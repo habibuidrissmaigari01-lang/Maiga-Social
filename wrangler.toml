@@ -1,6 +1,6 @@
 name = "maiga-social"
 main = "index.js"
-compatibility_date = "2024-03-25"
+compatibility_date = "2024-09-23"
 compatibility_flags = [ "nodejs_compat" ]
 
 [assets]
