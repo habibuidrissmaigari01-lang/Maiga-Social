@@ -1,0 +1,10 @@
+# Environment variables
+.env
+
+# Node dependencies
+/node_modules
+
+# Log files and local email mocks
+*.log
+email.txt
+email.html

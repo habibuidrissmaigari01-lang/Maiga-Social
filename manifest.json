@@ -1,0 +1,22 @@
+{
+  "short_name": "Maiga Social",
+  "name": "Maiga Social",
+  "icons": [
+    {
+      "src": "img/logo.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "img/logo.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/?source=pwa",
+  "background_color": "#FFFFFF",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#000000",
+  "description": "Connect and share on the Maiga social network."
+}

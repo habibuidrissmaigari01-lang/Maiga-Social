@@ -1,0 +1,1213 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maiga Social - Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    <script src="alpine.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .dark { background-color: #18191a; color: #e4e6eb; }
+        body { background-color: #f0f2f5; transition: background-color 0.3s; -webkit-tap-highlight-color: transparent; }
+        .dark body { background-color: #18191a; }
+        .dark .bg-white { background-color: #242526 !important; color: #e4e6eb; }
+        .dark .text-gray-500 { color: #b0b3b8 !important; }
+        .dark .border-gray-200, .dark .border-gray-800 { border-color: #3e4042 !important; }
+        .dark .divide-gray-200 { border-color: #3e4042 !important; }
+    </style>
+</head>
+<body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
+      :class="{ 'dark': darkMode }"
+      x-data="adminData">
+
+    <!-- Mobile Sidebar -->
+    <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
+        <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div class="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl flex flex-col transition-transform duration-300 transform"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="-translate-x-full"
+             x-transition:enter-end="translate-x-0"
+             x-transition:leave="transition ease-in duration-300"
+             x-transition:leave-start="translate-x-0"
+             x-transition:leave-end="-translate-x-full">
+            <div class="p-4 border-b dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
+                <img src="img/logo.png" class="w-8 h-8 mr-2">
+                <span class="text-xl font-black text-blue-600 italic">Maiga Social</span>
+            </div>
+            <div class="p-6 border-b dark:border-gray-700 flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <img :src="admin.avatar" class="w-10 h-10 rounded-full object-cover">
+                    <div>
+                        <h3 class="font-bold text-md text-gray-900 dark:text-white" x-text="admin.name"></h3>
+                        <p class="text-gray-500 text-xs">Admin Panel</p>
+                    </div>
+                </div>
+                <button @click="isSideMenuOpen = false" class="text-gray-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <button @click="activeTab = 'dashboard'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'dashboard' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-tachometer-alt text-xl w-8 text-center"></i><span class="font-bold">Dashboard</span></button>
+                <button @click="activeTab = 'users'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-users text-xl w-8 text-center"></i><span class="font-bold">Users</span></button>
+                <button @click="activeTab = 'reports'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'reports' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-flag text-xl w-8 text-center"></i><span class="font-bold">Reports</span></button>
+                <button @click="activeTab = 'moderation'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'moderation' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-shield-halved text-xl w-8 text-center"></i><span class="font-bold">Moderation</span></button>
+                <button @click="activeTab = 'broadcast'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'broadcast' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-bullhorn text-xl w-8 text-center"></i><span class="font-bold">Broadcast</span></button>
+                <button @click="activeTab = 'logs'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'logs' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-clipboard-list text-xl w-8 text-center"></i><span class="font-bold">System Logs</span></button>
+                <button @click="activeTab = 'settings'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'settings' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-gear text-xl w-8 text-center"></i><span class="font-bold">Settings</span></button>
+                <hr class="my-2 dark:border-gray-700">
+                <button @click="darkMode = !darkMode" class="flex items-center space-x-4 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
+                    <i class="fa-solid w-8 text-center text-xl" :class="darkMode ? 'fa-sun text-yellow-500' : 'fa-moon text-blue-600'"></i>
+                    <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
+                </button>
+                <button @click="logout()" class="flex items-center space-x-4 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
+                    <i class="fa-solid fa-arrow-left text-xl w-8 text-center"></i>
+                    <span>Back to App</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Desktop Sidebar -->
+    <aside class="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
+        <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
+            <img src="img/logo.png" class="w-10 h-10 mr-2">
+            <span class="text-2xl font-black text-blue-600 italic">Maiga</span>
+        </div>
+        <div @click="isEditingAdminProfile = true" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+            <img :src="admin.avatar" class="w-12 h-12 rounded-full object-cover">
+            <div>
+                <h3 class="font-bold text-md text-gray-900 dark:text-white" x-text="admin.name"></h3>
+                <p class="text-gray-500 text-xs">Admin</p>
+            </div>
+        </div>
+        
+        <div class="p-4 space-y-2 flex-1 flex flex-col">
+            <nav>
+                <button @click="activeTab = 'dashboard'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'dashboard' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-tachometer-alt text-xl w-8 text-center"></i>
+                    <span class="font-bold">Dashboard</span>
+                </button>
+                <button @click="activeTab = 'users'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-users text-xl w-8 text-center"></i>
+                    <span class="font-bold">Users</span>
+                </button>
+                <button @click="activeTab = 'reports'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'reports' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-flag text-xl w-8 text-center"></i>
+                    <span class="font-bold">Reports</span>
+                </button>
+                <button @click="activeTab = 'moderation'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'moderation' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-shield-halved text-xl w-8 text-center"></i>
+                    <span class="font-bold">Moderation</span>
+                </button>
+                <button @click="activeTab = 'broadcast'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'broadcast' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-bullhorn text-xl w-8 text-center"></i>
+                    <span class="font-bold">Broadcast</span>
+                </button>
+                <button @click="activeTab = 'logs'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'logs' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-clipboard-list text-xl w-8 text-center"></i>
+                    <span class="font-bold">System Logs</span>
+                </button>
+                <button @click="activeTab = 'settings'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'settings' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-gear text-xl w-8 text-center"></i>
+                    <span class="font-bold">Settings</span>
+                </button>
+            </nav>
+            <div class="mt-auto space-y-2">
+                <button @click="darkMode = !darkMode" class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300">
+                    <div class="flex items-center space-x-4">
+                        <i class="fa-solid text-xl w-8 text-center" :class="darkMode ? 'fa-sun text-yellow-500' : 'fa-moon'"></i>
+                        <span class="font-bold">Dark Mode</span>
+                    </div>
+                    <div class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors" :class="darkMode ? 'bg-blue-600' : ''">
+                        <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="darkMode ? 'left-6' : 'left-1'"></div>
+                    </div>
+                </button>
+                <button @click="logout()" class="w-full flex items-center space-x-4 p-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket text-xl w-8 text-center"></i>
+                    <span class="font-bold">Log Out</span>
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <div class="flex-1 min-w-0">
+        <!-- Top Navigation -->
+        <header class="bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg px-4 py-3 flex justify-between items-center sticky top-0 z-[100] border-b dark:border-gray-800">
+            <div class="flex items-center space-x-3">
+                <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
+                <span class="text-xl font-bold" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
+            </div>
+            <div class="flex items-center space-x-3" x-data="{ showNotifications: false }" x-cloak>
+                <button @click="showNotifications = !showNotifications" class="relative p-2 bg-gray-100 dark:bg-gray-800 rounded-full transition-transform active:scale-90">
+                    <i class="fa-solid fa-bell dark:text-white"></i>_
+                    <span x-show="notifications.some(n => n.unread)" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold" x-text="notifications.filter(n => n.unread).length"></span>
+                </button>
+                
+                <!-- Notification Dropdown -->
+                <div x-show="showNotifications" @click.away="showNotifications = false" x-transition.opacity.duration.200ms class="absolute top-14 right-4 w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border dark:border-gray-700 overflow-hidden z-50">
+                    <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                        <h3 class="font-bold text-sm dark:text-white">Notifications</h3>
+                        <button @click="markAllRead()" class="text-xs text-blue-600 font-bold hover:underline">Mark all read</button>
+                    </div>
+                    <div class="max-h-80 overflow-y-auto">
+                        <template x-if="notifications.length === 0">
+                            <div class="p-6 text-center text-gray-500 text-xs">No notifications</div>
+                        </template>
+                        <template x-for="notif in notifications" :key="notif.id">
+                            <div class="group p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-start space-x-3 transition-colors border-b dark:border-gray-700/50 last:border-0" :class="{'bg-blue-50 dark:bg-blue-900/10': notif.unread}">
+                                <div class="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full flex-shrink-0 text-blue-600">
+                                    <i class="fa-solid" :class="notif.icon || 'fa-bell'"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-xs text-gray-800 dark:text-gray-200 font-medium" x-text="notif.message"></p>
+                                    <p class="text-[10px] text-gray-500 mt-1" x-text="notif.time"></p>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    <div x-show="notif.unread" class="w-2 h-2 bg-blue-600 rounded-full"></div>
+                                    <button @click.stop="deleteNotification(notif.id)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1 -m-1">
+                                        <i class="fa-solid fa-xmark text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="p-4 lg:p-6">
+            <!-- Dashboard -->
+            <div x-show="activeTab === 'dashboard'">
+                <h2 class="text-2xl font-black mb-6">Dashboard</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4">
+                        <div class="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full"><i class="fa-solid fa-users text-2xl text-blue-600"></i></div>
+                        <div>
+                            <p class="text-gray-500 text-sm font-bold">Total Users</p>
+                            <p class="text-3xl font-black" x-text="stats.total_users || 0"></p>
+                        </div>
+                    </div>
+                    <div @click="setFilterAndGoToUsers('maiga')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                        <div class="bg-indigo-100 dark:bg-indigo-900/30 p-4 rounded-full"><i class="fa-solid fa-user-check text-2xl text-indigo-600"></i></div>
+                        <div>
+                            <p class="text-gray-500 text-sm font-bold">Maiga Users</p>
+                            <p class="text-3xl font-black" x-text="stats.maiga_users || 0"></p>
+                        </div>
+                    </div>
+                    <div @click="setFilterAndGoToUsers('ysu')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                        <div class="bg-teal-100 dark:bg-teal-900/30 p-4 rounded-full"><i class="fa-solid fa-user-graduate text-2xl text-teal-600"></i></div>
+                        <div>
+                            <p class="text-gray-500 text-sm font-bold">YSU Users</p>
+                            <p class="text-3xl font-black" x-text="stats.ysu_users || 0"></p>
+                        </div>
+                    </div>
+                    <div @click="activeTab = 'reports'" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                        <div class="bg-red-100 dark:bg-red-900/30 p-4 rounded-full"><i class="fa-solid fa-flag text-2xl text-red-600"></i></div>
+                        <div>
+                            <p class="text-gray-500 text-sm font-bold">Open Reports</p>
+                            <p class="text-3xl font-black" x-text="stats.open_reports || 0"></p>
+                        </div>
+                    </div>
+                    <div @click="setFilterAndGoToUsers('online')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                        <div class="bg-green-100 dark:bg-green-900/30 p-4 rounded-full"><i class="fa-solid fa-circle text-2xl text-green-600"></i></div>
+                        <div>
+                            <p class="text-gray-500 text-sm font-bold">Online Users</p>
+                            <p class="text-3xl font-black" x-text="stats.online_users || 0"></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
+                        <h3 class="font-bold text-lg mb-4">Weekly Activity</h3>
+                        <canvas id="userActivityChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
+                        <h3 class="font-bold text-lg mb-4">User Account Types</h3>
+                        <canvas id="accountTypeChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
+                        <h3 class="font-bold text-lg mb-4">Weekly Signups by Type</h3>
+                        <canvas id="signupsByAccountTypeChart"></canvas>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md lg:col-span-2">
+                        <h3 class="font-bold text-lg mb-4">Posts per Day (Last 7 Days)</h3>
+                        <canvas id="postsPerDayChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
+                <h3 class="font-bold text-lg mb-4">Recommended Actions</h3>
+                <ul class="space-y-3 list-disc list-inside text-sm text-gray-600 dark:text-gray-300">
+                    <li>Review the 5 oldest user reports in the "Reports" tab.</li>
+                    <li>Check for posts flagged for containing sensitive content.</li>
+                    <li>Broadcast a welcome message to new users who joined this week.</li>
+                    <li>Review analytics for user engagement over the last 7 days.</li>
+                </ul>
+            </div>
+    </div>
+
+    <!-- Users -->
+    <div x-show="activeTab === 'users'">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <h2 class="text-2xl font-black">User Management</h2>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                <div class="relative w-full sm:w-auto">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                    <input type="text" x-model="searchQuery" placeholder="Search users..." class="w-full sm:w-64 pl-9 pr-4 py-2 rounded-xl border-none bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 shadow-sm">
+                </div>
+                <select x-model="userFilter" class="w-full sm:w-auto px-4 py-2 rounded-xl border-none bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 shadow-sm">
+                    <option value="all">All Users</option>
+                    <option value="online">Online</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="maiga">Maiga Only</option>
+                    <option value="ysu">YSU Only</option>
+                </select>
+            <button @click="exportUsersToCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 w-full sm:w-auto">
+                <i class="fa-solid fa-file-csv"></i>
+                <span>Export CSV</span>
+            </button>
+            <button @click="exportUsersToPDF()" :disabled="isExporting" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 w-full sm:w-auto disabled:opacity-50">
+                <i class="fa-solid" :class="isExporting ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+                <span x-text="isExporting ? 'Exporting...' : 'Export PDF'"></span>
+            </button>
+            </div>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden">
+            <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left min-w-[600px]">
+                <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-500">
+                    <tr>
+                        <th class="p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group" @click="sort('name')">
+                            <div class="flex items-center space-x-1">
+                                <span>User</span>
+                                <i class="fa-solid text-[10px]" :class="sortCol === 'name' ? (sortAsc ? 'fa-arrow-up' : 'fa-arrow-down') : 'fa-sort text-gray-300 group-hover:text-gray-400'"></i>
+                            </div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group" @click="sort('email')">
+                            <div class="flex items-center space-x-1">
+                                <span>Email</span>
+                                <i class="fa-solid text-[10px]" :class="sortCol === 'email' ? (sortAsc ? 'fa-arrow-up' : 'fa-arrow-down') : 'fa-sort text-gray-300 group-hover:text-gray-400'"></i>
+                            </div>
+                        </th>
+                        <th class="p-4">Status</th>
+                        <th class="p-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y dark:divide-gray-700">
+                    <template x-for="user in users" :key="user.id">
+                        <tr>
+                            <td class="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" @click="openUserOptions(user)">
+                                <img :src="user.avatar" class="w-10 h-10 rounded-full object-cover">
+                                <div>
+                                    <p class="font-bold" x-text="user.name"></p>
+                                    <p class="text-xs text-gray-500" x-text="user.dept"></p>
+                                </div>
+                            </td>
+                            <td class="p-4 text-gray-600 dark:text-gray-300">
+                                <span x-text="user.email"></span>
+                            </td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 text-xs font-bold rounded-full" :class="user.blocked ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' : (user.online ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300')" x-text="user.blocked ? 'Blocked' : (user.online ? 'Online' : 'Offline')"></span>
+                            </td>
+                            <td class="p-4 space-x-2">
+                                <button @click="openProfileModal(user)" class="text-gray-400 hover:text-blue-600"><i class="fa-solid fa-eye"></i></button>
+                                <button @click="toggleBlockUser(user)" class="text-gray-400 hover:text-red-600" :class="{'text-green-500': user.blocked}">
+                                    <i class="fa-solid" :class="user.blocked ? 'fa-unlock' : 'fa-ban'"></i>
+                                </button>
+                                <button @click="toggleVerify(user)" class="text-gray-400 hover:text-blue-500" :class="{'text-blue-500': user.is_verified == 1}">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                </button>
+                                <button @click="deleteUser(user.id)" class="text-gray-400 hover:text-purple-600"><i class="fa-solid fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            </div>
+            <!-- Pagination Controls -->
+            <div class="p-4 border-t dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gray-50 dark:bg-gray-800/50">
+                <span class="text-xs text-gray-500 font-medium">Showing <span x-text="users.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0"></span> to <span x-text="Math.min(currentPage * itemsPerPage, totalUsers)"></span> of <span x-text="totalUsers"></span> users</span>
+                <div class="flex space-x-2">
+                    <button @click="prevPage()" :disabled="currentPage === 1" class="px-4 py-2 rounded-lg bg-white dark:bg-gray-700 border dark:border-gray-600 text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">Previous</button>
+                    <button @click="nextPage()" :disabled="currentPage === totalPages" class="px-4 py-2 rounded-lg bg-white dark:bg-gray-700 border dark:border-gray-600 text-xs font-bold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports -->
+    <div x-show="activeTab === 'reports'">
+        <h2 class="text-2xl font-black mb-6">User Reports</h2>
+        <div class="space-y-4">
+            <template x-for="report in reports" :key="report.id">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-md">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="font-bold text-sm">Report from <span x-text="report.first_name + ' ' + report.surname"></span></p>
+                            <p class="text-xs text-gray-500">Regarding: <span class="font-medium text-gray-700 dark:text-gray-300" x-text="report.reason"></span></p>
+                        </div>
+                        <span class="text-xs text-gray-400" x-text="report.time"></span>
+                    </div>
+                    <p class="text-sm mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg" x-text="report.details"></p>
+                    <div class="mt-3 flex justify-end space-x-3">
+                        <button @click="dismissReport(report.id)" class="text-sm font-bold text-gray-500 hover:text-gray-700">Dismiss</button>
+                        <a :href="'/home?viewPost=' + report.content_id" target="_blank" class="text-sm font-bold text-green-600 hover:underline">View Content</a>
+                        <button @click="sendMessageToUser(report.reporter_id)" class="text-sm font-bold text-blue-600 hover:underline">Chat with User</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Moderation Queue -->
+    <div x-show="activeTab === 'moderation'">
+        <h2 class="text-2xl font-black mb-6">Content Moderation</h2>
+        <div class="space-y-4">
+            <template x-if="flaggedPosts.length === 0">
+                <div class="text-center text-gray-500 py-12 bg-white dark:bg-gray-800 rounded-2xl">
+                    <i class="fa-solid fa-check-circle text-4xl text-green-500 mb-3"></i>
+                    <p class="font-bold">All caught up!</p>
+                    <p class="text-sm">No flagged content to review.</p>
+                </div>
+            </template>
+            <template x-for="post in flaggedPosts" :key="post.id">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-md border-l-4 border-yellow-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <p class="font-bold text-sm" x-text="post.author"></p>
+                            <p class="text-xs text-gray-500">Flagged for: <span class="font-bold text-red-500" x-text="post.reason"></span></p>
+                        </div>
+                        <span class="text-xs text-gray-400" x-text="post.time"></span>
+                    </div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg whitespace-pre-wrap" x-text="post.content"></p>
+                    <div class="flex justify-end space-x-3">
+                        <button @click="approvePost(post.report_id)" class="px-4 py-2 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Keep</button>
+                        <button @click="removePost(post.id)" class="px-4 py-2 rounded-lg text-xs font-bold bg-red-50 dark:bg-red-900/20 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors">Delete Post</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Broadcast -->
+    <div x-show="activeTab === 'broadcast'">
+        <h2 class="text-2xl font-black mb-6">Broadcast Message</h2>
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md max-w-2xl">
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Title (Optional)</label>
+                <input type="text" x-model="broadcast.title" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-all">
+            </div>
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Message</label>
+                <textarea x-model="broadcast.message" rows="5" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-all resize-none" placeholder="Type your message to all users..."></textarea>
+            </div>
+            <div class="flex justify-end">
+                <button @click="sendBroadcast()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!broadcast.message.trim()">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Send Broadcast</span>
+                </button>
+            </div>
+        </div>
+        <div class="mt-8">
+            <h3 class="text-xl font-black mb-4">Broadcast History</h3>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-md">
+                <div class="p-4 border-b dark:border-gray-700">
+                    <input type="text" x-model="broadcastSearchQuery" placeholder="Search by title or message..." class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-all">
+                </div>
+                <div class="space-y-3 max-h-60 overflow-y-auto p-4">
+                    <template x-if="broadcastHistory.length === 0">
+                        <p class="text-sm text-gray-500 text-center py-4">No broadcasts sent yet.</p>
+                    </template>
+                    <template x-for="item in filteredBroadcastHistory" :key="item.id">
+                        <div class="p-3 border-b dark:border-gray-700 last:border-0 group">
+                            <div class="flex justify-between items-start">
+                                <p class="font-bold text-sm" x-text="item.title || 'Untitled Broadcast'"></p>
+                                <div class="flex items-center space-x-2">
+                                    <p class="text-xs text-gray-400" x-text="new Date(item.sent_at).toLocaleString()"></p>
+                                    <button @click="deleteBroadcast(item.id)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fa-solid fa-trash text-xs"></i></button>
+                                </div>
+                            </div>
+                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-1" x-text="item.message"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Logs -->
+    <div x-show="activeTab === 'logs'">
+        <h2 class="text-2xl font-black mb-6">System Logs</h2>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden">
+            <div class="p-4 flex gap-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                <input type="date" x-model="logFilters.startDate" class="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-blue-500">
+                <input type="date" x-model="logFilters.endDate" class="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-blue-500">
+                <select x-model="logFilters.action" class="bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-blue-500">
+                    <option value="">All Actions</option>
+                    <option value="LOGIN">Login</option>
+                    <option value="DELETE_POST">Delete Post</option>
+                    <option value="BLOCK_USER">Block User</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left min-w-[600px]">
+                <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-500">
+                    <tr>
+                        <th class="p-4">Timestamp</th>
+                        <th class="p-4">User</th>
+                        <th class="p-4">Action</th>
+                        <th class="p-4">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y dark:divide-gray-700">
+                    <template x-for="log in systemLogs" :key="log.id">
+                        <tr>
+                            <td class="p-4 text-gray-500" x-text="log.timestamp"></td>
+                            <td class="p-4 font-bold" x-text="log.user"></td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 text-xs font-bold rounded-full" 
+                                      :class="{
+                                          'bg-blue-100 text-blue-700': log.action === 'LOGIN',
+                                          'bg-red-100 text-red-700': log.action === 'DELETE_POST',
+                                          'bg-yellow-100 text-yellow-700': log.action === 'UPDATE_PROFILE',
+                                          'bg-green-100 text-green-700': log.action === 'CREATE_POST',
+                                          'bg-purple-100 text-purple-700': log.action === 'BLOCK_USER'
+                                      }" 
+                                      x-text="log.action">
+                                </span>
+                            </td>
+                            <td class="p-4 text-gray-600 dark:text-gray-300" x-text="log.details"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings -->
+    <div x-show="activeTab === 'settings'">
+        <h2 class="text-2xl font-black mb-6">Settings</h2>
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md max-w-2xl">
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 dark:text-gray-300">Site Name</label>
+                    <input type="text" x-model="settings.site_name" class="mt-1 block w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-bold text-sm">Maintenance Mode</p>
+                        <p class="text-xs text-gray-500">Temporarily disable access to the main site for non-admins.</p>
+                    </div>
+                    <div @click="settings.maintenance_mode = !settings.maintenance_mode" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer" :class="settings.maintenance_mode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
+                        <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="settings.maintenance_mode ? 'left-7' : 'left-1'"></div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="font-bold text-sm">Allow New Registrations</p>
+                        <p class="text-xs text-gray-500">Enable or disable the user registration form.</p>
+                    </div>
+                    <div @click="settings.allow_registrations = !settings.allow_registrations" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer" :class="settings.allow_registrations ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
+                        <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="settings.allow_registrations ? 'left-7' : 'left-1'"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 pt-6 border-t dark:border-gray-700 flex justify-end">
+                <button @click="saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-colors flex items-center space-x-2">
+                    <i class="fa-solid fa-save"></i>
+                    <span>Save Settings</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Options Modal -->
+    <div x-show="showUserOptionsModal" class="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 backdrop-blur-sm" x-cloak>
+        <div @click.away="showUserOptionsModal = false" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-80 animate-fadeIn flex flex-col space-y-3">
+            <h3 class="text-lg font-black text-center mb-2" x-text="selectedUser?.name"></h3>
+            
+            <button @click="openProfileModal(selectedUser)" class="w-full p-3 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/20 font-bold flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-user"></i>
+                <span>View Profile</span>
+            </button>
+            
+            <button @click="sendMessageToUser(selectedUser.id); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-green-50 text-green-600 dark:bg-green-900/20 font-bold flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Send Message</span>
+            </button>
+            
+            <button @click="deleteUserChat(selectedUser.id); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-900/20 font-bold flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-comment-slash"></i>
+                <span>Delete Chat History</span>
+            </button>
+            
+            <button @click="toggleBlockUser(selectedUser); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-yellow-50 text-yellow-600 dark:bg-yellow-900/20 font-bold flex items-center justify-center space-x-2">
+                <i class="fa-solid" :class="selectedUser?.blocked ? 'fa-unlock' : 'fa-ban'"></i>
+                <span x-text="selectedUser?.blocked ? 'Unblock Account' : 'Block Account'"></span>
+            </button>
+            
+            <button @click="deleteUser(selectedUser.id); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-red-50 text-red-600 dark:bg-red-900/20 font-bold flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-trash"></i>
+                <span>Delete Account</span>
+            </button>
+            
+            <button @click="showUserOptionsModal = false" class="w-full p-3 rounded-xl text-gray-500 font-bold">Cancel</button>
+        </div>
+    </div>
+
+    <!-- User Profile Modal -->
+    <div x-show="showUserProfileModal" class="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-cloak>
+        <div @click.away="showUserProfileModal = false" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <template x-if="!viewingUser">
+                <div class="p-16 flex justify-center items-center">
+                    <i class="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i>
+                </div>
+            </template>
+            <template x-if="viewingUser">
+                <div class="flex flex-col h-full">
+                    <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                        <h3 class="font-black text-lg" x-text="viewingUser.name + ' - Profile'"></h3>
+                        <button @click="showUserProfileModal = false" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-6">
+                        <div class="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
+                            <img :src="viewingUser.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
+                            <div class="text-center sm:text-left">
+                                <h2 class="text-2xl font-black" x-text="viewingUser.name"></h2>
+                                <p class="text-gray-500" x-text="'@' + viewingUser.username"></p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2" x-text="viewingUser.bio"></p>
+                                <div class="text-xs text-gray-400 mt-2 space-x-4">
+                                    <span>Joined: <span class="font-semibold" x-text="new Date(viewingUser.created_at).toLocaleDateString()"></span></span>
+                                    <span>Last Seen: <span class="font-semibold" x-text="new Date(viewingUser.last_seen).toLocaleString()"></span></span>
+                                </div>
+                            </div>
+                        </div>
+                        <h4 class="font-bold text-md mb-3 border-t dark:border-gray-700 pt-4">Posts (<span x-text="viewingUser.posts.length"></span>)</h4>
+                        <div class="space-y-4 max-h-80 overflow-y-auto pr-2">
+                            <template x-if="viewingUser.posts.length === 0"><p class="text-sm text-gray-500">This user has no posts.</p></template>
+                            <template x-for="post in viewingUser.posts" :key="post.id"><div class="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl border dark:border-gray-700"><p class="text-xs text-gray-500 mb-1" x-text="post.time"></p><p class="text-sm whitespace-pre-wrap" x-text="post.content"></p><template x-if="post.media"><img :src="post.media" class="mt-2 rounded-lg max-h-40"></template></div></template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Admin Profile Modal -->
+    <div x-show="isEditingAdminProfile" class="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-cloak>
+        <div @click.away="isEditingAdminProfile = false" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn flex flex-col space-y-4">
+            <h3 class="text-lg font-black text-center mb-2">Edit Admin Profile</h3>
+            <div class="flex flex-col items-center">
+                <div class="relative group cursor-pointer">
+                    <img :src="editAdmin.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
+                    <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fa-solid fa-camera text-2xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="text-xs font-bold text-gray-500">Name</label>
+                <input type="text" x-model="editAdmin.name" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm mt-1">
+            </div>
+            <button @click="saveAdminProfile()" class="w-full p-3 rounded-xl bg-blue-600 text-white font-bold">Save Changes</button>
+            <button @click="isEditingAdminProfile = false" class="w-full p-2 rounded-xl text-gray-500 font-bold">Cancel</button>
+        </div>
+    </div>
+
+    </main>
+    </div>
+
+    <script>
+        const CSRF_TOKEN = 'mock-csrf-token';
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('adminData', () => ({
+                darkMode: false,
+                isSideMenuOpen: false,
+                showUserOptionsModal: false,
+                showUserProfileModal: false,
+                isEditingAdminProfile: false,
+                viewingUser: null,
+                selectedUser: null,
+                activeTab: 'dashboard',
+                stats: { maiga_users: 0, ysu_users: 0 },
+                userActivityChart: null,
+                accountTypeChart: null,
+                signupsByAccountTypeChart: null,
+                postsPerDayChart: null,
+                admin: {
+                    name: 'Habibu Idriss Maigari',
+                    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky'
+                },
+                editAdmin: {},
+                posts: [],
+                chatMessages: {},
+                searchQuery: '',
+                broadcastSearchQuery: '',
+                isExporting: false,
+                userFilter: 'all',
+                currentPage: 1,
+                itemsPerPage: 5,
+                sortCol: 'name',
+                sortAsc: true,
+                users: [],
+                reports: [],
+                flaggedPosts: [],
+                broadcastHistory: [],
+                logFilters: { startDate: '', endDate: '', action: '' },
+                broadcast: {
+                    title: '',
+                    message: ''
+                },
+                notifications: [],
+                markAllRead() {
+                    this.notifications.forEach(n => n.unread = false);
+                },
+                deleteNotification(id) {
+                    this.notifications = this.notifications.filter(n => n.id !== id);
+                },
+                systemLogs: [
+                    { id: 1, timestamp: '2026-03-06 10:00:15', user: 'Umar Faruk', action: 'LOGIN', details: 'User logged in from IP 192.168.1.1' },
+                    { id: 2, timestamp: '2026-03-06 09:45:32', user: 'Admin', action: 'DELETE_POST', details: 'Deleted post #102 for hate speech.' },
+                    { id: 3, timestamp: '2026-03-06 09:30:05', user: 'Aisha Yusuf', action: 'UPDATE_PROFILE', details: 'Changed bio.' },
+                    { id: 4, timestamp: '2026-03-06 08:55:12', user: 'Zainab Bello', action: 'CREATE_POST', details: 'Created a new post with media.' },
+                    { id: 5, timestamp: '2026-03-06 08:10:47', user: 'Admin', action: 'BLOCK_USER', details: 'Blocked user Musa Ibrahim.' }
+                ],
+                get totalMaigaUsers() {
+                    return this.users.filter(u => u.account_type === 'maiga').length;
+                },
+                get totalYsuUsers() {
+                    return this.users.filter(u => u.account_type === 'ysu').length;
+                },
+                get totalPages() {
+                    return Math.ceil(this.totalUsers / this.itemsPerPage);
+                },
+                nextPage() {
+                    if (this.currentPage < this.totalPages) this.currentPage++;
+                },
+                prevPage() {
+                    if (this.currentPage > 1) this.currentPage--;
+                },
+                get paginatedUsers() {
+                    const start = (this.currentPage - 1) * this.itemsPerPage;
+                    const end = start + this.itemsPerPage;
+                    return this.users.slice(start, end);
+                },
+                sort(col) {
+                    if (this.sortCol === col) {
+                        this.sortAsc = !this.sortAsc;
+                    } else {
+                        this.sortCol = col;
+                        this.sortAsc = true;
+                    }
+                },
+                get filteredBroadcastHistory() {
+                    if (!this.broadcastSearchQuery.trim()) {
+                        return this.broadcastHistory;
+                    }
+                    const query = this.broadcastSearchQuery.toLowerCase();
+                    return this.broadcastHistory.filter(item => 
+                        (item.title && item.title.toLowerCase().includes(query)) ||
+                        (item.message && item.message.toLowerCase().includes(query))
+                    );
+                },
+                exportUsersToPDF() {
+                    if (this.isExporting) return;
+                    this.isExporting = true;
+                    
+                    // Fetch all users for export
+                    const params = new URLSearchParams({
+                        action: 'get_users',
+                        page: 1,
+                        limit: 99999, // A large number to fetch all users
+                        search: this.searchQuery,
+                        filter: this.userFilter,
+                        sort: this.sortCol,
+                        dir: this.sortAsc ? 'asc' : 'desc'
+                    });
+
+                    fetch(`/api?${params.toString()}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const { jsPDF } = window.jspdf;
+                            const doc = new jsPDF();
+
+                            const tableColumn = ["ID", "Name", "Email", "Department", "Status", "Account Type"];
+                            const tableRows = [];
+
+                            data.users.forEach(user => {
+                                const userData = [
+                                    user.id,
+                                    user.name,
+                                    user.email,
+                                    user.dept,
+                                    user.blocked ? 'Blocked' : (user.online ? 'Online' : 'Offline'),
+                                    user.account_type
+                                ];
+                                tableRows.push(userData);
+                            });
+
+                            doc.autoTable({
+                                head: [tableColumn],
+                                body: tableRows,
+                                startY: 20,
+                            });
+                            doc.text("User List", 14, 15);
+                            doc.save("user_list.pdf");
+                        }).catch(err => alert('Failed to export users to PDF.'))
+                        .finally(() => this.isExporting = false);
+                },
+                setFilterAndGoToUsers(filter) {
+                    this.userFilter = filter;
+                    this.activeTab = 'users';
+                },
+                openProfileModal(user) {
+                    this.viewingUser = null; // Show loading spinner
+                    this.showUserProfileModal = true;
+                    fetch(`/api?action=get_user_profile_details&user_id=${user.id}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.error) {
+                                alert(data.error);
+                                this.showUserProfileModal = false;
+                            } else {
+                                this.viewingUser = data;
+                            }
+                        });
+                },
+                sendMessageToUser(id) {
+                    window.location.href = `/home?chatUserId=${id}`;
+                },
+                openUserOptions(user) {
+                    this.selectedUser = user;
+                    this.showUserOptionsModal = true;
+                },
+                toggleBlockUser(user) {
+                    if (!user) return;
+                    const action = user.blocked ? 'unblock_user' : 'block_user';
+                    const confirmMessage = user.blocked ? 'Are you sure you want to unblock this user?' : 'Are you sure you want to block this user?';
+
+                    if (!confirm(confirmMessage)) return;
+
+                    fetch(`/api?action=${action}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ user_id: user.id })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            user.blocked = !user.blocked;
+                            const logAction = user.blocked ? 'BLOCK_USER' : 'UNBLOCK_USER';
+                            this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: logAction, details: `${user.blocked ? 'Blocked' : 'Unblocked'} user ${user.name}.` });
+                        } else {
+                            alert(data.error || 'An error occurred.');
+                        }
+                    });
+                },
+                exportUsersToCSV() {
+                    let csvContent = "data:text/csv;charset=utf-8,";
+                    const headers = ["ID", "Name", "Department", "Status", "Online"];
+                    csvContent += headers.join(",") + "\r\n";
+
+                    this.users.forEach(user => {
+                        const status = user.blocked ? 'Blocked' : 'Active';
+                        const row = [user.id, `"${user.name}"`, `"${user.dept}"`, status, user.online];
+                        csvContent += row.join(",") + "\r\n";
+                    });
+
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "users_export.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+                deleteUser(userId) {
+                    if (confirm('Are you sure you want to delete this user account? This action cannot be undone.')) {                        
+                        fetch('/api?action=delete_user', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-CSRF-Token': CSRF_TOKEN
+                            },
+                            body: JSON.stringify({ user_id: userId })
+                        }).then(r=>r.json()).then(d=>{
+                            if(d.success) {
+                                this.users = this.users.filter(user => user.id !== userId);
+                                this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: 'DELETE_USER', details: `Deleted user ID ${userId}` });
+                            } else {
+                                alert(d.error || 'Failed to delete user.');
+                            }
+                        });
+                    }
+                },
+                deleteUserChat(userId) {
+                    if (confirm('Are you sure you want to delete this user\'s chat history? This cannot be undone.')) {
+                        if (this.chatMessages[userId]) {
+                            delete this.chatMessages[userId];
+                            this.chatMessages = { ...this.chatMessages }; // Trigger reactivity
+                            // Also clear on server
+                            fetch('/api?action=clear_chat', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ chat_id: userId, type: 'user' })
+                            });
+                            this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: 'DELETE_CHAT', details: `Deleted chat history for user ID ${userId}.` });
+                        } else {
+                            alert('No chat history found for this user.');
+                        }
+                    }
+                },
+                updateChartColors() {
+                    const isDark = this.darkMode;
+                    const tickColor = isDark ? '#e4e6eb' : '#6b7280';
+                    const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+                    [this.userActivityChart, this.accountTypeChart, this.postsPerDayChart, this.signupsByAccountTypeChart].forEach(chart => {
+                        if (chart) {
+                            // For line/bar charts
+                            if (chart.options.scales) {
+                                if(chart.options.scales.y) {
+                                    chart.options.scales.y.ticks.color = tickColor;
+                                    chart.options.scales.y.grid.color = gridColor;
+                                }
+                                if(chart.options.scales.x) {
+                                    chart.options.scales.x.ticks.color = tickColor;
+                                    chart.options.scales.x.grid.color = gridColor;
+                                }
+                            }
+
+                            // For pie/doughnut charts
+                            if (chart.options.plugins && chart.options.plugins.legend) {
+                                chart.options.plugins.legend.labels.color = tickColor;
+                            }
+                            chart.update();
+                        }
+                    });
+                },
+                initSignupsByAccountTypeChart(data) {
+                    const ctx = document.getElementById('signupsByAccountTypeChart').getContext('2d');
+                    this.signupsByAccountTypeChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.labels,
+                            datasets: [{
+                                label: 'Maiga Signups',
+                                data: data.maigaData,
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }, {
+                                label: 'YSU Signups',
+                                data: data.ysuData,
+                                borderColor: 'rgba(16, 185, 129, 1)',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 2 } },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: { legend: { position: 'top', labels: { color: this.darkMode ? '#e4e6eb' : '#6b7280' } } }
+                        }
+                    });
+                },
+                initAccountTypeChart(data) {
+                    const accountCtx = document.getElementById('accountTypeChart').getContext('2d');
+                    this.accountTypeChart = new Chart(accountCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: ['Maiga Users', 'YSU Users'],
+                            datasets: [{
+                                data: [data.maiga, data.ysu],
+                                backgroundColor: [
+                                    'rgba(59, 130, 246, 0.8)', // blue-500
+                                    'rgba(16, 185, 129, 0.8)'  // emerald-500
+                                ],
+                                borderColor: this.darkMode ? '#242526' : '#fff',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: { color: this.darkMode ? '#e4e6eb' : '#6b7280' }
+                                }
+                            }
+                        }
+                    });
+                },
+                initPostsPerDayChart(data) {
+                    const ctx = document.getElementById('postsPerDayChart').getContext('2d');
+                    this.postsPerDayChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: data.labels,
+                            datasets: [{
+                                label: 'Posts',
+                                data: data.data,
+                                backgroundColor: 'rgba(139, 92, 246, 0.6)', // purple-500
+                                borderColor: 'rgba(139, 92, 246, 1)',
+                                borderWidth: 1,
+                                borderRadius: 4,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: {
+                                legend: { display: false }
+                            }
+                        }
+                    });
+                },
+                initUserActivityChart(data) {
+                    const ctx = document.getElementById('userActivityChart').getContext('2d');
+                    this.userActivityChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.labels,
+                            datasets: [{
+                                label: 'Sign-ups',
+                                data: data.data,
+                                borderColor: 'rgba(34, 197, 94, 1)',
+                                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                },
+                approvePost(reportId) {
+                    this.flaggedPosts = this.flaggedPosts.filter(p => p.report_id !== reportId);
+                    this.dismissReport(reportId);
+                },
+                dismissReport(id) {
+                    this.reports = this.reports.filter(r => r.id !== id);
+                    fetch('/api?action=update_report_status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ report_id: id, status: 'dismissed' })
+                    });
+                },
+                removePost(id, reportId) {
+                    if(confirm('Delete this post?')) {
+                        fetch('/api?action=delete_post', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ post_id: id })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                this.flaggedPosts = this.flaggedPosts.filter(p => p.id !== id);
+                                if(reportId) this.dismissReport(reportId);
+                                this.posts = this.posts.filter(p => p.id !== id);
+                                this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: 'DELETE_POST', details: `Deleted post #${id}` });
+                            } else {
+                                alert(data.error || 'Failed to delete post');
+                            }
+                        });
+                    }
+                },
+                deleteBroadcast(id) {
+                    if(!confirm('Delete this broadcast record?')) return;
+                    fetch('/api?action=delete_broadcast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data.success) {
+                            this.broadcastHistory = this.broadcastHistory.filter(item => item.id !== id);
+                        }
+                    });
+                },
+                sendBroadcast() {
+                    if (!this.broadcast.message.trim()) return;
+                    if (!confirm('Are you sure you want to send this broadcast to all users?')) return;
+                    
+                    fetch('/api?action=send_broadcast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(this.broadcast)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if(data.success) {
+                            alert(`Broadcast sent successfully!`);
+                            this.broadcast.title = '';
+                            this.broadcast.message = '';
+                        } else {
+                            alert('Failed to send broadcast.');
+                        }
+                    });
+                },
+                toggleVerify(user) {
+                    if (!user) return;
+                    fetch('/api?action=toggle_verify_user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_id: user.id })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            user.is_verified = user.is_verified == 1 ? 0 : 1;
+                            const action = user.is_verified ? 'VERIFY_USER' : 'UNVERIFY_USER';
+                            this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: action, details: `${action === 'VERIFY_USER' ? 'Verified' : 'Unverified'} user ${user.name}.` });
+                        } else {
+                            alert(data.error || 'Failed to toggle verification');
+                        }
+                    });
+                },
+                init() {
+                    this.$watch('darkMode', val => {
+                        if (val) document.documentElement.classList.add('dark');
+                        else document.documentElement.classList.remove('dark');
+                        this.updateChartColors();
+                    });
+                    this.editAdmin = { ...this.admin };
+
+                    // Watchers for server-side filtering
+                    this.$watch('currentPage', () => this.fetchUsers());
+                    this.$watch('searchQuery', () => { this.currentPage = 1; this.fetchUsers(); });
+                    this.$watch('userFilter', () => { this.currentPage = 1; this.fetchUsers(); });
+                    this.$watch('sortCol', () => this.fetchUsers());
+                    this.$watch('sortAsc', () => this.fetchUsers());
+                    this.$watch('logFilters', () => this.fetchLogs(), { deep: true });
+
+                    // Initial data fetching
+                    this.fetchUsers();
+                    this.fetchNotifications();
+                    this.fetchBroadcastHistory();
+                    this.fetchLogs();
+                    this.loadSettings();
+                    this.fetchDashboardData();
+                },
+                fetchDashboardData() {
+                    fetch('/api?action=get_dashboard_stats').then(r => r.json()).then(d => {
+                        this.stats = {...this.stats, ...d};
+                    });
+                    fetch('/api?action=get_account_type_stats').then(r => r.json()).then(d => {
+                        this.stats.maiga_users = d.maiga;
+                        this.stats.ysu_users = d.ysu;
+                        this.initAccountTypeChart(d);
+                    });
+                    fetch('/api?action=get_posts_per_day_stats').then(r => r.json()).then(d => this.initPostsPerDayChart(d));
+                    fetch('/api?action=get_weekly_signups').then(r => r.json()).then(d => this.initUserActivityChart(d));
+                    fetch('/api?action=get_weekly_signups_by_type').then(r => r.json()).then(d => this.initSignupsByAccountTypeChart(d));
+                    fetch('/api?action=get_flagged_posts').then(r => r.json()).then(d => this.flaggedPosts = d);
+                    fetch('/api?action=get_reports').then(r => r.json()).then(d => this.reports = d);
+                },
+                fetchUsers() {
+                    const params = new URLSearchParams({
+                        action: 'get_users',
+                        page: this.currentPage,
+                        limit: this.itemsPerPage,
+                        search: this.searchQuery,
+                        filter: this.userFilter,
+                        sort: this.sortCol,
+                        dir: this.sortAsc ? 'asc' : 'desc'
+                    });
+                    fetch(`/api?${params.toString()}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.users) {
+                                this.users = data.users;
+                                this.totalUsers = data.total;
+                            }
+                        }).catch(() => alert('Error fetching users.'));
+                },
+                logout() {
+                    fetch('/api?action=logout', { method: 'POST' })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) window.location.href = '/';
+                        });
+                },
+                loadSettings() {
+                    fetch('/api?action=get_settings')
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.settings = data.settings; });
+                },
+                saveSettings() {
+                    fetch('/api?action=save_settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify(this.settings)
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) alert('Settings saved!');
+                        else alert(data.error || 'Failed to save settings.');
+                    });
+                },
+                saveAdminProfile() {
+                    // This is a placeholder. You need a backend endpoint to handle this.
+                    console.log('Saving admin profile:', this.editAdmin);
+                    this.admin = { ...this.editAdmin };
+                    alert('Admin profile updated!');
+                    this.isEditingAdminProfile = false;
+                },
+                fetchNotifications() {
+                    fetch('/api?action=get_admin_notifications')
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.notifications = data.notifications; });
+                },
+                markAllRead() {
+                    this.notifications.forEach(n => n.unread = false);
+                    fetch('/api?action=mark_all_notifications_read', { method: 'POST' });
+                },
+                deleteNotification(id) {
+                    this.notifications = this.notifications.filter(n => n.id !== id);
+                    fetch('/api?action=delete_notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id })
+                    });
+                },
+                fetchBroadcastHistory() {
+                    fetch('/api?action=get_broadcast_history')
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.broadcastHistory = data.history; });
+                },
+                fetchLogs() {
+                    const params = new URLSearchParams({
+                        action: 'get_logs',
+                        ...this.logFilters
+                    });
+                    fetch(`/api?${params.toString()}`)
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.systemLogs = data.logs; });
+                }
+            }));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,4774 @@
+// Define CSRF_TOKEN globally to prevent ReferenceErrors
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+const API_BASE_URL = ''; // Use relative path so it works on any IP
+
+let isMaigaInitialized = false;
+const initMaiga = () => {
+    if (isMaigaInitialized) return;
+
+    // Helper function for formatting post content (hashtags, mentions)
+    window.formatContent = (content) => {
+        if (!content) return '';
+        content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic sanitize
+        content = content.replace(/#(\w+)/g, '<a href="#" class="text-blue-500 hover:underline" onclick="openHashtag(\'$1\'); return false;">#$1</a>');
+        content = content.replace(/@(\w+)/g, '<a href="#" class="text-blue-500 hover:underline" onclick="openUserProfileByName(\'$1\'); return false;">@$1</a>');
+        return content;
+    };
+
+    isMaigaInitialized = true;
+    Alpine.data('appData', () => ({
+        init() {
+            this.mainInit();
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                this.installPrompt = e;
+            });
+        },
+        installPrompt: null,
+        // Initialize State Variables
+        darkMode: localStorage.getItem('darkMode') === 'true',
+        isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',
+        
+        // Helper to prevent apiFetch crash if missing
+        getMockData(url) {
+            // Mocks removed to force backend connection for implemented features.
+            // Only keep user mock if absolutely necessary, but implementing all means removing safety nets.
+            return null;
+        },
+
+        async apiFetch(url, options = {}) {
+            // Ensure CSRF token is included for non-GET requests
+            if (options.method && options.method !== 'GET') {
+                options.headers = {
+                    ...options.headers,
+                    'X-CSRF-Token': CSRF_TOKEN
+                };
+            }
+
+            // Prepend Server URL if the url is relative (starts with /)
+            const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
+
+            try {
+                const response = await fetch(fullUrl, options);
+                
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return null;
+                }
+
+                const contentType = response.headers.get('content-type');
+
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    if (!response.ok || data.error) {
+                        this.showToast('Error', data.error || `Request failed with status ${response.status}`, 'error');
+                        console.error('API Error:', data);
+                        return null;
+                    }
+                    return data;
+                } else {
+                    const errorText = await response.text();
+                    console.error('Non-JSON response from server:', errorText);
+                    // If server returns 404 (e.g. endpoint not found), try mock data
+                    const mock = this.getMockData(url);
+                    if (mock) return mock;
+                    return null; 
+                }
+            } catch (error) {
+                console.error('Fetch Error:', error);
+                // Fallback to mock data if connection fails (server down)
+                const mock = this.getMockData(url);
+                if (mock) return mock;
+                
+                this.showToast('Network Error', 'Could not connect to the server.', 'error');
+                return null;
+            }
+        },
+        activeTab: localStorage.getItem('maiga_active_tab') || 'home',
+
+        
+        // --- MEDIA EDITOR STATE ---
+        isMediaEditorOpen: false,
+        editorSource: null, // 'post' or 'story'
+        editorFile: null,
+        editorPreviewUrl: null,
+        editorType: null,
+        editorOverlays: [],
+        editorFilter: 'none',
+        editorMusic: null,
+        editorStickers: [], // Will fetch from backend
+        editorHistory: [],
+        editorHistoryIndex: -1,
+        showEditorStickers: false,
+        isAddingEditorText: false,
+        editorText: '',
+        editorTextColor: '#ffffff',
+        editorTextFont: 'sans-serif',
+        editorFonts: ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'Arial', 'Verdana', 'Times New Roman'],
+        videoDuration: 0,
+        videoTrim: { start: 0, end: 100 },
+        cropper: null,
+        isCropping: false,
+        imageFilters: [
+            { name: 'Normal', value: 'none' },
+            { name: 'Grayscale', value: 'grayscale(1)' },
+            { name: 'Sepia', value: 'sepia(1)' },
+            { name: 'Saturate', value: 'saturate(2)' },
+            { name: 'Contrast', value: 'contrast(1.5)' },
+            { name: 'Brightness', value: 'brightness(1.2)' },
+            { name: 'Invert', value: 'invert(1)' },
+        ],
+        drawings: [],
+        // State from x-init moved here
+        isDrawing: false,
+        activeTool: 'brush', // 'brush' or 'eraser'
+        currentPath: [],
+        brushColor: '#ffffff',
+        brushSize: 5,
+        editorTextOpacity: 1,
+        editorTextRotation: 0,
+
+        isLeftSidebarCollapsed: false,
+        socket: null,
+        followLoading: [],
+        connectionList: [],
+        connectionSearchQuery: '',
+        isCreatingPost: false,
+        isCreatingStory: false,
+        newStoryContent: '',
+        postFile: null, // Store raw file for posts
+        storyFile: null,
+        storyMediaPreview: null,
+        storyMediaType: null,
+        textStoryStyleIndex: 0,
+        showMusicPicker: false,
+        musicTracks: [], // Will fetch from backend
+        selectMusic(track) {
+            this.tempStory.hasMusic = this.tempStory.musicTrack?.src !== track.src;
+            this.tempStory.musicTrack = this.tempStory.hasMusic ? track : null;
+            this.showMusicPicker = false;
+        },
+        selectEditorMusic(track) {
+            this.editorMusic = track;
+            this.showMusicPicker = false;
+            this.showToast('Music Added', track.title, 'success');
+        },
+        textStoryStyles: [
+            { background: 'linear-gradient(to bottom, #4f46e5, #9333ea)', color: '#ffffff' },
+            { background: 'linear-gradient(to bottom, #f97316, #fde047)', color: '#ffffff' },
+            { background: '#18181b', color: '#ffffff' },
+            { background: '#ffffff', color: '#18181b' },
+        ],
+        showStoryStickerPicker: false,
+        storyStickers: [], // Will fetch from backend
+        storyOverlays: [],
+        storyMediaType: null,
+        followingList: [],
+        groupSearchQuery: '',
+        friendsSearchQuery: '',
+        friendsTab: 'suggestions',
+        get unreadBadgeDisplay() {
+            const count = this.totalUnreadChats;
+            return count > 9 ? '9+' : count;
+        },
+        getSeenByText(msg) {
+            if (!msg.read_by || !Array.isArray(msg.read_by) || msg.read_by.length === 0) return '';
+            // Filter out self
+            const readers = msg.read_by.filter(u => (u._id || u.id) != this.user.id);
+            if (readers.length === 0) return '';
+            
+            const names = readers.map(u => u.first_name || u.name || 'User').join(', ');
+            return `Seen by: ${names}`;
+        },
+        get filteredFollowingList() {
+            if (!this.friendsSearchQuery.trim()) return this.followingList;
+            const q = this.friendsSearchQuery.toLowerCase();
+            return this.followingList.filter(f =>
+                (f.name && f.name.toLowerCase().includes(q)) ||
+                (f.username && f.username.toLowerCase().includes(q)) ||
+                (f.dept && f.dept.toLowerCase().includes(q))
+            );
+        },
+        get potentialGroupMembers() {
+            if (!this.activeChat || !this.activeChat.members) return this.filteredFollowingForGroup;
+            const existingMemberIds = this.activeChat.members.map(m => m.id);
+            let potential = this.followingList.filter(f => !existingMemberIds.includes(f.id));
+
+            // If adding to a YSU group, only show YSU members
+            if (this.activeChat.account_type === 'ysu') {
+                potential = potential.filter(f => f.account_type === 'ysu');
+            }
+
+            if (!this.addMemberSearchQuery.trim()) {
+                return potential;
+            }
+            const q = this.addMemberSearchQuery.toLowerCase();
+            return potential.filter(f => (f.name && f.name.toLowerCase().includes(q)) || (f.username && f.username.toLowerCase().includes(q)));
+        },
+        get filteredFriendsList() {
+            if (!this.friendsSearchQuery.trim()) return this.friends;
+            const q = this.friendsSearchQuery.toLowerCase();
+            return this.friends.filter(f =>
+                (f.name && f.name.toLowerCase().includes(q)) ||
+                (f.username && f.username.toLowerCase().includes(q)) ||
+                (f.dept && f.dept.toLowerCase().includes(q))
+            );
+        },
+        get filteredFollowingForGroup() {
+            if (!this.groupSearchQuery.trim()) return this.followingList;
+            const q = this.groupSearchQuery.toLowerCase();
+            return this.followingList.filter(f =>
+                (f.name && f.name.toLowerCase().includes(q)) ||
+                (f.username && f.username.toLowerCase().includes(q)) ||
+                (f.dept && f.dept.toLowerCase().includes(q))
+            );
+        },
+        isMessaging: false,
+        isEditingProfile: false,
+        isSideMenuOpen: false,
+        isCreatingGroup: false,
+        activeChat: null,
+        typingUsers: [],
+        showMemberOptionsFor: null,
+        isAddingGroupMembers: false,
+        membersToAdd: [],
+        addMemberSearchQuery: '',
+        isEditingGroupInfo: false,
+        editingGroup: { id: null, name: '', description: '', avatarPreview: null, avatarFile: null, permissions: {}, approve_members: false },
+        createGroupStep: 1,
+        newGroup: { 
+            name: '', 
+            description: '',
+            members: [], 
+            avatarFile: null, 
+            avatarPreview: null,
+            permissions: {
+                can_edit_settings: false,
+                can_send_messages: true,
+                can_add_members: false,
+            },
+            approve_members: false,
+        },
+        newMessage: '',
+        showChatOptions: false,
+        showScrollTop: false,
+        showStickerPicker: false,
+        showLikesModal: false,
+        likersList: [],
+        stickers: ['😀', '😃', '😄', '😁'],
+         viewingComments: null,
+        replyingToComment: null,
+        commentInput: '',
+        showShareModal: false,
+        sharingPost: null,
+        showReelOptions: false,
+        showPostOptions: false,
+        selectedPostForMenu: null,
+        selectedReel: null,
+        lastReelClick: 0,
+        typingIndicatorTimeout: null,
+        isRecording: false,
+        mediaRecorder: null,
+        audioChunks: [],
+        recordingTimer: null,
+        recordingDuration: 0,
+        isRecordingComment: false,
+        commentRecordingDuration: 0,
+        commentMediaRecorder: null,
+        commentAudioChunks: [],
+        commentRecordingTimer: null,
+        showMessageOptions: false,
+        selectedMessageForOptions: null,
+        showForwardModal: false,
+        messageToForward: null,
+        replyingTo: null,
+        isCreatingPoll: false,
+        newPoll: { question: '', options: ['', ''] },
+        isSchedulingMessage: false,
+        scheduledTime: '',
+        scheduledMessages: [],
+        isReelsMuted: false,
+        reelClickTimer: null,
+        selectedMedia: null,
+        mediaType: null,
+        newPostContent: '',
+        homeSearchQuery: '',
+        isSearchFocused: false,
+        recentSearches: ['Exam Timetable', 'Library', 'Sports'],
+        isCallChatOpen: false,
+        isCallMinimized: false,
+        isCalling: false,
+        async logout() {
+            await this.apiFetch('/api/logout');
+            window.location.href = 'index.html';
+        },
+        async installPwa() {
+            if (!this.installPrompt) return;
+            this.installPrompt.prompt();
+            this.installPrompt = null;
+        },
+        sendWave(friend) {
+            if (!friend || !friend.id) return;
+            
+            this.showToast('Waved!', `You waved at ${friend.name || 'user'} 👋`, 'success');
+
+            this.apiFetch('/api/send_wave', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ user_id: friend.id })
+            });
+        },
+        isCallRecording: false,
+        isRightSidebarCollapsed: false,
+        callRecorder: null,
+        callChunks: [],
+        profileTab: 'posts',
+        showFollowerList: null,
+        batteryLevel: 100,
+        isCharging: false,
+        isPoorConnection: false,
+        isReconnecting: false,
+        connectionInterval: null,
+        callType: null,
+        facingMode: 'user',
+        isScreenSharing: false,
+        localStream: null,
+        callStatus: '',
+        isMicMuted: false,
+        isCameraOff: false,
+        isSpeakerOn: false,
+        callDuration: 0,
+        callTimer: null,
+        isDragging: false,
+        dragInfo: { startX: 0, startY: 0, initialX: 0, initialY: 0 },
+        minimizedCallTransform: { x: 0, y: 0 },
+        swipeStart: { x: 0, y: 0 },
+        swipingMsgId: null,
+        swipeOffset: 0,
+        touchTimer: null,
+        editingMessageId: null,
+        isSearchingChat: false,
+        chatSearchQuery: '',
+        createPostOffset: { x: 0, y: 0 },
+        createPostStart: { x: 0, y: 0 },
+        isCreatePostDragging: false,
+        mutedChats: [],
+        mediaPreviewUrl: null,
+        mediaPreviewFile: null,
+        mediaPreviewType: null,
+        incomingCall: null,
+        peerConnection: null,
+        currentCallId: null,
+        pinnedChats: [],
+        archivedChats: [],
+        activeHashtag: null,
+        page: 1,
+        isLoadingMore: false,
+        searchResults: [],
+        toasts: [],
+        isReporting: false,
+        reportForm: { title: '', description: '', screenshot: null, preview: null, targetType: '', targetId: null, targetUserId: null },
+        // Pull to Refresh
+        pullStartY: 0,
+        pullDistance: 0,
+        isOffline: !navigator.onLine,
+        isRefreshing: false,
+        handlePullStart(e) {
+            if (this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
+                this.pullStartY = e.touches[0].clientY;
+            }
+        },
+        handlePullMove(e) {
+            if (this.pullStartY > 0 && this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
+                const touchY = e.touches[0].clientY;
+                const dist = touchY - this.pullStartY;
+                if (dist > 0) {
+                    e.preventDefault(); // Prevent browser's default pull-to-refresh
+                    this.pullDistance = Math.min(dist * 0.4, 150);
+                } else {
+                    this.pullDistance = 0;
+                }
+            }
+        },
+        handlePullEnd() {
+            if (this.pullDistance > 80) { // Increased threshold for better UX
+                this.refreshAllData();
+            } else {
+                this.pullDistance = 0;
+                this.pullStartY = 0;
+            }
+        },
+        checkConnection() {
+            if (!this.isOffline && navigator.onLine) {
+                this.showToast('Online', 'You are already online.', 'success');
+                return;
+            }
+            this.showToast('Connecting', 'Checking connection...', 'info');
+            
+            fetch('/?t=' + Date.now(), { method: 'HEAD', cache: 'no-store' })
+                .then(() => {
+                    this.isOffline = false;
+                    this.showToast('Back Online', 'Internet connection restored.', 'success');
+                    this.refreshAllData();
+                })
+                .catch(() => {
+                    this.isOffline = true;
+                    this.showToast('Offline', 'Still offline. Please check your connection.', 'error');
+                });
+        },
+        refreshAllData() {
+            if (this.isRefreshing) return;
+            this.isRefreshing = true;
+
+            const promises = [
+                this.apiFetch('/api/get_posts?page=1').then(data => { if (Array.isArray(data)) { this.posts = data; this.page = 1; } }), // Fixed: this.homePosts to this.posts
+                this.apiFetch('/api/get_chats').then(data => { if (Array.isArray(data)) this.chats = data; }),
+                this.apiFetch('/api/get_groups').then(data => { if (Array.isArray(data)) this.groups = data; }),
+                this.apiFetch('/api/get_stories').then(data => this.processStories(Array.isArray(data) ? data : [])),
+                this.apiFetch('/api/friends/suggestions').then(data => { if (Array.isArray(data)) this.friends = data; }),
+                this.apiFetch('/api/get_trending').then(data => { if (Array.isArray(data)) this.trendingTopics = data; })
+        
+            ];
+
+            Promise.all(promises).finally(() => {
+                this.showToast('Refreshed', 'Your feed is up to date.', 'success');
+                // Use a timeout to make the animation feel smoother
+                setTimeout(() => {
+                    this.isRefreshing = false;
+                    this.pullDistance = 0;
+                    this.pullStartY = 0;
+                }, 500);
+            });
+        },
+        isLoading: true,
+        showSkeletons: true,
+        user: {
+            id: 0,
+            name: '',
+            username: '',
+            avatar: '',
+            account_type: 'maiga',
+            followerIds: [],
+            followingIds: []
+        },
+        following: [],
+        selectedLanguage: 'English',
+        selectedTopic: null,
+        showUserProfile: false,
+        viewingUser: null,
+        viewingPost: null, // ... other properties
+        viewingStory: null,
+        showSeenList: false, // ... other properties
+        isUploadingStory: false,
+        showCloseFriendsManager: false,
+        storyOverlays: [],
+        isAddingStoryText: false,
+        newStoryText: '',
+        newStoryTextColor: '#ffffff',
+        storyTextColors: ['#ffffff', '#000000', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff'],
+        tempStory: null,
+        closeFriends: [],
+        touchStartY: 0,
+        pressStartTime: 0,
+        isPaused: false,
+        showStoryShareOptions: false,
+        isSharingStoryToChat: false,
+        zoomScale: 1,
+        lastScale: 1,
+        startPinchDist: 0,
+        uploadProgress: 0,
+        isPostingStory: false,
+        myStories: [],
+        storyProgress: 0,
+        storyTimer: null,
+        blockedUsers: [],
+        showGroupInfo: false,
+        replyContent: '',
+        activeMessageTab: 'all',
+        privacySettings: {
+            privateAccount: false,
+            activityStatus: true,
+            location: true
+        },
+        passwordForm: { current: '', new: '', confirm: '' },
+        editUser: {},
+        posts: [],
+        friends: [], // Will be populated from API
+        groups: [],
+        trendingTopics: [],
+        savedPostList: [], // Store saved posts here
+        forumTopics: [], // Will fetch from backend
+        notifications: [],
+        reports: [
+            { 
+                id: 1, 
+                reporter: { name: 'Aisha Yusuf', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aisha' }, 
+                reason: 'Harassment', 
+                details: 'Another user is sending me inappropriate messages.',
+                time: '2h ago'
+            },
+            { 
+                id: 2, 
+                reporter: { name: 'Musa Ibrahim', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Musa' }, 
+                reason: 'Spam Post', 
+                details: 'The post with ID #4521 seems to be a spam link.',
+                time: '5h ago'
+            }
+        ],
+        chats: [],
+        chatMessages: {}, // Will populate via API
+        reels: [],
+        myReels: [],
+        observer: null,
+        viewedReels: new Set(),
+        reelPage: 1,
+        isLoadingMoreReels: false,
+        
+        // --- GLOBAL AUDIO PLAYER ---
+        globalPlayer: {
+            visible: false,
+            minimized: true,
+            playing: false,
+            track: null, // { title, artist, cover, src }
+            currentTime: 0,
+            duration: 0,
+            progress: 0,
+            audioObj: null
+        },
+
+        initGlobalAudio() {
+            if (this.globalPlayer.audioObj) return;
+            this.globalPlayer.audioObj = new Audio();
+            const p = this.globalPlayer;
+            const a = p.audioObj;
+
+            a.addEventListener('timeupdate', () => {
+                p.currentTime = a.currentTime || 0;
+                p.duration = a.duration || 0;
+                p.progress = (a.duration > 0) ? (a.currentTime / a.duration) * 100 : 0;
+            });
+            a.addEventListener('ended', () => {
+                p.playing = false;
+                p.progress = 100;
+            });
+            a.addEventListener('play', () => p.playing = true);
+            a.addEventListener('pause', () => p.playing = false);
+            a.addEventListener('error', () => {
+                this.showToast('Error', 'Unable to play audio track.', 'error');
+                p.playing = false;
+            });
+        },
+
+        playGlobalTrack(track) {
+            this.initGlobalAudio();
+            const p = this.globalPlayer;
+            
+            if (p.track && p.track.src === track.src) {
+                this.toggleGlobalPlayback();
+                return;
+            }
+
+            // Stop any inline audio
+            if (this.activeAudioId) {
+                const el = document.getElementById(this.activeAudioId);
+                if (el) el.pause();
+            }
+
+            p.track = track;
+            p.visible = true;
+            p.minimized = true; 
+            p.audioObj.src = track.src;
+            p.audioObj.play().catch(e => console.error(e));
+        },
+
+        toggleGlobalPlayback() {
+            if (!this.globalPlayer.audioObj) return;
+            if (this.globalPlayer.playing) this.globalPlayer.audioObj.pause();
+            else this.globalPlayer.audioObj.play();
+        },
+
+        seekGlobalAudio(event) {
+            if (!this.globalPlayer.audioObj) return;
+            const percent = event.target.value;
+            const time = (percent / 100) * this.globalPlayer.audioObj.duration;
+            this.globalPlayer.audioObj.currentTime = time;
+        },
+
+        closeGlobalPlayer() {
+            if (this.globalPlayer.audioObj) {
+                this.globalPlayer.audioObj.pause();
+                this.globalPlayer.audioObj.currentTime = 0;
+            }
+            this.globalPlayer.visible = false;
+            this.globalPlayer.playing = false;
+            this.globalPlayer.track = null;
+        },
+
+        // --- INLINE AUDIO MANAGEMENT ---
+        activeAudioId: null,
+        
+        toggleAudio(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+
+            // Pause global player if running
+            if (this.globalPlayer.playing) this.globalPlayer.audioObj.pause();
+
+            if (this.activeAudioId === elementId) {
+                el.pause();
+            } else {
+                if (this.activeAudioId) {
+                    const prev = document.getElementById(this.activeAudioId);
+                    if (prev) prev.pause();
+                }
+                el.play().catch(e => console.error(e));
+            }
+        },
+        
+        handleAudioPlay(elementId) {
+            this.activeAudioId = elementId;
+        },
+        
+        handleAudioPause(elementId) {
+            if (this.activeAudioId === elementId) {
+                this.activeAudioId = null;
+            }
+        },
+
+        // --- REACTION LOGIC ---
+        activeReactionPostId: null,
+        reactionTimer: null,
+
+        startReactionTimer(postId) {
+            this.reactionTimer = setTimeout(() => {
+                this.activeReactionPostId = postId;
+                if (navigator.vibrate) navigator.vibrate(50);
+            }, 500);
+        },
+
+        stopReactionTimer() {
+            if (this.reactionTimer) {
+                clearTimeout(this.reactionTimer);
+                this.reactionTimer = null;
+            }
+        },
+
+        closeReactions(postId) {
+            if (this.activeReactionPostId === postId) {
+                this.activeReactionPostId = null;
+            }
+        },
+
+        async mainInit() {
+            // Prevent back button to login page
+            history.pushState(null, null, location.href);
+            window.onpopstate = function () {
+                history.go(1);
+            };
+
+            // --- SOCKET.IO IMPLEMENTATION ---
+            this.socket = io(API_BASE_URL);
+
+            // 2. Join a room based on the user's ID once connected and user is loaded
+            this.socket.on('connect', () => {
+                console.log('Socket connected:', this.socket.id);
+                if (this.user && this.user.id) {
+                    this.socket.emit('join_room', this.user.id);
+                    // Join group rooms for real-time updates
+                    this.groups.forEach(g => {
+                        this.socket.emit('join_group', g.id);
+                    });
+                }
+            });
+
+            // 3. Listen for incoming messages
+            this.socket.on('receive_message', async (data) => {
+                console.log('Received message:', data);
+                document.getElementById('receive-sound').play().catch(()=>{}); // Play notification sound
+
+                // Make sure it's not our own message coming back
+                if (data.sender_id === this.user.id) return;
+
+                // Decrypt E2EE messages
+                if (data.media_type === 'e2ee') {
+                    try {
+                        const privKey = await this.crypto.getPrivateKey();
+                        data.content = await this.crypto.decrypt(data.content, privKey);
+                        data.type = 'text'; 
+                    } catch (e) {
+                        console.error("Decryption failed", e);
+                        data.content = '🔒 Encrypted Message';
+                        data.type = 'text';
+                    }
+                }
+
+                const chatId = data.sender_id;
+
+                if (!this.chatMessages[chatId]) {
+                    this.chatMessages[chatId] = [];
+                }
+
+                this.chatMessages[chatId].push(data);
+
+                const chatInList = this.chats.find(c => c.id == chatId);
+                if (chatInList) {
+                    chatInList.lastMsg = data.content;
+                    chatInList.time = 'Just now';
+                    if (this.activeChat?.id != chatId) chatInList.unread = true;
+                }
+            });
+
+             // --- Socket Call Listeners ---
+            this.socket.on('incoming_call', (data) => {
+                if (this.isCalling || this.incomingCall) return; // Busy
+                this.incomingCall = {
+                    caller_id: data.from,
+                    name: data.name,
+                    avatar: data.avatar,
+                    type: data.type,
+                    sdp: data.signal // Keep original object
+                };
+                document.getElementById('ringing-sound').play().catch(()=>{});
+            });
+
+            this.socket.on('call_accepted', (signal) => {
+                this.callStatus = 'Connected';
+                document.getElementById('ringing-sound').pause();
+                this.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+                clearInterval(this.connectionInterval); // Stop any fallback polling
+                this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
+            });
+
+            this.socket.on('ice_candidate', (candidate) => {
+                if (this.peerConnection) {
+                    this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>{});
+                }
+            });
+
+            this.socket.on('call_ended', () => {
+                this.endCall();
+                this.showToast('Info', 'Call ended.');
+            });
+
+            // Listen for typing events
+            this.socket.on('display_typing', (data) => {
+                // data.chat_id is the Group ID (for groups) or Sender ID (for 1-on-1)
+                if (this.activeChat && this.activeChat.id == data.chat_id && data.sender_id != this.user.id) {
+                    if (!this.typingUsers.includes(data.sender_id)) {
+                        this.typingUsers.push(data.sender_id);
+                    }
+                    // Auto-hide typing indicator after 3 seconds
+                    setTimeout(() => {
+                        this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
+                    }, 3000);
+                }
+            });
+
+            this.socket.on('hide_typing', (data) => {
+                if (this.activeChat && this.activeChat.id == data.chat_id) {
+                    this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
+                }
+            });
+
+            // --- Notification Listener ---
+            this.socket.on('new_notification', (data) => {
+                this.notifications.unshift(data);
+                this.showToast('New Notification', data.content, 'info');
+                
+                // If it's a follow notification, you might want to refresh friend suggestions or follower count
+                if (data.type === 'follow') {
+                    // Optional: refresh follower count if viewing profile
+                    if (this.activeTab === 'profile') this.apiFetch('/api/get_user').then(u => this.user = {...this.user, ...u});
+                }
+            });
+
+            // --- User Status Listener (Online/Offline) ---
+            this.socket.on('user_status', (data) => {
+                const chat = this.chats.find(c => c.id == data.userId);
+                if (chat) {
+                    chat.status = data.status;
+                }
+
+                // Update Friends/Suggestions List
+                const friend = this.friends.find(f => f.id == data.userId);
+                if (friend) {
+                    friend.online = data.status === 'online';
+                }
+
+                // Update Following List
+                const following = this.followingList.find(f => f.id == data.userId);
+                if (following) {
+                    following.online = data.status === 'online';
+                }
+            });
+
+            // --- Message Edited Listener ---
+            this.socket.on('message_edited', (data) => {
+                // If viewing the chat where the edit happened, refresh to handle decryption or update
+                if (this.activeChat) {
+                    const hasMessage = this.chatMessages[this.activeChat.id]?.some(m => m.id == data.id);
+                    if (hasMessage) {
+                        // Re-fetch messages to handle E2EE decryption cleanly
+                        this.fetchMessages(this.activeChat, false);
+                    }
+                }
+            });
+
+            // --- Seen Status Listener ---
+            this.socket.on('messages_seen', (data) => {
+                // Someone viewed my messages
+                // data.viewer_id is the person who read them
+                const chatId = data.viewer_id;
+                if (this.chatMessages[chatId]) {
+                    this.chatMessages[chatId].forEach(m => {
+                        if (m.sender === 'me') m.read = true;
+                    });
+                }
+            });
+
+            // Offline Detection
+            window.addEventListener('online', () => { 
+                this.isOffline = false; 
+                this.showToast('Back Online', 'Internet connection restored.', 'success'); 
+            });
+            window.addEventListener('offline', () => { 
+                this.isOffline = true; 
+            });
+            // Setup cryptography - Fix for phone/non-secure context
+            if (window.isSecureContext && window.crypto && window.crypto.subtle) {
+                try {
+                    await this.crypto.init(this);
+                    const hasKeys = await this.crypto.hasKeys();
+                    if (!hasKeys) {
+                        await this.crypto.generateAndStoreKeys(this);
+                        this.showToast('Security', 'Encryption keys generated and stored securely.', 'success');
+                    }
+                } catch (e) { console.warn("Crypto init skipped due to error", e); }
+            }
+            this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
+            
+            // Watch for changes to isFullScreen and save to localStorage
+            this.$watch('isFullScreen', (value) => {
+                localStorage.setItem('maiga_fullscreen', value);
+            });
+            
+            // Watch for dark mode changes
+            this.$watch('darkMode', (value) => {
+                localStorage.setItem('darkMode', value);
+            });
+
+            // Re-join room if user data loads after socket connects
+            this.$watch('user.id', (newId) => {
+                if (newId && this.socket && this.socket.connected) this.socket.emit('join_room', newId);
+            });
+            
+            // If full screen was active on last visit, try to restore it
+            if (this.isFullScreen) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    // this.showToast('Error', 'Could not restore full screen mode.', 'error'); // Suppress for cleaner UI
+                    this.isFullScreen = false; // Reset if it fails
+                });
+            }
+            document.addEventListener('fullscreenchange', () => {
+                this.isFullScreen = !!document.fullscreenElement;
+            });
+            this.editUser = { ...this.user };
+            
+            // Consolidate initial data fetching
+            const initialDataPromises = [
+                // 1. Get User Data
+                this.apiFetch('/api/get_user').then(data => {
+                    if(data) {
+                        this.user = { ...this.user, ...data };
+                        this.editUser = { ...this.user };
+                    }
+                }),
+                // 2. Get Posts
+                this.apiFetch('/api/get_posts?page=1').then(data => {
+                    this.posts = Array.isArray(data) ? data : [];
+                }),
+                // 3. Get Chats
+                this.apiFetch('/api/get_chats').then(data => {
+                    this.chats = Array.isArray(data) ? data : [];
+                }),
+                // 4. Get Connections (for group creation etc)
+                this.apiFetch('/api/get_connections?type=following').then(data => {
+                    this.followingList = Array.isArray(data) ? data : [];
+                })
+            ];
+
+            // Fetch newly implemented features
+            this.apiFetch('/api/get_forum_topics').then(data => { if(Array.isArray(data)) this.forumTopics = data; });
+            this.apiFetch('/api/get_music_tracks').then(data => { if(Array.isArray(data)) this.musicTracks = data; });
+            this.apiFetch('/api/get_stickers').then(data => { 
+                if(data) { this.editorStickers = data.editor || []; this.storyStickers = data.story || []; }
+            });
+
+            // Non-blocking fetches (can load after UI is ready)
+            this.apiFetch('/api/get_trending').then(data => {
+                this.trendingTopics = Array.isArray(data) ? data : [];
+            });
+
+            // Fetch Groups
+            this.apiFetch('/api/get_groups').then(data => {
+                    this.groups = Array.isArray(data) ? data : [];
+                    if(this.socket && this.socket.connected) {
+                        this.groups.forEach(g => this.socket.emit('join_group', g.id));
+                    }
+            });
+
+            // Fetch Blocked Users
+            this.apiFetch('/api/get_blocked_users')
+                .then(data => {
+            
+                    this.blockedUsers = Array.isArray(data) ? data : [];
+                }).catch(() => { this.blockedUsers = []; });
+
+            // Fetch Notifications
+            this.apiFetch('/api/get_notifications')
+                .then(data => {
+                    this.notifications = Array.isArray(data) ? data : [];
+                }).catch(() => { this.notifications = []; });
+
+            // Fetch Muted Chats
+            this.apiFetch('/api/get_muted_chats')
+                    .then(data => {
+                    this.mutedChats = Array.isArray(data) ? data : [];
+                }).catch(() => { this.mutedChats = []; });
+
+            // Fetch Pinned Chats
+            this.apiFetch('/api/get_pinned_chats')
+                .then(data => {
+                    this.pinnedChats = data;
+                    this.pinnedChats = Array.isArray(data) ? data : [];
+                })
+                .catch(err => console.error("Error fetching pinned chats:", err));
+
+            // Fetch Reels
+            this.apiFetch('/api/get_reels?page=1&limit=5')
+                .then(data => {
+                    this.reels = Array.isArray(data) ? data : [];
+                }).catch(() => { this.reels = []; });
+                
+            // Fetch Stories
+            this.apiFetch('/api/get_stories')
+                .then(data => this.processStories(Array.isArray(data) ? data : []))
+                .catch(() => this.processStories([]));
+
+            // Wait for critical data, then hide loading screen
+            Promise.all(initialDataPromises).finally(() => {
+                this.isLoading = false;
+                this.showSkeletons = false;
+                // Fetch suggestions after main load
+                this.apiFetch('/api/friends/suggestions').then(data => {
+                    this.friends = Array.isArray(data) ? data : [];
+                });
+            });
+
+           this.$watch('activeChat', val => {
+               if (val) {
+                    this.fetchMessages(val);
+                    this.markAsRead(val);
+                    this.typingUsers = [];
+                }
+            });
+            
+
+            // Watch for typing
+            this.$watch('newMessage', (val) => {
+               if (val && this.activeChat) {
+                    this.sendTypingSignal();
+                }
+            });
+
+            // Watch reels to setup observer when data loads
+            this.$watch('reels', () => {
+                this.$nextTick(() => {
+                      this.setupReelsObserver();
+                });
+            });
+
+            // Watch activeTab to manage video playback
+           this.$watch('activeTab', (val) => {
+            localStorage.setItem('maiga_active_tab', val);
+                if (val === 'reels') {
+                    this.$nextTick(() => this.setupReelsObserver()); 
+                    // Fetch latest reels when entering tab
+                    this.apiFetch('/api/get_reels').then(d => { if(Array.isArray(d)) this.reels = d; });
+                } else {
+                    this.stopAllReels();
+                }
+
+                if (val === 'friends') {
+                    // Fetch suggestions/following when entering tab
+                    this.apiFetch('/api/friends/suggestions').then(data => { if (Array.isArray(data)) this.friends = data; });
+                }
+
+                // Watch for Saved tab
+                if (val === 'saved') {
+                    this.fetchSavedPosts();
+                }
+            });
+
+            // Heartbeat for Last Seen (every 2 minutes)
+            this.updateLastSeen();
+            setInterval(() => {
+                this.updateLastSeen();
+            }, 120000);
+
+            // Check for URL params to open user profile
+            const urlParams = new URLSearchParams(window.location.search);
+            const viewUserId = urlParams.get('userId');
+            if (viewUserId) {
+                const userToView = this.friends.find(f => f.id == viewUserId);
+                if (userToView) {
+                    this.openUserProfile(userToView);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }
+
+            // Check for URL params to open chat
+            const chatUserId = urlParams.get('chatUserId');
+            if (chatUserId) {
+                const userToChat = this.friends.find(f => f.id == chatUserId);
+                if (userToChat) {
+                    let chat = this.chats.find(c => c.id == userToChat.id);
+                    if (!chat) {
+                        chat = {
+                            id: userToChat.id,
+                            name: userToChat.name,
+                            avatar: userToChat.avatar,
+                            lastMsg: 'Start a conversation',
+                            time: 'Now',
+                            unread: false,
+                            status: userToChat.online ? 'online' : 'offline'
+                        };
+                        this.chats.unshift(chat);
+                    }
+                    this.activeChat = chat;
+                    this.isMessaging = true;
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }
+            }
+
+            // Check for invite link code in URL
+            const inviteCode = urlParams.get('invite_code');
+            if (inviteCode) {
+                // Small delay to ensure user is logged in/data loaded
+                setTimeout(() => this.joinGroupViaLink(inviteCode), 1000);
+            }
+
+            window.addEventListener('mousemove', this.dragMove.bind(this));
+            window.addEventListener('mouseup', this.dragEnd.bind(this));
+            window.addEventListener('touchmove', this.dragMove.bind(this));
+            window.addEventListener('touchend', this.dragEnd.bind(this));
+
+            if ('getBattery' in navigator) {
+                navigator.getBattery().then(battery => {
+                    this.updateBatteryStatus(battery);
+                    battery.addEventListener('levelchange', () => this.updateBatteryStatus(battery));
+                    battery.addEventListener('chargingchange', () => this.updateBatteryStatus(battery));
+                });
+            }
+
+            this.$watch('isPaused', val => {
+                const video = document.querySelector('.story-video');
+                if (video) val ? video.pause() : video.play();
+            });
+            /* Auto-Delete: Remove stories older than 24 hours */
+            setInterval(() => {
+                const now = Date.now();
+                this.myStories = this.myStories.filter(s => (now - s.time) < 24 * 60 * 60 * 1000);
+            }, 60000);
+            // Check scheduled messages every 5 seconds
+            setInterval(() => {
+                const now = new Date();
+                this.scheduledMessages.forEach((msg, index) => {
+                    if (new Date(msg.dueTime) <= now) {
+                        this.sendScheduledMessage(msg, index);
+                    }
+                });
+            }, 5000);
+
+            // Expose functions for x-html clicks
+            window.openHashtag = (tag) => this.openHashtag(tag);
+            window.openUserProfileByName = (name) => this.openUserProfileByName(name);
+            window.openUserProfile = (id) => this.openUserProfile(id);
+            
+            this.initPushNotifications();
+        },
+        toggleFullScreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen(); 
+                }
+            }
+        },
+        openUserProfile(userOrId) {
+            let userId, username;
+            if (typeof userOrId === 'object' && userOrId !== null) {
+                userId = userOrId.id;
+                username = userOrId.username;
+                if (username) this.addToRecent(username);
+            } else {
+                userId = userOrId;
+            }
+            
+
+            if (!userId || userId == this.user.id) {
+                this.activeTab = 'profile';
+                return;
+            }
+            
+            // Close other modals to prevent overlapping/z-index issues
+            this.showFollowerList = null;
+            this.viewingComments = null;
+            this.showGroupInfo = false;
+
+            this.viewingUser = null; // Show loading state
+            this.showUserProfile = true;
+
+            // Fetch full user profile from API
+            this.apiFetch(`/api/get_profile?user_id=${userId}`)
+                .then(data => {
+                    if (data && !data.error && data.id) {
+                        this.viewingUser = data;
+                        this.viewingUser.posts = []; // initialize posts array
+                        // Now fetch their posts
+                        this.apiFetch(`/api/get_posts?user_id=${userId}`)
+                            .then(postsData => {
+                                if (postsData) this.viewingUser.posts = postsData;
+                            });
+                        // Fetch their reels
+                        this.apiFetch(`/api/get_reels?user_id=${userId}`)
+                            .then(reelsData => {
+                                if (reelsData) this.viewingUser.reels = reelsData;
+                            });
+                    } else {
+                        this.showUserProfile = false;
+                        this.showToast('Error', 'Could not load user profile.', 'error');
+                    }
+                })
+                .catch(err => {
+                    this.showUserProfile = false;
+                    this.showToast('Error', 'Network error loading profile.', 'error');
+                });
+        },
+        updateLastSeen() {
+            if (this.socket && this.socket.connected) {
+                this.socket.emit('update_last_seen');
+            }
+        },
+        sendTypingSignal: Alpine.throttle(function() { 
+            if (!this.activeChat) return;
+            this.socket.emit('typing', { 
+                chat_id: this.activeChat.id, 
+                is_group: this.activeChat.type === 'group',
+                sender_id: this.user.id
+            });
+        }, 2000),
+
+        showToast(title, message, type = 'info') {
+            const id = Date.now();
+            this.toasts.push({ id, title, message, type, visible: true });
+            setTimeout(() => {
+                this.removeToast(id);
+            }, 3000);
+        },
+        removeToast(id) {
+            this.toasts = this.toasts.filter(t => t.id !== id);
+        },
+        processStories(data) {
+            if (!Array.isArray(data)) return;
+            
+            const fetchedMyStories = [];
+            const storiesByUser = new Map(); // For friends' stories
+
+            data.forEach(story => {
+                const storyObj = {
+                    id: story.id,
+                    type: story.type,
+                    media: story.media,
+                    time: new Date(story.created_at).getTime(),
+                    seenBy: [], // Will be populated on view
+                    viewCount: story.view_count || 0,
+                    hasMusic: !!story.has_music,
+                    audience: story.audience,
+                    musicTrack: story.music_track
+                };
+
+                // Check if story belongs to current user
+                // Note: Ensure both IDs are compared as strings or numbers consistentnly
+                if (String(story.user_id) === String(this.user.id)) {
+                    fetchedMyStories.push(storyObj);
+                } else {
+                    if (!storiesByUser.has(story.user_id)) {
+                        storiesByUser.set(story.user_id, {
+                            id: story.user_id,
+                            name: story.first_name + ' ' + story.surname,
+                            // Use story.avatar from DB, fallback to dicebear if missing
+                            avatar: story.avatar || ('https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(story.first_name || 'User')),
+                            stories: []
+                        });
+                    }
+                    storiesByUser.get(story.user_id).stories.push(storyObj);
+                }
+            });
+
+            this.myStories = fetchedMyStories;
+            // Convert Map to Array for Alpine x-for
+            this.following = Array.from(storiesByUser.values());
+        },
+        get userMediaPosts() {
+            return this.myReels;
+        },
+        get userLikedPosts() {
+            return this.posts.filter(p => p.myReaction !== null);
+        },
+        get filteredConnectionList() {
+            if (!this.connectionSearchQuery.trim()) {
+                return this.connectionList;
+            }
+            const query = this.connectionSearchQuery.toLowerCase();
+            return this.connectionList.filter(person =>
+                person.name.toLowerCase().includes(query) ||
+                (person.username && person.username.toLowerCase().includes(query)) ||
+                (person.dept && person.dept.toLowerCase().includes(query))
+            );
+        },
+        isFollowing(friendId) {
+            if (!friendId) return false;
+            return this.user.followingIds.some(id => id == friendId);
+        },
+        isChatMuted(chatId, type) {
+            return this.mutedChats.some(m => m.chat_id == chatId && m.type == type);
+        },
+        isPinned(chatId, type) {
+            return this.pinnedChats.some(p => p.chat_id == chatId && p.type == type);
+        },
+        toggleFollow(friendId) {
+            if (this.followLoading.includes(friendId)) return;
+            
+            this.followLoading.push(friendId);
+            const isCurrentlyFollowing = this.isFollowing(friendId);
+
+            // --- Optimistic UI Update ---
+            if (isCurrentlyFollowing) {
+                this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
+                if (this.viewingUser && this.viewingUser.id == friendId) {
+                    this.viewingUser.followers_count--;
+                }
+            } else {
+                this.user.followingIds.push(friendId);
+                if (this.viewingUser && this.viewingUser.id == friendId) {
+                    this.viewingUser.followers_count++;
+                }
+            }
+            // --- End Optimistic UI Update ---
+
+            this.apiFetch('/api/toggle_follow', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ user_id: friendId })
+            })
+            .then(data => {
+                if (!data || !data.success) {
+                    // --- Revert on failure ---
+                    if (isCurrentlyFollowing) {
+                        this.user.followingIds.push(friendId);
+                        if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count++;
+                    } else {
+                        this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
+                        if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count--;
+                    }
+                    this.showToast('Error', (data && data.error) || 'Failed to update follow status.', 'error');
+                } else {
+                    // Success, just refresh the full list for consistency
+                    this.apiFetch('/api/get_connections?type=following').then(d => {
+                        if (d) this.followingList = d;
+                    });
+                }
+            })
+            .catch(err => {
+                // --- Revert on network error ---
+                if (isCurrentlyFollowing) {
+                    this.user.followingIds.push(friendId);
+                    if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count++;
+                } else {
+                    this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
+                    if (this.viewingUser && this.viewingUser.id == friendId) {
+                        this.viewingUser.followers_count--;
+                    }
+                }
+                console.error(err);
+                this.showToast('Error', 'Network error', 'error');
+            })
+            .finally(() => {
+                this.followLoading = this.followLoading.filter(id => id !== friendId);
+            });
+        },
+        openFollowerList(type) { 
+            this.showFollowerList = type;
+            this.connectionSearchQuery = '';
+            this.connectionList = [];
+            this.apiFetch(`/api/get_connections?type=&user_id=${this.user.id}`)
+                .then(data => {
+                    this.connectionList = Array.isArray(data) ? data : [];
+                })
+                .catch(() => { this.connectionList = []; });
+        },
+        removeFollower(followerId) {
+            if (!confirm('Are you sure you want to remove this follower? They will no longer be following you.')) return;
+
+            this.apiFetch('/api/remove_follower', {
+                    method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ user_id: followerId })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.connectionList = this.connectionList.filter(p => p.id !== followerId);
+                    this.user.followerIds = this.user.followerIds.filter(id => id !== followerId);
+                    this.showToast('Success', 'Follower removed.');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to remove follower.', 'error');
+                }
+            });
+        },
+        handlePostMedia(event) {
+                const file = event.target.files[0];
+            if (!file) return;
+            this.postFile = file;
+            this.mediaType = file.type.startsWith('video') ? 'video' : 'image';
+            const reader = new FileReader();
+            reader.onload = (e) => this.selectedMedia = e.target.result;
+            reader.readAsDataURL(file);
+        },
+        handleEditingGroupAvatarChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.editingGroup.avatarFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.editingGroup.avatarPreview = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        },
+        handleGroupAvatarChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.newGroup.avatarFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => this.newGroup.avatarPreview = e.target.result;
+            reader.readAsDataURL(file);
+        },
+        createPost() {
+            if (!this.newPostContent && !this.selectedMedia) return;
+
+            const content = this.newPostContent;
+            const mediaPreview = this.selectedMedia;
+            const mediaType = this.mediaType;
+
+
+            const isVideo = this.mediaType === 'video';
+            const formData = new FormData();
+            formData.append('content', this.newPostContent);
+            
+            // Use edited file if available, else original input
+            if (this.postFile) {
+                formData.append('media', this.postFile);
+            }
+            if (this.editorMusic && this.editorSource === 'post') formData.append('music_track', this.editorMusic.src);
+
+            this.apiFetch('/api/create_post', {
+                    method: 'POST',
+                headers: { 'X-CSRF-Token': CSRF_TOKEN },
+                body: formData
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Post created successfully!', 'success');
+
+                        // Optimistic Update: Add post to feed immediately
+                    this.homePosts.unshift({
+                        id: data.post ? data.post._id : Date.now(),
+                        user_id: this.user.id,
+                        author: this.user.name,
+                        avatar: this.user.avatar,
+                        content: content,
+                        media: mediaPreview,
+                        mediaType: mediaType,
+                        time: 'Just now',
+                        likes: 0,
+                        comments: 0,
+                        shares: 0,
+                        saved: false,
+                        verified: this.user.isVerified || false
+                    });
+                    
+                    this.newPostContent = '';
+                    this.selectedMedia = null;
+                    this.mediaType = null;
+
+                    if (isVideo) {
+                        this.activeTab = 'reels';
+                        this.apiFetch('/api/get_reels')
+                            .then(data => {
+                                if (data) this.reels = data;
+                            });
+                        this.apiFetch(`/api/get_reels?user_id=${this.user.id}`)
+                            .then(data => {
+                                if (data) this.myReels = data;
+                            });
+                    } else {
+                        this.activeTab = 'home';
+                        this.refreshHomeFeed();
+                    }
+
+                    // Refresh trending topics as new hashtags might have been added
+                    this.apiFetch('/api/get_trending')
+                        .then(data => {
+                            if (data) this.trendingTopics = data;
+                        });
+                } else {
+                    this.showToast('Error', data.error || 'Failed to create post.', 'error');
+                }
+            });
+            this.isCreatingPost = false;
+        },
+        createGroup() {
+            if (!this.newGroup.name.trim()) {
+                this.showToast('Error', 'Group name is required.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', this.newGroup.name);
+            formData.append('description', this.newGroup.description);
+            formData.append('members', JSON.stringify(this.newGroup.members));
+            formData.append('permissions', JSON.stringify(this.newGroup.permissions));
+            formData.append('approve_members', this.newGroup.approve_members ? 1 : 0);
+            if (this.newGroup.avatarFile) {
+                formData.append('avatar', this.newGroup.avatarFile);
+            }
+
+            this.apiFetch('/api/create_group', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': CSRF_TOKEN },
+                body: formData
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.groups.unshift({ ...data.group, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members });
+                    this.isCreatingGroup = false;
+                    this.activeChat = this.groups[0];
+                    this.showToast('Success', 'Group created successfully!');
+                    // Reset form
+                    this.createGroupStep = 1;
+                    this.newGroup = { name: '', description: '', members: [], avatarFile: null, avatarPreview: null, permissions: { can_edit_settings: false, can_send_messages: true, can_add_members: false }, approve_members: false };
+                } else {
+                    this.showToast('Error', data.error || 'Failed to create group.', 'error');
+                }
+            });
+        },
+        async sendMessage(mediaData = null, type = 'text', contentOverride = null, fileObject = null) {
+
+            if (this.isBlocked(this.activeChat?.id)) return;
+            let content = contentOverride || mediaData || this.newMessage;
+            
+            // Handle Edit
+            if (this.editingMessageId) {
+                // E2EE edit is complex, for now, we just edit unencrypted messages
+                // or re-encrypt, which reveals edit history.
+                // Simple implementation:
+                await this.crypto.editMessage(this.editingMessageId, content);
+                this.fetchMessages(this.activeChat, false);
+                this.newMessage = '';
+                this.editingMessageId = null;
+
+                return;
+            }
+
+            if (!content && type === 'text') return;
+            
+            const formData = new FormData();
+            let finalType = type;
+            
+            // E2EE for 1-on-1 text messages
+            if (type === 'text' && this.activeChat.type !== 'group' && this.activeChat.id) {
+                try {
+                    const theirPublicKey = await this.crypto.fetchPublicKey(this.activeChat.id);
+                    if (theirPublicKey) {
+                        const encryptedPayload = await this.crypto.encrypt(content, theirPublicKey);
+                        formData.append('content', JSON.stringify(encryptedPayload));
+                        formData.append('media_type', 'e2ee');
+                        finalType = 'e2ee';
+                    } else {
+    // Fallback to plain text if recipient has no public key
+                        formData.append('content', content);
+                        formData.append('media_type', type);
+                    }
+                } catch (e) {
+                    console.error("Encryption failed", e);
+                    this.showToast('Error', 'Could not encrypt message.', 'error');
+                    formData.append('content', content);
+                    formData.append('media_type', type);
+                }
+            } else {
+                formData.append('content', (type === 'text' || type === 'sticker' || type === 'call_log') ? content : '');
+                formData.append('media_type', type);
+            }
+
+            if (this.replyingTo) {
+                formData.append('reply_to_id', this.replyingTo.id);
+            }
+
+            if (this.activeChat.type === 'group') {
+                formData.append('group_id', this.activeChat.id);
+            } else {
+                formData.append('receiver_id', this.activeChat.id);
+            }
+
+            // Handle media upload if it's not text
+            // Note: For simplicity in this snippet, we assume mediaData is a base64 string for preview, 
+            // but for real upload you'd attach the file object. 
+            // If using the file input refs:
+            if (fileObject) {
+                formData.append('media', fileObject);
+            } else if (type === 'image' && this.$refs.imgInput.files[0]) {
+                formData.append('media', this.$refs.imgInput.files[0]);
+            } else if (type === 'video' && this.$refs.videoInput.files[0]) {
+                formData.append('media', this.$refs.videoInput.files[0]);
+            } else if (type === 'file' && this.$refs.fileInput.files[0]) {
+                formData.append('media', this.$refs.fileInput.files[0]);
+            }
+            else if (type === 'audio' && mediaData) {
+                formData.append('media', mediaData, 'voice_note.webm');
+            }
+
+            // Optimistic UI Update
+            const messagePayload = {
+                id: Date.now(),
+                sender_id: this.user.id,
+                receiver_id: this.activeChat.id,
+                content: content, // This might be encrypted content or raw, careful with display
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                author: this.user.name,
+                avatar: this.user.avatar,
+                sender: 'me',
+                type: finalType === 'e2ee' ? 'text' : finalType
+            };
+            if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
+            this.chatMessages[this.activeChat.id].push(messagePayload);
+            this.$nextTick(() => {
+                const container = document.getElementById('messageContainer');
+                if (container) container.scrollTop = container.scrollHeight;
+            });
+
+            this.apiFetch('/api/send_message', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-Token': CSRF_TOKEN
+                }
+            })
+            .then(data => {
+                if (data && data.success) {
+                    // Update with real message data if needed or just rely on optimistic
+                    document.getElementById('sent-sound').play().catch(()=>{}); // Play sent sound
+                }
+            });
+
+            this.newMessage = '';
+            this.replyingTo = null;
+        },
+        handleMediaSelect(event, type) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            this.mediaPreviewType = type;
+            this.mediaPreviewFile = file;
+
+            if (type === 'image' || type === 'video') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.mediaPreviewUrl = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                this.mediaPreviewUrl = 'file'; // Placeholder for non-visual files
+            }
+            // Clear input so same file can be selected again
+            event.target.value = '';
+        },
+        closeMediaPreview() {
+            this.mediaPreviewUrl = null;
+            this.mediaPreviewFile = null;
+            this.mediaPreviewType = null;
+        },
+        sendMediaFromPreview() {
+            if (!this.mediaPreviewFile) return;
+            // Use the file object stored in state
+            // Pass null for mediaData (base64) because we are passing fileObject
+            this.sendMessage(null, this.mediaPreviewType, null, this.mediaPreviewFile);
+            this.closeMediaPreview();
+        },
+        fetchMessages(chat, forceScroll = true) {
+            const type = chat.type === 'group' ? 'group' : 'user';
+            let url = `/api/get_messages?chat_id=${chat.id}&type=${type}`;
+            if (this.chatSearchQuery) {
+                url += `&search=${encodeURIComponent(this.chatSearchQuery)}`;
+            }
+
+            this.apiFetch(url)
+                .then(async data => {
+                    const formattedMessages = await Promise.all(data.map(async m => {
+                        let content = m.media || m.content;
+                        let msgType = m.media_type || 'text';
+
+                        if (msgType === 'e2ee') {
+                            try {
+                                const privKey = await this.crypto.getPrivateKey();
+                                content = await this.crypto.decrypt(content, privKey);
+                                msgType = 'text';
+                            } catch (e) {
+                                content = '🔒 Encrypted Message';
+                                msgType = 'text';
+                            }
+                        }
+
+                        return {
+                        id: m.id,
+                        sender_id: m.sender_id,
+                        sender: m.sender_id == this.user.id ? 'me' : 'them',
+                        type: msgType,
+                        content: content,
+                        created_at: m.created_at,
+                        time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        is_edited: !!m.is_edited,
+                        pinned: !!m.is_pinned,
+                        read: !!m.is_read,
+                        read_by: m.read_by || [],
+                        author: m.first_name + ' ' + m.surname, // For groups
+                        avatar: m.avatar,
+                        replyTo: m.replyTo,
+                        // Poll specific data
+                        question: m.question,
+                        options: m.options ? m.options.map(opt => ({
+                            id: opt.id,
+                            text: opt.option_text,
+                            votes: opt.votes || []
+                        })) : null,
+                        poll_id: m.poll_id
+                    }}));
+                    this.chatMessages[chat.id] = formattedMessages;
+                    
+                    if (forceScroll) {
+                        this.$nextTick(() => {
+                            const container = document.getElementById('messageContainer');
+                            if (container) container.scrollTop = container.scrollHeight;
+                        });
+                    }
+                });
+        },
+        markAsRead(chat) {
+            if (!chat) return;
+            const type = chat.type === 'group' ? 'group' : 'user';
+            
+            // Real-time 'seen' status update via socket
+            this.socket.emit('mark_seen', { chat_id: chat.id, type: type });
+
+            this.apiFetch('/api/mark_messages_read', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: chat.id, type: type })
+            });
+            // Local update handled by polling or optimistic update if needed
+            chat.unread = false;
+        },
+        markAsUnread(chat) {
+            if (!chat) return;
+            this.showChatOptions = false;
+            this.activeChat = null; // Close chat to see the unread status
+            this.isMessaging = true; // Go back to list
+            
+            this.apiFetch('/api/mark_chat_unread', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: chat.id })
+            });
+            chat.unread = true; // Optimistic update
+        },
+        sendSticker(sticker) {
+            this.sendMessage(sticker, 'sticker');
+            this.showStickerPicker = false;
+        },
+        handleSwipeStart(e, msgId) {
+            this.swipeStart.x = e.touches[0].clientX;
+            this.swipeStart.y = e.touches[0].clientY;
+            this.swipingMsgId = msgId;
+            this.swipeOffset = 0;
+            this.touchStart(e, this.chatMessages[this.activeChat.id].find(m => m.id === msgId)); // Also trigger long press logic
+        },
+        handleSwipeMove(e) {
+            if (!this.swipingMsgId) return;
+            const dx = e.touches[0].clientX - this.swipeStart.x;
+            const dy = e.touches[0].clientY - this.swipeStart.y;
+            // Only allow horizontal swipe (right for reply) and prevent vertical scroll interference
+            if (Math.abs(dx) > Math.abs(dy) && dx > 0 && Math.abs(dx) > 10) {
+                this.swipeOffset = Math.min(dx, 80); // Cap at 80px
+            }
+        },
+        handleSwipeEnd() {
+            if (this.swipeOffset > 50) { // Threshold to trigger reply
+                const msg = this.chatMessages[this.activeChat.id].find(m => m.id === this.swipingMsgId);
+                if (msg) this.replyToMessage(msg);
+            }
+            this.swipingMsgId = null;
+            this.swipeOffset = 0;
+            this.touchEnd();
+        },
+        touchStart(e, msg) {
+            this.touchTimer = setTimeout(() => {
+                this.openMessageOptions(msg);
+            }, 500);
+        },
+        touchEnd() {
+            clearTimeout(this.touchTimer);
+        },
+        openMessageOptions(msg) {
+            this.selectedMessageForOptions = msg;
+            this.showMessageOptions = true;
+        },
+        replyToMessage(msg = null) {
+            this.replyingTo = msg || this.selectedMessageForOptions;
+            this.showMessageOptions = false;
+            this.$nextTick(() => document.querySelector('input[x-model="newMessage"]')?.focus());
+        },
+        get activeChatPinnedMsg() {
+            if (!this.activeChat || !this.chatMessages[this.activeChat.id]) return null;
+            return this.chatMessages[this.activeChat.id].find(m => m.pinned);
+        },
+        togglePinMessage() {
+            if (!this.selectedMessageForOptions || !this.activeChat) return;
+            const chatId = this.activeChat.id;
+            const msg = this.selectedMessageForOptions;
+            
+            this.apiFetch('/api/toggle_pin_message', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ message_id: msg.id })
+            }).then(() => {
+                msg.pinned = !msg.pinned;
+                this.showToast('Success', msg.pinned ? 'Message pinned' : 'Message unpinned');
+            });
+
+            this.showMessageOptions = false;
+        },
+        unpinMessage(msg) {
+            if (msg) msg.pinned = false;
+        },
+        scrollToMessage(msgId) {
+            const el = document.getElementById('msg-' + msgId);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+                setTimeout(() => el.classList.remove('bg-blue-50', 'dark:bg-blue-900/20'), 1000);
+            }
+        },
+        openForwardModal() {
+            this.messageToForward = this.selectedMessageForOptions;
+            this.showMessageOptions = false;
+            this.showForwardModal = true;
+        },
+        forwardTo(friend) {
+            if (!this.messageToForward) return;
+            if (!this.chatMessages[friend.id]) this.chatMessages[friend.id] = [];
+            this.chatMessages[friend.id].push({
+                id: Date.now(),
+                sender: 'me',
+                type: this.messageToForward.type,
+                content: this.messageToForward.content,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                read: false,
+                forwarded: true
+            });
+            // Update chat list preview
+            const chat = this.chats.find(c => c.id === friend.id);
+            if (chat) { chat.lastMsg = `Forwarded: ${this.messageToForward.type === 'text' ? this.messageToForward.content : 'Media'}`; chat.time = 'Now'; }
+            this.showForwardModal = false;
+            this.messageToForward = null;
+            this.showToast('Sent', 'Message forwarded successfully', 'success');
+        },
+        blockActiveChatUser() {
+            if (!this.activeChat || this.activeChat.type === 'group') return;
+            // Ensure viewingUser is set so toggleBlock knows who to block
+            this.viewingUser = { id: this.activeChat.id };
+            this.toggleBlock();
+            this.showChatOptions = false;
+        },
+        createPoll() {
+            if (!this.newPoll.question.trim() || this.newPoll.options.filter(o => o.trim()).length < 2) {
+                this.showToast('Error', 'Please enter a question and at least 2 options.', 'error');
+                return;
+            }
+            
+            const payload = {
+                question: this.newPoll.question,
+                options: this.newPoll.options.filter(o => o.trim())
+            };
+
+            if (this.activeChat.type === 'group') {
+                payload.group_id = this.activeChat.id;
+            } else {
+                payload.receiver_id = this.activeChat.id;
+            }
+
+            this.apiFetch('/api/create_poll', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.fetchMessages(this.activeChat);
+                    this.isCreatingPoll = false;
+                    this.newPoll = { question: '', options: ['', ''] };
+                } else {
+                    this.showToast('Error', data.error || 'Failed to create poll', 'error');
+                }
+            });
+        },
+        votePoll(msgId, optionId) {
+            // Find the message to get the poll_id
+            const msg = this.chatMessages[this.activeChat.id].find(m => m.id === msgId);
+            if (!msg || !msg.poll_id) return;
+
+            this.apiFetch('/api/vote_poll', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ poll_id: msg.poll_id, option_id: optionId })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.fetchMessages(this.activeChat, false);
+                }
+            });
+        },
+        getTotalVotes(msg) {
+            return msg.options.reduce((acc, curr) => acc + curr.votes.length, 0);
+        },
+        getPollPercentage(msg, optionId) {
+            const total = this.getTotalVotes(msg);
+            if (total === 0) return 0;
+            const option = msg.options.find(o => o.id === optionId);
+            return option ? Math.round((option.votes.length / total) * 100) : 0;
+        },
+        scheduleMessage() {
+            if (!this.newMessage.trim() || !this.scheduledTime) return;
+            this.scheduledMessages.push({
+                chatId: this.activeChat.id,
+                content: this.newMessage,
+                type: 'text',
+                dueTime: this.scheduledTime
+            });
+            this.newMessage = '';
+            this.isSchedulingMessage = false;
+            this.scheduledTime = '';
+            this.showToast('Scheduled', 'Message scheduled successfully!', 'success');
+        },
+        sendScheduledMessage(msg, index) {
+            if (!this.chatMessages[msg.chatId]) this.chatMessages[msg.chatId] = [];
+            this.chatMessages[msg.chatId].push({
+                id: Date.now(),
+                sender: 'me',
+                type: msg.type,
+                content: msg.content,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                read: false
+            });
+            
+            // Update last message if this chat is in list
+            const chat = this.chats.find(c => c.id === msg.chatId) || this.groups.find(g => g.id === msg.chatId);
+            if (chat) {
+                chat.lastMsg = msg.content;
+                chat.time = 'Now';
+            }
+
+            this.scheduledMessages.splice(index, 1);
+            
+            // If currently viewing this chat, scroll down
+            if (this.activeChat && this.activeChat.id === msg.chatId) {
+                this.$nextTick(() => {
+                    const container = document.getElementById('messageContainer');
+                    if (container) container.scrollTop = container.scrollHeight;
+                });
+            }
+        },
+        copyMessageText() {
+            if (this.selectedMessageForOptions && this.selectedMessageForOptions.type === 'text') {
+                navigator.clipboard.writeText(this.selectedMessageForOptions.content);
+                this.showToast('Copied', 'Message copied to clipboard');
+            }
+            this.showMessageOptions = false;
+        },
+        editMessage() {
+            const msg = this.selectedMessageForOptions;
+            if (!msg || msg.type !== 'text') return;
+            
+            this.newMessage = msg.content;
+            this.editingMessageId = msg.id;
+            this.showMessageOptions = false;
+            // Focus input
+            this.$nextTick(() => document.querySelector('input[x-model="newMessage"]').focus());
+        },
+        deleteMessage(mode) {
+            if (!this.selectedMessageForOptions || !this.activeChat) return;
+            if (!confirm(mode === 'everyone' ? 'Delete for everyone?' : 'Delete for me?')) return;
+
+            const chatId = this.activeChat.id;
+            const msgId = this.selectedMessageForOptions.id;
+
+            this.apiFetch('/api/delete_message', {
+                    method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ message_id: msgId, mode: mode })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    if (this.chatMessages[chatId]) {
+                        this.chatMessages[chatId] = this.chatMessages[chatId].filter(m => m.id !== msgId);
+                    }
+                    this.showToast('Success', 'Message deleted');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to delete');
+                }
+            });
+
+            this.showMessageOptions = false;
+        },
+        openComments(item, type) {
+            this.fetchComments(item.id, item.user_id);
+            if (this.viewingComments) {
+                this.viewingComments.type = type;
+            }
+        },
+        fetchComments(postId, postAuthorId) {
+            this.viewingComments = { id: postId, type: 'post', list: [], post_author_id: postAuthorId };
+            this.apiFetch(`/api/get_comments?post_id=${postId}`)
+                .then(data => {
+                    if (this.viewingComments && this.viewingComments.id === postId) {
+                        this.viewingComments.list = data || [];
+                    }
+                });
+        },
+        addComment(audioBlob = null) {
+            if ((!this.commentInput.trim() && !audioBlob) || !this.viewingComments) return;
+            
+            const formData = new FormData(); formData.append('post_id', this.viewingComments.id);
+            if (this.replyingToComment) {
+                formData.append('parent_comment_id', this.replyingToComment.id);
+            }
+            formData.append('content', this.commentInput);
+                if (audioBlob) {
+                formData.append('media', audioBlob, 'comment_audio.webm');
+            } else {
+                formData.append('content', this.commentInput);
+            }
+
+            this.apiFetch('/api/add_comment', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-Token': CSRF_TOKEN
+                }
+            })
+            .then(data => {
+                if (data && data.success) { // Optimistic Update for instant feedback
+                    const newComment = {
+                        id: data.comment_id,
+                        user_id: this.user.id,
+                        content: data.content,
+                        media: data.media,
+                        media_type: data.media_type,
+                        created_at: new Date().toISOString(),
+                        author: this.user.name,
+                        avatar: this.user.avatar,
+                        text: data.content,
+                        time: 'Just now',
+                        replies: [],
+                        parent_comment_id: this.replyingToComment ? this.replyingToComment.id : null
+                    };
+
+                    if (this.replyingToComment) {
+                        const parent = this.viewingComments.list.find(c => c.id === this.replyingToComment.id);
+                        if (parent) {
+                            if (!parent.replies) parent.replies = [];
+                            parent.replies.push(newComment);
+                        } else {
+                            this.viewingComments.list.push(newComment);
+                        }
+                    } else {
+                        this.viewingComments.list.push(newComment);
+                    }
+
+                    const item = this.viewingComments.type === 'post' 
+                        ? this.posts.find(p => p.id === this.viewingComments.id)
+                        : this.reels.find(r => r.id === this.viewingComments.id);
+                    if(item) item.comments = (item.comments || 0) + 1;
+
+                } else {
+                    this.showToast('Error', data.error || 'Failed to add comment.', 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Add comment error:', err);
+                this.showToast('Error', 'Could not send comment. Please check your connection.', 'error');
+            })
+            .finally(() => {
+                this.commentInput = '';
+                this.replyingToComment = null;
+            });
+        },
+        async startCommentRecording() {
+            if (this.isRecordingComment) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.commentMediaRecorder = new MediaRecorder(stream);
+                this.commentAudioChunks = [];
+                this.commentMediaRecorder.addEventListener("dataavailable", event => {
+                    this.commentAudioChunks.push(event.data);
+                });
+                this.commentMediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.commentAudioChunks, { type: 'audio/webm' });
+                    this.addComment(audioBlob); // Pass blob to addComment
+                    this.commentAudioChunks = [];
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                this.commentMediaRecorder.start();
+                this.isRecordingComment = true;
+                this.commentRecordingDuration = 0;
+                this.commentRecordingTimer = setInterval(() => { this.commentRecordingDuration++; }, 1000);
+            } catch (err) {
+                this.showToast('Error', 'Could not access microphone. Check permissions.', 'error');
+            }
+        },
+        stopCommentRecording() {
+            if (!this.isRecordingComment || !this.commentMediaRecorder) return;
+            this.commentMediaRecorder.stop();
+            this.isRecordingComment = false;
+            clearInterval(this.commentRecordingTimer);
+            
+        },
+        deleteComment(commentId) {
+            if (!confirm('Delete this comment?')) return;
+            this.apiFetch('/api/delete_comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comment_id: commentId })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.fetchComments(this.viewingComments.id, this.viewingComments.post_author_id);
+                }
+            });
+        },
+        startReportChat(report) {
+            // This is a placeholder. In a real app, you'd open a chat with a support agent.
+            const chat = {
+                id: 'report-' + report.id,
+                name: `Help Center: ${report.reporter.name}`,
+                avatar: report.reporter.avatar,
+                lastMsg: report.details
+            };
+            // For now, just log it.
+            console.log("Starting report chat:", chat);
+            this.activeChat = chat;
+        },
+        openShareModal(post) {
+            this.sharingPost = post;
+            this.showShareModal = true;
+        },
+        sharePost() {
+            if (!this.sharingPost) return;
+            this.apiFetch('/api/share_post', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ post_id: this.sharingPost.id })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Post shared to your feed!');
+                    this.showShareModal = false;
+                    
+                    // Update original post/reel share count
+                    const post = this.homePosts.find(p => p.id === this.sharingPost.id);
+                    if (post) post.shares++;
+                    
+                    const reel = this.reels.find(r => r.id === this.sharingPost.id);
+                    if (reel) reel.shares++;
+                }
+            });
+        },
+        sharePostToStory() {
+            if (!this.sharingPost) return;
+            this.myStories.push({
+                id: Date.now(),
+                type: this.sharingPost.mediaType || 'text',
+                media: this.sharingPost.media || this.sharingPost.avatar,
+                time: Date.now(),
+                seenBy: [],
+                audience: 'public',
+                hasMusic: false
+            });
+            this.showShareModal = false;
+            this.sharingPost.shares++;
+            this.showToast('Shared', 'Post shared to your story!', 'success');
+        },
+        copyPostLink() {
+            if (!this.sharingPost) return;
+            navigator.clipboard.writeText(`https://maiga-social.com/post/${this.sharingPost.id}`);
+            this.showShareModal = false;
+            this.sharingPost.shares++;
+            this.showToast('Copied', 'Link copied to clipboard!', 'success');
+        },
+        handleReelClick(reel, event) {
+            const now = Date.now();
+            if (now - this.lastReelClick < 300) {
+                // Double tap detected
+                clearTimeout(this.reelClickTimer);
+                
+                if (!reel.liked) {
+                    this.toggleReelLike(reel);
+                }
+                
+                reel.showHeart = true;
+                setTimeout(() => reel.showHeart = false, 1000);
+            } else {
+                // Single tap (wait to see if it's double)
+                this.reelClickTimer = setTimeout(() => {
+                    const video = document.getElementById('reel-video-' + reel.id);
+                    if (video) video.paused ? video.play().catch(e => {}) : video.pause();
+                }, 300);
+            }
+            this.lastReelClick = now;
+        },
+        get homePosts() {
+            return this.posts; // This should probably be this.homePosts
+        },
+        get totalUnreadChats() {
+            return this.chats.filter(c => c.unread).length + this.groups.filter(g => g.unread).length;
+        },
+        get sortedChats() {
+            const all = [...this.chats, ...this.groups];
+            return all.sort((a, b) => {
+                const aPinned = this.isPinned(a.id, a.type || 'user');
+                const bPinned = this.isPinned(b.id, b.type || 'user');
+                if (aPinned && !bPinned) return -1;
+                if (!aPinned && bPinned) return 1;
+                return 0; // Keep original order (usually time based)
+            });
+        },
+        searchUsers() {
+            if (this.homeSearchQuery.length < 2) {
+                this.searchResults = [];
+                return;
+            }
+                this.apiFetch(`/api/search_users?q=${encodeURIComponent(this.homeSearchQuery)}`)
+                .then(data => {
+                    if (data) this.searchResults = data;
+                });
+        },
+        openUserProfileByName(name) {
+            // Search by username
+            const user = this.friends.find(f => f.username && f.username.toLowerCase() === name.toLowerCase());
+            if (user) {
+                this.openUserProfile(user);
+            } else {
+                // Fallback to API search if not in local list
+                this.apiFetch(`/api/search_users?q=${encodeURIComponent(name)}`)
+                    .then(data => {
+                        const foundUser = data && data.find(u => u.username && u.username.toLowerCase() === name.toLowerCase());
+                        if (foundUser) {
+                            this.openUserProfile(foundUser.id);
+                        } else {
+                            this.showToast('User not found', `Could not find user @`, 'error');
+                        }
+                    });
+            }
+        },
+        formatRecordingTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        },
+        async startRecording() {
+            if (this.isRecording || !this.activeChat || this.isBlocked(this.activeChat.id)) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.mediaRecorder = Alpine.raw(new MediaRecorder(stream));
+                this.audioChunks = [];
+                this.mediaRecorder.addEventListener("dataavailable", event => {
+                    this.audioChunks.push(event.data);
+                });
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    this.sendMessage(audioBlob, 'audio');
+                    this.audioChunks = [];
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                this.mediaRecorder.start();
+                this.isRecording = true;
+                this.recordingDuration = 0;
+                this.recordingTimer = setInterval(() => { this.recordingDuration++; }, 1000);
+            } catch (err) {
+                this.showToast('Error', 'Could not access microphone. Check permissions.', 'error');
+            }
+        },
+        stopRecording() {
+            if (!this.isRecording || !this.mediaRecorder) return;
+            this.mediaRecorder.stop();
+            this.isRecording = false;
+            clearInterval(this.recordingTimer);
+        },
+        saveProfile() {
+            const formData = new FormData();
+            formData.append('name', this.editUser.name);
+            formData.append('username', this.editUser.username);
+            formData.append('bio', this.editUser.bio || '');
+            formData.append('dept', this.editUser.dept || '');
+            
+            if (this.$refs.profileAvatarInput.files.length > 0) {
+                formData.append('avatar', this.$refs.profileAvatarInput.files[0]);
+            }
+
+            
+            this.apiFetch('/api/update_profile', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-Token': CSRF_TOKEN
+                }
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Profile updated successfully.');
+                    // Refresh user data to get new avatar URL if changed
+                    
+                    this.apiFetch('/api/get_user')
+                        .then(userData => {
+                            if(userData) {
+                                this.user = { ...this.user, ...userData };
+                                if (userData.first_name && userData.surname) {
+                                    this.user.name = userData.first_name + ' ' + userData.surname;
+                                }
+                                this.editUser = { ...this.user };
+                            }
+                        });
+                    this.isEditingProfile = false;
+                } else {
+                    this.showToast('Error', data.error || 'Failed to update profile.', 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                this.showToast('Error', 'Network error.', 'error');
+            });
+        },
+        toggleReelLike(reel) {
+            // Optimistic update
+            reel.liked = !reel.liked;
+            reel.likes += reel.liked ? 1 : -1;
+            if (reel.liked) reel.showHeart = true;
+            if (reel.showHeart) setTimeout(() => reel.showHeart = false, 1000);
+
+            this.apiFetch('/api/toggle_reaction', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ post_id: reel.id, reaction: 'like' })
+            })
+            .then(data => {
+                if (!data || !data.success) {
+                    // Revert optimistic update on failure
+                    reel.liked = !reel.liked;
+                    reel.likes += reel.liked ? 1 : -1;
+                    this.showToast('Error', 'Could not save like.', 'error');
+                }
+            })
+            .catch(err => {
+                // Revert optimistic update on network error
+                reel.liked = !reel.liked;
+                reel.likes += reel.liked ? 1 : -1;
+                this.showToast('Error', 'Network error. Could not save like.', 'error');
+            });
+        },
+        saveReel(reel) {
+            this.toggleSave(reel);
+            this.showReelOptions = false;
+        },
+        savePost(post) {
+            this.toggleSave(post);
+            this.showPostOptions = false;
+        },
+        downloadReel(reel) {
+            const a = document.createElement('a');
+            a.href = reel.media;
+            a.download = `reel_${reel.id}.mp4`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            this.showReelOptions = false;
+            this.showToast('Downloading', 'Download started...', 'success');
+        },
+        downloadPostMedia(post) {
+            if (!post.media) return;
+            const a = document.createElement('a');
+            a.href = post.media;
+            const ext = post.mediaType === 'video' ? 'mp4' : 'jpg';
+            a.download = `post_${post.id}.${ext}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            this.showPostOptions = false;
+            this.showToast('Downloading', 'Download started...', 'success');
+        },
+        markInterested(reel) {
+            this.showToast('Feedback', 'Thanks! We will show more like this.', 'success');
+            this.showReelOptions = false;
+        },
+        
+        changePassword() {
+            if (!this.passwordForm.current || !this.passwordForm.new || !this.passwordForm.confirm) {
+                this.showToast('Error', 'Please fill in all fields.', 'error');
+                return;
+            }
+            if (this.passwordForm.new !== this.passwordForm.confirm) {
+                this.showToast('Error', 'New passwords do not match.', 'error');
+                return;
+            }
+            if (this.passwordForm.new.length < 6) {
+                this.showToast('Error', 'Password must be at least 6 characters.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('current_password', this.passwordForm.current);
+            formData.append('new_password', this.passwordForm.new);
+
+                this.apiFetch('/api/change_password', {
+                method: 'POST',
+                body: formData
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Password changed successfully.');
+                    this.passwordForm = { current: '', new: '', confirm: '' };
+                    this.activeTab = 'settings';
+                } else {
+                    this.showToast('Error', data.error || 'Failed to change password.', 'error');
+                }
+            })
+            .catch(err => {
+                this.showToast('Error', 'Network error.', 'error');
+            });
+        },
+        get savedPosts() {
+            // Use the dedicated savedPostList if available, otherwise fallback to filtering
+            return this.savedPostList.length > 0 ? this.savedPostList : this.posts.filter(p => p.saved);
+        },
+        fetchSavedPosts() {
+            this.apiFetch('/api/saved_posts')
+                .then(data => {
+                    if (Array.isArray(data)) this.savedPostList = data;
+                });
+        },
+        get userPosts() {
+            return this.posts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
+            return this.homePosts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
+        },
+        addToRecent(term) {
+            if (!term) return;
+            this.recentSearches = this.recentSearches.filter(t => t !== term);
+            this.recentSearches.unshift(term);
+            if (this.recentSearches.length > 5) this.recentSearches.pop();
+        },
+        toggleSelectAll() {
+            if (this.newGroup.members.length === this.filteredFollowingForGroup.length) {
+                this.newGroup.members = [];
+            } else {
+                this.newGroup.members = this.filteredFollowingForGroup.map(f => f.id);
+            }
+        },
+        toggleNewGroupMember(friendId) {
+            const index = this.newGroup.members.indexOf(friendId);
+            if (index > -1) {
+                this.newGroup.members.splice(index, 1);
+            } else {
+                this.newGroup.members.push(friendId);
+            }
+        },
+        deleteGroup(groupId) {
+            if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+            
+            this.apiFetch('/api/delete_group', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_id: groupId })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.groups = this.groups.filter(g => g.id !== groupId);
+                    this.activeChat = null;
+                    this.showGroupInfo = false;
+                    this.showToast('Success', 'Group deleted successfully.', 'success');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to delete group.', 'error');
+                }
+            });
+        },
+        postReply() {
+            if (!this.replyContent.trim()) return;
+            this.selectedTopic.repliesList.push({
+                id: Date.now(),
+                author: this.user.name,
+                text: this.replyContent,
+                time: 'Just now'
+            });
+            this.selectedTopic.replies++;
+            this.replyContent = '';
+        },
+        deleteReply(reply) {
+            this.selectedTopic.repliesList = this.selectedTopic.repliesList.filter(r => r.id !== reply.id);
+            this.selectedTopic.replies--;
+        },
+        toggleLike(reply) {
+            reply.liked = !reply.liked;
+            reply.likes = reply.likes || 0;
+            reply.likes += reply.liked ? 1 : -1;
+        },
+        revokeGroupInviteLink(group) {
+            if (!confirm('Are you sure you want to revoke this invite link? The old link will no longer work.')) return;
+
+            this.apiFetch('/api/revoke_group_invite_link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                body: JSON.stringify({ group_id: group.id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    group.invite_link_code = data.new_code;
+                    this.showToast('Success', 'Invite link has been revoked and a new one generated.');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to revoke link.', 'error');
+                }
+            });
+        },
+        handleMemberClick(member) {
+            // Don't show options for myself
+            if (member.id === this.user.id) {
+                this.openUserProfile(member.id);
+                return;
+            }
+            // Only admins can see options for other members
+            if (this.activeChat.role === 'admin') {
+                this.showMemberOptionsFor = member;
+            } else {
+                // Non-admins just view profile
+                this.openUserProfile(member.id);
+            }
+        },
+        promoteToAdmin(member) {
+            if (!confirm(`Make ${member.first_name} an admin?`)) return;
+            this.apiFetch('/api/promote_group_member', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_id: this.activeChat.id, member_id: member.id })
+            }).then(data => {
+                if (data.success) {
+                    this.showToast('Success', `${member.first_name} is now an admin.`);
+                    this.openChatProfile(); // Refresh group info
+                }
+                this.showMemberOptionsFor = null;
+            });
+        },
+        removeMember(member) {
+            if (!confirm(`Remove ${member.first_name} from the group?`)) return;
+            this.apiFetch('/api/remove_group_member', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_id: this.activeChat.id, member_id: member.id })
+            }).then(data => {
+                if (data.success) {
+                    this.showToast('Success', `${member.first_name} has been removed.`);
+                    this.openChatProfile(); // Refresh group info
+                }
+                this.showMemberOptionsFor = null;
+            });
+        },
+        openAddMembers() {
+            this.isAddingGroupMembers = true;
+            this.showGroupInfo = false;
+            this.membersToAdd = [];
+            this.addMemberSearchQuery = '';
+        },
+        toggleMemberToAdd(friendId) {
+            const index = this.membersToAdd.indexOf(friendId);
+            if (index > -1) {
+                this.membersToAdd.splice(index, 1);
+            } else {
+                this.membersToAdd.push(friendId);
+            }
+        },
+        addMembersToGroup() {
+            if (this.membersToAdd.length === 0) return;
+
+            this.apiFetch('/api/add_group_members', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    group_id: this.activeChat.id,
+                    members: this.membersToAdd
+                })
+            }).then(data => {
+                if (data.success) {
+                    this.isAddingGroupMembers = false;
+                    this.openChatProfile(); // Refresh group info
+                }
+            });
+        },
+        leaveGroup(groupId) {
+            if (!confirm('Are you sure you want to leave this group?')) return;
+            this.apiFetch('/api/leave_group', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ group_id: groupId })
+            }).then(data => {
+                if (data.success) {
+                    this.groups = this.groups.filter(g => g.id !== groupId);
+                    this.activeChat = null;
+                    this.showGroupInfo = false;
+                    this.showToast('Success', 'You have left the group.');
+                }
+            });
+        },
+        openGroupEditor() {
+            if (!this.activeChat) return;
+            this.editingGroup = {
+                id: this.activeChat.id,
+                name: this.activeChat.name,
+                description: this.activeChat.description || '',
+                avatarPreview: this.activeChat.avatar,
+                avatarFile: null,
+                permissions: { ...this.activeChat.permissions },
+                approve_members: this.activeChat.approve_new_members == 1,
+            };
+            this.isEditingGroupInfo = true;
+            this.showGroupInfo = false;
+        },
+        updateGroupInfo() {
+            const formData = new FormData();
+            formData.append('group_id', this.editingGroup.id);
+            formData.append('name', this.editingGroup.name);
+            formData.append('description', this.editingGroup.description);
+            formData.append('permissions', JSON.stringify(this.editingGroup.permissions));
+            formData.append('approve_members', this.editingGroup.approve_members ? 1 : 0);
+
+            if (this.editingGroup.avatarFile) {
+                formData.append('avatar', this.editingGroup.avatarFile);
+            }
+
+            this.apiFetch('/api/update_group_info', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': CSRF_TOKEN },
+                body: formData
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Group updated successfully!');
+                    this.isEditingGroupInfo = false;
+                    this.apiFetch('/api/get_groups').then(d => { if(Array.isArray(d)) this.groups = d; });
+                    this.apiFetch(`/api/get_group_info?group_id=${this.editingGroup.id}`).then(d => { if(d) this.activeChat = {...this.activeChat, ...d}; });
+                }
+            });
+        },
+        openChatProfile() {
+            if (this.activeChat.type === 'group') {
+                // To prevent a race condition, show the panel immediately but clear the members
+                // array first. The fetch will populate it with the full objects.
+                const oldMembers = this.activeChat.members;
+                this.activeChat.members = [];
+                this.showGroupInfo = true;
+
+                this.apiFetch(`/api/get_group_info?group_id=${this.activeChat.id}`)
+                    .then(data => {
+                        if (!data.error) {
+                            const myMembership = data.members.find(m => m.id === this.user.id);
+                            this.activeChat = { ...this.activeChat, ...data };
+                            this.activeChat.role = myMembership ? myMembership.role : null;
+                            this.activeChat.pending_requests_count = data.join_requests ? data.join_requests.length : 0;
+                        } else {
+                            this.activeChat.members = oldMembers; // Restore on error
+                        }
+                    });
+            } else {
+                // Try to find in friends list first
+                let user = this.friends.find(f => f.id === this.activeChat.id);
+                if (user) {
+                    this.viewingUser = user;
+                    this.showUserProfile = true;
+                } else {
+                    // Fetch from API if not found locally
+                    this.apiFetch(`/api/get_profile?user_id=${this.activeChat.id}`)
+                        .then(data => {
+                            if (!data.error) { this.viewingUser = data; this.showUserProfile = true; }
+                        });
+                }
+            }
+        },
+        getInviteLink(code) {
+            const baseUrl = window.location.href.split('?')[0];
+            return `?invite_code=`;
+        },
+        copyGroupLink(code) {
+            const link = this.getInviteLink(code);
+            navigator.clipboard.writeText(link);
+            this.showToast('Success', 'Invite link copied to clipboard');
+        },
+        toggleGroupInviteLink(group) {
+            this.apiFetch('/api/toggle_group_invite_link', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                body: JSON.stringify({ group_id: group.id })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    group.invite_link_active = data.active;
+                } else {
+                    this.showToast('Error', 'Unauthorized', 'error');
+                }
+            });
+        },
+        handleJoinRequest(groupId, userId, decision) {
+            this.apiFetch('/api/handle_join_request', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                body: JSON.stringify({ group_id: groupId, user_id: userId, decision: decision })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    // Remove request from UI locally
+                    this.activeChat.join_requests = this.activeChat.join_requests.filter(r => r.id !== userId);
+                    // Decrement the counter for the red dot indicator
+                    if (this.activeChat.pending_requests_count > 0) {
+                        this.activeChat.pending_requests_count--;
+                    }
+                    if (decision === 'approve') {
+                        this.showToast('Success', 'Member approved');
+                        // Refresh group info to update member list
+                        this.openChatProfile(); 
+                    } else {
+                        this.showToast('Info', 'Request rejected');
+                    }
+                }
+            });
+        },
+        joinGroupViaLink(code) {
+            this.apiFetch('/api/join_group_via_link', {
+                    method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                body: JSON.stringify({ code: code })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', data.message, 'success');
+                    window.history.replaceState({}, document.title, window.location.pathname); // Clean URL
+                    if (data.action === 'joined') {
+                        // Add to groups list if joined immediately
+                        this.apiFetch('/api/get_groups').then(g => { if(g) this.groups = g; });
+                    }
+                } else {
+                    this.showToast('Error', data.error, 'error');
+                }
+            });
+        },
+        clearChat() {
+            if (!this.activeChat) return;
+            if (!confirm('Are you sure you want to clear this chat? This cannot be undone.')) return;
+
+            const type = this.activeChat.type === 'group' ? 'group' : 'user';
+            
+            this.apiFetch('/api/clear_chat', {
+                    method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: this.activeChat.id, type: type })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.chatMessages[this.activeChat.id] = [];
+                    this.activeChat.lastMsg = '';
+                    this.showChatOptions = false;
+                    this.showToast('Success', 'Chat cleared.');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to clear chat.', 'error');
+                }
+            });
+        },
+        toggleMute() {
+            if (!this.activeChat) return;
+            const type = this.activeChat.type === 'group' ? 'group' : 'user';
+            const chatId = this.activeChat.id;
+
+            this.apiFetch('/api/toggle_mute', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: chatId, type: type })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    if (data.muted) {
+                        this.mutedChats.push({ chat_id: chatId, type: type });
+                        this.showToast('Muted', 'Notifications muted for this chat.');
+                    } else {
+                        this.mutedChats = this.mutedChats.filter(m => !(m.chat_id == chatId && m.type == type));
+                        this.showToast('Unmuted', 'Notifications enabled for this chat.');
+                    }
+                }
+            });
+        },
+        togglePin(chat) {
+            if (!chat) return;
+            const type = chat.type === 'group' ? 'group' : 'user';
+            const chatId = chat.id;
+
+            this.apiFetch('/api/toggle_pin_chat', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: chatId, type: type })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    if (data.pinned) {
+                        this.pinnedChats.push({ chat_id: chatId, type: type });
+                        this.showToast('Pinned', 'Chat pinned to top.');
+                    } else {
+                        this.pinnedChats = this.pinnedChats.filter(p => !(p.chat_id == chatId && p.type == type));
+                        this.showToast('Unpinned', 'Chat unpinned.');
+                    }
+                }
+            });
+        },
+        fetchArchivedChats() {
+            this.apiFetch('/api/get_archived_chats')
+                .then(data => {
+                    this.archivedChats = data;
+                });
+        },
+        toggleArchiveChat(chat) {
+            if (!chat) return;
+            const type = chat.type === 'group' ? 'group' : 'user';
+            this.apiFetch('/api/toggle_archive_chat', {
+                    method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ chat_id: chat.id, type: type })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    if (data.archived) {
+                        this.chats = this.chats.filter(c => c.id !== chat.id);
+                        this.groups = this.groups.filter(g => g.id !== chat.id);
+                        this.showToast('Archived', 'Chat moved to archived.');
+                        this.activeChat = null;
+                        this.showChatOptions = false;
+                    } else {
+                        this.archivedChats = this.archivedChats.filter(c => c.id !== chat.id);
+                        this.showToast('Unarchived', 'Chat moved back to main list.');
+                        // Refresh main lists
+                        this.apiFetch('/api/get_chats').then(d => { if(d) this.chats = d; });
+                        this.apiFetch('/api/get_groups').then(d => { if(d) this.groups = d; });
+                    }
+                }
+            });
+        },
+        isBlocked(userId) {
+            return this.blockedUsers.includes(userId);
+        },
+        toggleBlock() {
+            if (!this.viewingUser) return;
+            const userId = this.viewingUser.id;
+            const action = this.isBlocked(userId) ? 'unblock_user' : 'block_user';
+            
+            this.apiFetch(`/api/${action}`, {
+                    method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ user_id: userId })
+            })
+            .then(data => {
+                if (data && data.success) {
+            if (this.isBlocked(userId)) {
+                this.blockedUsers = this.blockedUsers.filter(id => id !== userId);
+                        this.showToast('Success', 'User unblocked.');
+            } else {
+                this.blockedUsers.push(userId);
+                        this.showToast('Success', 'User blocked.');
+            }
+                }
+            });
+        },
+
+                                        
+                    handleStoryUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.type.startsWith('video')) {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => {
+                    window.URL.revokeObjectURL(video.src);
+                    /* Requirement: Max Duration 30 Seconds */
+                    if (video.duration > 30) {
+                        alert('Video exceeds 30s limit. Trimming automatically to 30s.');
+                    }
+                    /* Requirement: Resolution 720p (HD) */
+                    if (Math.min(video.videoWidth, video.videoHeight) > 720) {
+                        alert('Resolution too high. Max resolution is 720p.');
+                        event.target.value = '';
+                        return;
+                    }
+                    this.processStoryFile(file, event.target);
+                };
+                video.src = URL.createObjectURL(file);
+            } else {
+                this.processStoryFile(file, event.target);
+            }
+        },
+        processStoryFile(file, input) {
+            this.tempStory = {
+                media: URL.createObjectURL(file),
+                file: file,
+                type: file.type.startsWith('video') ? 'video' : 'image',
+                hasMusic: false
+            };
+            this.isUploadingStory = true;
+            if (input) input.value = '';
+        },
+        viewStory(stories, user = null) {
+            this.viewingStory = { list: stories, index: 0, user: user || this.user };
+            if (this.viewingStory.user.id !== this.user.id) {
+                const currentStory = this.viewingStory.list[this.viewingStory.index];
+                if (!currentStory.seenBy) {
+                    currentStory.seenBy = [];
+                }
+                const viewerExists = currentStory.seenBy.find(v => v.name === this.user.name);
+                if (!viewerExists) {
+                    currentStory.seenBy.push({ id: 0, name: this.user.name, avatar: this.user.avatar, liked: false });
+                }
+                
+                // Record view in DB
+                this.apiFetch('/api/record_story_view', {
+                        method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': CSRF_TOKEN
+                    },
+                    body: JSON.stringify({ story_id: currentStory.id })
+                });
+            } else {
+                // It's my story, fetch real viewers
+                const currentStory = this.viewingStory.list[this.viewingStory.index];
+                this.apiFetch(`/api/get_story_viewers?story_id=${currentStory.id}`)
+                    .then(data => {
+                        currentStory.seenBy = data;
+                    });
+            }
+            this.$nextTick(() => this.startStoryProgress());
+        },
+        startStoryProgress() {
+            clearInterval(this.storyTimer);
+            this.handleStoryMusic();
+            this.storyProgress = 0;
+            this.storyTimer = setInterval(() => {
+                if (!this.viewingStory || this.isPaused) return; // Check if viewingStory is null
+                this.storyProgress += 1;
+                if (this.storyProgress >= 100) {
+                    if (this.viewingStory.index < this.viewingStory.list.length - 1) {
+                        this.viewingStory.index++;
+                        this.storyProgress = 0;
+                        this.handleStoryMusic();
+                    } else {
+                        this.nextUserStory();
+                    }
+                }
+            }, 50);
+        },
+        closeStory() {
+            clearInterval(this.storyTimer);
+            if (this.$refs.storyAudio) {
+                this.$refs.storyAudio.pause();
+                this.$refs.storyAudio.currentTime = 0;
+            }
+            this.viewingStory = null;
+            this.showSeenList = false;
+        },
+        deleteCurrentStory() {
+            if (!this.viewingStory) return;
+            const currentStory = this.viewingStory.list[this.viewingStory.index];
+            
+            if (!confirm('Delete this story?')) return;
+
+            this.apiFetch('/api/delete_story', {
+
+
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ story_id: currentStory.id })
+            }).then(() => {
+                this.myStories = this.myStories.filter(s => s.id !== currentStory.id);
+                if (this.viewingStory.user.id === this.user.id) {
+                    this.viewingStory.list = this.myStories;
+                    if (this.myStories.length === 0) {
+                        this.closeStory();
+                    } else {
+                        if (this.viewingStory.index >= this.myStories.length) this.viewingStory.index = this.myStories.length - 1;
+                        this.storyProgress = 0;
+                    }
+                }
+            });
+        },
+        sendStoryReply(content) {
+            if (!content || !this.viewingStory || !this.viewingStory.user || this.viewingStory.user.id === this.user.id) return;
+            const friendId = this.viewingStory.user.id;
+            const messageContent = `Replying to story: `;
+
+            if (!this.chatMessages[friendId]) this.chatMessages[friendId] = [];
+            this.chatMessages[friendId].push({
+                id: Date.now(),
+                sender: 'me',
+                type: 'text',
+                content: messageContent,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                read: false
+            });
+
+            // Update chat list preview
+            const chat = this.chats.find(c => c.id === friendId && c.type !== 'group');
+            if (chat) {
+                chat.lastMsg = messageContent;
+                chat.time = 'Now';
+            }
+
+            const formData = new FormData();
+            formData.append('receiver_id', friendId);
+            formData.append('content', messageContent);
+            formData.append('media_type', 'text');
+
+            this.apiFetch('/api/send_message', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-Token': CSRF_TOKEN
+                }
+            }).then(data => {
+                if(data && data.success) this.showToast('Sent', 'Reply sent');
+            });
+        },
+        addStoryText() {
+            if (!this.newStoryText.trim()) return;
+            this.storyOverlays.push({
+                id: Date.now(),
+                type: 'text',
+                content: this.newStoryText,
+                color: this.newStoryTextColor,
+                x: 50,
+                y: 50
+            });
+            this.isAddingStoryText = false;
+            this.newStoryText = '';
+        },
+        removeStoryOverlay(id) {
+            this.storyOverlays = this.storyOverlays.filter(o => o.id !== id);
+        },
+        startDragOverlay(e, overlay) {
+            // Bring the selected overlay to the front for reordering
+            const targetArray = this.isMediaEditorOpen ? this.editorOverlays : this.storyOverlays;
+            const containerRef = this.isMediaEditorOpen ? this.$refs.editorArea : this.$refs.storyPreviewArea;
+
+            const index = targetArray.findIndex(o => o.id === overlay.id);
+            if (index > -1 && index < targetArray.length - 1) {
+                targetArray.splice(index, 1);
+                targetArray.push(overlay);
+            }
+
+            const isTouchEvent = e.touches && e.touches.length > 0;
+            const startX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const startY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            const startLeft = overlay.x;
+            const startTop = overlay.y;
+            const container = containerRef.getBoundingClientRect();
+
+            const moveHandler = (ev) => {
+                ev.preventDefault();
+                const currentX = isTouchEvent ? ev.touches[0].clientX : ev.clientX;
+                const currentY = isTouchEvent ? ev.touches[0].clientY : ev.clientY;
+                
+                const deltaX = ((currentX - startX) / container.width) * 100;
+                const deltaY = ((currentY - startY) / container.height) * 100;
+                
+                overlay.x = Math.max(0, Math.min(100, startLeft + deltaX));
+                overlay.y = Math.max(0, Math.min(100, startTop + deltaY));
+            };
+
+            const upHandler = () => {
+                window.removeEventListener('mousemove', moveHandler);
+                window.removeEventListener('mouseup', upHandler);
+                window.removeEventListener('touchmove', moveHandler);
+                window.removeEventListener('touchend', upHandler);
+                if (this.isMediaEditorOpen) this.saveEditorState();
+            };
+
+            window.addEventListener('mousemove', moveHandler);
+            window.addEventListener('mouseup', upHandler);
+            window.addEventListener('touchmove', moveHandler, { passive: false });
+            window.addEventListener('touchend', upHandler);
+        },
+        async postStory(audience) {
+            if (!this.tempStory) return;
+            this.isPostingStory = true;
+            this.uploadProgress = 0;
+
+            let fileToUpload = this.tempStory.file;
+
+            // Merge overlays for Image
+            if (this.tempStory.type === 'image' && this.storyOverlays.length > 0) {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    
+                    const imgLoaded = new Promise((resolve, reject) => {
+                        img.onload = resolve;
+                        img.onerror = reject;
+                    });
+                    img.src = this.tempStory.media;
+                    await imgLoaded;
+                    
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    
+                    ctx.drawImage(img, 0, 0);
+                    
+                    this.storyOverlays.forEach(overlay => {
+                        const x = (overlay.x / 100) * canvas.width;
+                        const y = (overlay.y / 100) * canvas.height;
+                        
+                        ctx.save();
+                        ctx.translate(x, y);
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        
+                        if (overlay.type === 'text') {
+                            const fontSize = canvas.width * 0.08; 
+                            ctx.font = `bold ${fontSize}px sans-serif`;
+                            ctx.fillStyle = overlay.color;
+                            ctx.strokeStyle = 'black';
+                            ctx.lineWidth = fontSize * 0.05;
+                            ctx.strokeText(overlay.content, 0, 0);
+                            ctx.fillText(overlay.content, 0, 0);
+                        }
+                        ctx.restore();
+                    });
+                    
+                    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                    if (blob) {
+                        fileToUpload = new File([blob], "story_edited.jpg", { type: "image/jpeg" });
+                    }
+                } catch (e) {
+                    console.error("Error merging story", e);
+                    this.showToast('Error', 'Failed to process image for story', 'error');
+                    this.isPostingStory = false;
+                    this.isUploadingStory = false;
+                    return;
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('media', fileToUpload);
+            formData.append('type', this.tempStory.type);
+            formData.append('audience', audience);
+            formData.append('has_music', this.tempStory.hasMusic ? 1 : 0);
+
+            const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/create_story', true);
+                xhr.setRequestHeader('X-CSRF-Token', CSRF_TOKEN);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+                }
+            };
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    try {
+                        const res = JSON.parse(xhr.responseText);
+                        if (res.success) {
+                            this.isUploadingStory = false;
+                            this.isPostingStory = false;
+                            if (this.tempStory && this.tempStory.media.startsWith('blob:')) {
+                                URL.revokeObjectURL(this.tempStory.media);
+                            }
+                            this.tempStory = null;
+                            // Refresh stories
+                            this.apiFetch('/api/get_stories?t=' + Date.now()).then(data => this.processStories(data || []));
+                            this.showToast('Success', 'Story posted!');
+                        } else {
+                            this.isPostingStory = false;
+                            this.showToast('Error', res.error || 'Failed to post story', 'error');
+                        }
+                    } catch (e) {
+                        this.isPostingStory = false;
+                        this.showToast('Error', 'Invalid server response', 'error');
+                    }
+                } else {
+                    this.isPostingStory = false;
+                    this.showToast('Error', 'Upload failed', 'error');
+                }
+            };
+            xhr.send(formData);
+        },
+        toggleCloseFriend(friendId) {
+            if (this.closeFriends.includes(friendId)) {
+                this.closeFriends = this.closeFriends.filter(id => id !== friendId);
+            } else {
+                this.closeFriends.push(friendId);
+            }
+        },
+        get desktopGridCols() {
+            return 'lg:grid-cols-[auto_1fr_auto]';
+        },
+        handleStoryMusic() {
+            const audio = this.$refs.storyAudio;
+            if (!audio) return;
+            audio.pause();
+            audio.currentTime = 0;
+            if (this.viewingStory && this.viewingStory.list[this.viewingStory.index].hasMusic) {
+                const currentStory = this.viewingStory.list[this.viewingStory.index];
+                if (currentStory.music_track) {
+                    audio.src = currentStory.music_track;
+                    audio.play().catch(() => { });
+                }
+            }
+        },
+        nextUserStory() {
+            const owners = [];
+            if (this.myStories.length > 0) {
+                owners.push({ user: this.user, stories: this.myStories });
+            }
+            this.following.forEach(f => {
+                if (f.stories && f.stories.length > 0) {
+                    owners.push({ user: f, stories: f.stories });
+                }
+            });
+            const currentIndex = owners.findIndex(o => o.user.name === this.viewingStory.user.name);
+            if (currentIndex !== -1 && currentIndex < owners.length - 1) {
+                const next = owners[currentIndex + 1];
+                this.viewStory(next.stories, next.user);
+            } else {
+                this.closeStory();
+            }
+        },
+        didILikeThisStory() {
+            if (!this.viewingStory || this.viewingStory.user.id === this.user.id) return false;
+            const currentStory = this.viewingStory.list[this.viewingStory.index];
+            if (!currentStory.seenBy) return false;
+            const meAsViewer = currentStory.seenBy.find(v => v.name === this.user.name);
+            return meAsViewer ? meAsViewer.liked : false;
+        },
+        toggleStoryLike() {
+            if (!this.viewingStory || this.viewingStory.user.id === this.user.id) return;
+            const currentStory = this.viewingStory.list[this.viewingStory.index];
+            if (!currentStory.seenBy) return;
+            const meAsViewer = currentStory.seenBy.find(v => v.name === this.user.name);
+            if (meAsViewer) {
+                meAsViewer.liked = !meAsViewer.liked;
+            }
+        },
+    
+
+        blockUser(userId) {
+            // This is usually for admin, but if used for self-blocking logic:
+            this.viewingUser = { id: userId }; // Hack to reuse toggleBlock logic or implement direct call
+            this.toggleBlock();
+            this.showUserProfile = false;
+        },
+        
+        viewLikes(post) {
+            if (!post || post.likes === 0) return;
+            this.likersList = [];
+            this.showLikesModal = true;
+            this.apiFetch(`/api/get_post_likes?post_id=${post.id}`)
+                .then(data => {
+                    if (data && Array.isArray(data)) this.likersList = data;
+                });
+        },
+
+        deletePost(postId) {
+            if (!confirm('Are you sure you want to delete this post? This cannot be undone.')) return;
+
+            this.apiFetch('/api/delete_post', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ post_id: postId })
+            })
+            .then(data => {
+                if (data && data.success) {
+                    this.posts = this.posts.filter(p => p.id !== postId);
+                    this.savedPostList = this.savedPostList.filter(p => p.id !== postId);
+                    if (this.viewingPost && this.viewingPost.id === postId) {
+                        this.viewingPost = null;
+                    }
+                    this.showToast('Success', 'Post deleted successfully.');
+                } else {
+                    this.showToast('Error', data.error || 'Failed to delete post.', 'error');
+                }
+            });
+            this.showPostOptions = false;
+        },
+
+        getDistance(t1, t2) {
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        },
+        handlePinchStart(e) {
+            if (e.touches.length === 2) {
+                this.startPinchDist = this.getDistance(e.touches[0], e.touches[1]);
+            }
+        },
+        handlePinchMove(e) {
+            if (e.touches.length === 2 && this.startPinchDist > 0) {
+                const newDist = this.getDistance(e.touches[0], e.touches[1]);
+                let scale = this.lastScale * (newDist / this.startPinchDist);
+                if (scale < 1) scale = 1;
+                if (scale > 4) scale = 4;
+                this.zoomScale = scale;
+            }
+        },
+        handlePinchEnd(e) {
+            this.lastScale = this.zoomScale;
+            if (this.zoomScale < 1.05) {
+                this.zoomScale = 1;
+                this.lastScale = 1;
+            }
+        },
+        shareStoryAsPost() {
+            const story = this.viewingStory.list[this.viewingStory.index];
+            this.isCreatingPost = true;
+            this.newPostContent = 'Check out this story from @' + this.viewingStory.user.nickname + '!';
+            this.selectedMedia = story.media;
+            this.mediaType = story.type;
+            this.closeStory();
+            this.showStoryShareOptions = false;
+        },
+        sendSharedStory(friendId) {
+            const story = this.viewingStory.list[this.viewingStory.index];
+            if (!this.chatMessages[friendId]) this.chatMessages[friendId] = [];
+            this.chatMessages[friendId].push({ sender: 'me', type: 'text', content: 'Check out this story from ' + this.viewingStory.user.name + ':', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+            this.chatMessages[friendId].push({ sender: 'me', type: story.type, content: story.media, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+
+            const chat = this.chats.find(c => c.id === friendId);
+            if (chat) chat.lastMsg = 'Shared a story.';
+
+            this.isSharingStoryToChat = false;
+            this.showStoryShareOptions = false;
+        },
+        removeStoryOverlay(id) {
+            this.storyOverlays = this.storyOverlays.filter(o => o.id !== id);
+        },
+
+        // --- GENERIC MEDIA EDITOR FUNCTIONS ---
+        openMediaEditor(source) {
+            const file = source === 'post' ? this.postFile : this.storyFile;
+            if (!file) {
+                this.showToast('Error', 'Please select media first', 'error');
+                return;
+            }
+
+            this.editorSource = source;
+            this.editorFile = file;
+            this.editorPreviewUrl = URL.createObjectURL(file);
+            this.editorType = file.type.startsWith('video') ? 'video' : 'image';
+            
+            // Reset Editor
+            this.editorOverlays = [];
+            this.editorFilter = 'none';
+            this.editorMusic = null;
+            this.showEditorStickers = false;
+            this.isAddingEditorText = false;
+            this.editorText = '';
+            this.drawings = [];
+            this.activeTool = 'brush';
+            this.stopCrop(); // Reset crop state
+            
+            // Video specific init
+            if (this.editorType === 'video') {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => {
+                    this.videoDuration = video.duration;
+                    this.videoTrim = { start: 0, end: video.duration };
+                };
+                video.src = this.editorPreviewUrl;
+            }
+            
+            this.isMediaEditorOpen = true;
+            
+            // Initialize History
+            this.editorHistory = [];
+            this.editorHistoryIndex = -1;
+            this.saveEditorState();
+            
+            // Setup canvas resolution
+            this.$nextTick(() => {
+                const canvas = this.$refs.drawingCanvas;
+                if (canvas) {
+                    canvas.width = canvas.parentElement.clientWidth;
+                    canvas.height = canvas.parentElement.clientHeight;
+                    this.renderDrawingCanvas();
+                }
+            });
+        },
+
+        saveEditorState() {
+            const state = {
+                overlays: JSON.parse(JSON.stringify(this.editorOverlays)),
+                drawings: JSON.parse(JSON.stringify(this.drawings)),
+                filter: this.editorFilter,
+                file: this.editorFile,
+                previewUrl: this.editorPreviewUrl,
+                trim: { ...this.videoTrim }
+            };
+            
+            // If we are in the middle of history, discard future states
+            if (this.editorHistoryIndex < this.editorHistory.length - 1) {
+                this.editorHistory = this.editorHistory.slice(0, this.editorHistoryIndex + 1);
+            }
+            
+            this.editorHistory.push(state);
+            this.editorHistoryIndex++;
+        },
+
+        undoEditor() {
+            if (this.editorHistoryIndex > 0) {
+                this.editorHistoryIndex--;
+                this.restoreEditorState(this.editorHistory[this.editorHistoryIndex]);
+            }
+        },
+
+        redoEditor() {
+            if (this.editorHistoryIndex < this.editorHistory.length - 1) {
+                this.editorHistoryIndex++;
+                this.restoreEditorState(this.editorHistory[this.editorHistoryIndex]);
+            }
+        },
+
+        restoreEditorState(state) {
+            this.editorOverlays = JSON.parse(JSON.stringify(state.overlays));
+            this.drawings = state.drawings || [];
+            this.editorFilter = state.filter;
+            this.videoTrim = { ...state.trim };
+            
+            // Handle file changes (e.g., undoing a crop)
+            if (this.editorFile !== state.file) {
+                this.editorFile = state.file;
+                this.editorPreviewUrl = state.previewUrl;
+                this.stopCrop();
+            }
+            this.renderDrawingCanvas();
+        },
+        
+        setEditorFilter(filter) {
+            this.editorFilter = filter;
+            this.saveEditorState();
+        },
+
+        addEditorSticker(sticker) {
+            this.editorOverlays.push({
+                id: Date.now(),
+                type: 'sticker',
+                content: sticker,
+                x: 50, y: 50,
+                scale: 1,
+                rotation: 0
+            });
+            this.saveEditorState();
+        },
+
+        addEditorText() {
+            if (!this.editorText.trim()) return;
+            this.editorOverlays.push({
+                id: Date.now(),
+                type: 'text',
+                content: this.editorText,
+                color: this.editorTextColor,
+                font: this.editorTextFont,
+                x: 50, y: 50,
+                scale: 1,
+                rotation: this.editorTextRotation || 0
+            });
+            this.isAddingEditorText = false;
+            this.editorText = '';
+            this.saveEditorState();
+        },
+
+        startCrop() {
+            if (this.editorType !== 'image') return;
+            this.isCropping = true;
+            this.$nextTick(() => {
+                const image = this.$refs.editorImage;
+                if (this.cropper) this.cropper.destroy();
+                this.cropper = new Cropper(image, { viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false });
+            });
+        },
+
+        applyCrop() {
+            if (!this.cropper) return;
+            this.cropper.getCroppedCanvas().toBlob((blob) => {
+                const newFile = new File([blob], "cropped.jpg", { type: "image/jpeg" });
+                this.editorFile = newFile;
+                this.editorPreviewUrl = URL.createObjectURL(newFile);
+                this.stopCrop();
+                this.saveEditorState();
+            }, 'image/jpeg');
+        },
+
+        stopCrop() { if (this.cropper) { this.cropper.destroy(); this.cropper = null; } this.isCropping = false; },
+
+        // --- DRAWING METHODS ---
+        startDrawing(e) {
+            if (!this.isDrawing) return;
+            const { x, y } = this.getPoint(e);
+            this.currentPath = [{ x, y }];
+            this.renderDrawingCanvas(); // Render initial dot
+        },
+
+        handleDrawing(e) {
+            if (!this.isDrawing || this.currentPath.length === 0) return;
+            const { x, y } = this.getPoint(e);
+            this.currentPath.push({ x, y });
+        },
+
+        stopDrawing() {
+            if (!this.isDrawing || this.currentPath.length < 2) {
+                this.currentPath = [];
+                return;
+            }
+            this.drawings.push({
+                points: this.currentPath,
+                color: this.brushColor,
+                size: this.brushSize,
+                isEraser: this.activeTool === 'eraser'
+            });
+            this.currentPath = [];
+            this.saveEditorState();
+            this.renderDrawingCanvas();
+        },
+
+        getPoint(e) {
+            const rect = this.$refs.editorArea.getBoundingClientRect();
+            const isTouchEvent = e.touches && e.touches.length > 0;
+            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            return { x: (clientX - rect.left) / rect.width, y: (clientY - rect.top) / rect.height };
+        },
+
+        toggleDrawing() { this.isDrawing = !this.isDrawing; if (!this.isDrawing) this.currentPath = []; },
+
+        clearDrawings() {
+            if (this.drawings.length > 0 && confirm('Clear all drawings?')) { 
+                this.drawings = []; 
+                this.saveEditorState();
+                this.renderDrawingCanvas();
+            }
+        },
+
+        renderDrawingCanvas() {
+            const canvas = this.$refs.drawingCanvas;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw saved drawings
+            const drawPath = (path) => {
+                if (path.points.length < 1) return;
+                ctx.globalCompositeOperation = path.isEraser ? 'destination-out' : 'source-over';
+                ctx.strokeStyle = path.isEraser ? 'rgba(0,0,0,1)' : path.color;
+                ctx.lineWidth = (path.size / 100) * canvas.width; // Scale size relative to width
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(path.points[0].x * canvas.width, path.points[0].y * canvas.height);
+                for (let i = 1; i < path.points.length; i++) {
+                    ctx.lineTo(path.points[i].x * canvas.width, path.points[i].y * canvas.height);
+                }
+                ctx.stroke();
+            };
+
+            this.drawings.forEach(drawPath);
+
+            // Draw current live path
+            if (this.currentPath.length > 0) {
+                drawPath({
+                    points: this.currentPath,
+                    color: this.brushColor,
+                    size: this.brushSize,
+                    isEraser: this.activeTool === 'eraser'
+                });
+            }
+        },
+
+        async saveMediaEditor() {
+            this.showToast('Processing', 'Applying edits...', 'info');
+
+            let finalFile = this.editorFile;
+            
+            // Get container dimensions for aspect ratio correction
+            const container = this.$refs.editorArea;
+            const containerDims = container ? { width: container.clientWidth, height: container.clientHeight } : null;
+
+            // If image, bake filters and stickers
+            if (this.editorType === 'image') {
+                try {
+                    finalFile = await this.generateEditedImage(this.editorFile, this.editorFilter, this.editorOverlays, this.drawings, containerDims);
+                } catch (e) {
+                    console.error("Editor processing failed", e);
+                    this.showToast('Error', 'Failed to process image', 'error');
+                    return;
+                }
+            } else if (this.editorType === 'video') {
+                // Attach trim metadata
+                finalFile.trimStart = this.videoTrim.start;
+                finalFile.trimEnd = this.videoTrim.end;
+            }
+
+            // Apply changes back to source
+            if (this.editorSource === 'post') {
+                this.postFile = finalFile;
+                this.selectedMedia = URL.createObjectURL(finalFile);
+                // Music for post is stored in editorMusic, used in createPost
+            } else {
+                this.storyFile = finalFile;
+                this.storyMediaPreview = URL.createObjectURL(finalFile);
+                if (this.editorMusic) {
+                    this.tempStory = this.tempStory || {};
+                    this.tempStory.hasMusic = true;
+                    this.tempStory.musicTrack = this.editorMusic;
+                }
+            }
+
+            this.isMediaEditorOpen = false;
+            this.showToast('Success', 'Edits saved!');
+        },
+
+        generateEditedImage(file, filter, overlays, drawings = [], containerDims = null) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    
+                    // Calculate mapping ratios
+                    let offsetX = 0, offsetY = 0, scale = 1;
+                    if (containerDims) {
+                        const imgAspect = img.naturalWidth / img.naturalHeight;
+                        const contAspect = containerDims.width / containerDims.height;
+                        
+                        if (contAspect > imgAspect) { // Pillarbox
+                            const displayHeight = containerDims.height;
+                            const displayWidth = displayHeight * imgAspect;
+                            offsetX = (containerDims.width - displayWidth) / 2;
+                            scale = img.naturalHeight / displayHeight;
+                        } else { // Letterbox
+                            const displayWidth = containerDims.width;
+                            const displayHeight = displayWidth / imgAspect;
+                            offsetY = (containerDims.height - displayHeight) / 2;
+                            scale = img.naturalWidth / displayWidth;
+                        }
+                    }
+                    
+                    const mapPoint = (pX, pY) => {
+                        if (!containerDims) return { x: (pX/100)*canvas.width, y: (pY/100)*canvas.height };
+                        const screenX = (pX / 100) * containerDims.width;
+                        const screenY = (pY / 100) * containerDims.height;
+                        return { x: (screenX - offsetX) * scale, y: (screenY - offsetY) * scale };
+                    };
+
+                    // Draw Filter & Image
+                    ctx.filter = filter;
+                    ctx.drawImage(img, 0, 0);
+                    ctx.filter = 'none'; // Reset for stickers
+
+                    // Draw Drawings (Using offscreen canvas for correct Eraser compositing)
+                    if (drawings && drawings.length > 0) {
+                        const drawCanvas = document.createElement('canvas');
+                        drawCanvas.width = canvas.width;
+                        drawCanvas.height = canvas.height;
+                        const drawCtx = drawCanvas.getContext('2d');
+
+                        drawings.forEach(path => {
+                            if (path.points.length < 2) return;
+                            
+                            drawCtx.globalCompositeOperation = path.isEraser ? 'destination-out' : 'source-over';
+                            drawCtx.beginPath();
+                            drawCtx.strokeStyle = path.isEraser ? 'rgba(0,0,0,1)' : path.color;
+                            // Adjust brush size logic to match preview (relative to container width vs actual image width)
+                            // We use a base scale factor to ensure consistency
+                            drawCtx.lineWidth = (path.size / 100) * (containerDims ? containerDims.width * scale : canvas.width);
+                            drawCtx.lineCap = 'round';
+                            drawCtx.lineJoin = 'round';
+                            const start = mapPoint(path.points[0].x * 100, path.points[0].y * 100);
+                            drawCtx.moveTo(start.x, start.y);
+                            for (let i = 1; i < path.points.length; i++) {
+                                const p = mapPoint(path.points[i].x * 100, path.points[i].y * 100);
+                                drawCtx.lineTo(p.x, p.y);
+                            }
+                            drawCtx.stroke();
+                        });
+                        ctx.drawImage(drawCanvas, 0, 0);
+                    }
+
+                    // Draw Overlays
+                    overlays.forEach(o => {
+                        const pos = mapPoint(o.x, o.y);
+                        
+                        ctx.save();
+                        ctx.translate(pos.x, pos.y);
+                        ctx.rotate((o.rotation || 0) * Math.PI / 180);
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        
+                        // Font scaling approx based on width relative to image
+                        const fontSize = (canvas.width * 0.15) * (o.scale || 1); 
+                        ctx.font = o.type === 'text' ? `bold ${fontSize}px ${o.font || 'sans-serif'}` : `${fontSize}px sans-serif`;
+                        ctx.fillStyle = o.color || 'white';
+                        ctx.globalAlpha = o.opacity !== undefined ? o.opacity : 1;
+                        if (o.type === 'text') { ctx.strokeStyle = 'black'; ctx.lineWidth = fontSize * 0.05; ctx.strokeText(o.content, 0, 0); }
+                        ctx.fillText(o.content, 0, 0);
+                        ctx.restore();
+                    });
+
+                    canvas.toBlob(blob => resolve(new File([blob], "edited_image.jpg", { type: "image/jpeg" })), 'image/jpeg', 0.9);
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        },
+
+        handleStoryFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.storyFile = file;
+            this.storyMediaType = file.type.startsWith('video') ? 'video' : 'image';
+            this.storyMediaPreview = URL.createObjectURL(file);
+        },
+        async createStoryAction() {
+            if (!this.storyFile && !this.newStoryContent.trim() && this.storyOverlays.length === 0) return;
+            this.isPostingStory = true;
+            this.uploadProgress = 0;
+        
+            let fileToUpload = this.storyFile;
+            let type = this.storyMediaType || 'image';
+
+            // If there's no base file, but there is text or overlays, generate an image
+            if (!this.storyFile) {
+                fileToUpload = await this.generateFinalStoryImage(null, this.newStoryContent, this.storyOverlays);
+                           type = 'image';
+                        } 
+            // If there's an image file and text or overlays, merge them
+            else if (this.storyFile && this.storyMediaType === 'image') {
+                fileToUpload = await this.generateFinalStoryImage(this.storyFile, this.newStoryContent, this.storyOverlays);
+            }
+            // For videos, we can't merge on the client, so we'd need a different strategy (server-side processing)
+            // For now, we just upload the video as is
+            
+            const formData = new FormData();
+            formData.append('media', fileToUpload);
+            formData.append('type', type);
+            formData.append('audience', 'public');
+            formData.append('has_music', this.tempStory?.hasMusic ? 1 : 0);
+            if (this.tempStory?.hasMusic && this.tempStory?.musicTrack) {
+                formData.append('music_track', this.tempStory.musicTrack.src);
+            }
+        
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/create_story', true);
+            xhr.setRequestHeader('X-CSRF-Token', CSRF_TOKEN);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+            };
+            xhr.onload = () => {
+                this.isPostingStory = false;
+                if (xhr.status !== 200) { this.showToast('Error', 'Upload failed', 'error'); return; }
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (!res.success) { this.showToast('Error', res.error || 'Failed to post story', 'error'); return; }
+                    
+                    this.isCreatingStory = false;
+                    this.newStoryContent = '';
+                    this.storyFile = null;
+                    this.storyMediaPreview = null;
+                    this.storyMediaType = null;
+                    this.storyOverlays = [];
+                    this.showStoryStickerPicker = false;
+                    this.apiFetch('/api/get_stories?t=' + Date.now()).then(data => this.processStories(data || []));
+                    this.showToast('Success', 'Story posted!');
+                } catch (e) { this.showToast('Error', 'Invalid server response', 'error'); }
+            };
+            xhr.send(formData);
+        },
+               generateFinalStoryImage(baseFile, text, overlays) {
+            return new Promise(resolve => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 1080;
+                canvas.height = 1920;
+                const drawOperations = async () => {
+                    // 1. Draw background (either style or image)
+                    if (baseFile) {
+                        const img = new Image();
+                        const imgLoaded = new Promise(res => { img.onload = res; });
+                        img.src = URL.createObjectURL(baseFile);
+                        await imgLoaded;
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    } else {
+                        ctx.fillStyle = this.textStoryStyles[this.textStoryStyleIndex].background;
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+
+                    // 2. Draw main text content
+                    if (text && text.trim()) {
+                        ctx.fillStyle = this.textStoryStyles[this.textStoryStyleIndex].color;
+                        ctx.font = 'bold 80px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                        ctx.lineWidth = 4;
+                        this.wrapText(ctx, text, canvas.width / 2, canvas.height / 2, canvas.width * 0.9, 100, true);
+                    }
+
+                    // 3. Draw overlays (stickers)
+                    for (const overlay of overlays) {
+                        const x = (overlay.x / 100) * canvas.width;
+                        const y = (overlay.y / 100) * canvas.height;
+                        ctx.font = '150px sans-serif'; // Sticker font size
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(overlay.content, x, y);
+                    }
+
+                    canvas.toBlob(blob => resolve(new File([blob], "story.jpg", { type: "image/jpeg" })), 'image/jpeg', 0.9);
+                };
+
+                drawOperations();
+            });
+        },
+        mergeImageAndText(file, text) {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    const imgLoaded = new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+                    img.src = URL.createObjectURL(file);
+                    await imgLoaded;
+                    canvas.width = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    ctx.drawImage(img, 0, 0);
+                    ctx.fillStyle = 'white';
+                    const fontSize = canvas.width * 0.08;
+                    ctx.font = `bold ${fontSize}px sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = fontSize * 0.05;
+                    this.wrapText(ctx, text, canvas.width/2, canvas.height/2, canvas.width * 0.9, fontSize * 1.2, true);
+                    canvas.toBlob(blob => resolve(new File([blob], "story_edited.jpg", { type: "image/jpeg" })), 'image/jpeg', 0.9);
+                } catch(e) { resolve(file); }
+            });
+        },
+        wrapText(ctx, text, x, y, maxWidth, lineHeight, stroke = false) {
+            const words = text.split(' ');
+            let line = '';
+            let lines = [];
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + ' ';
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > maxWidth && n > 0) {
+                    lines.push(line);
+                    line = words[n] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+            let startY = y - ((lines.length - 1) * lineHeight) / 2;
+            for(let k = 0; k < lines.length; k++) {
+                if(stroke) ctx.strokeText(lines[k], x, startY + (k * lineHeight));
+                ctx.fillText(lines[k], x, startY + (k * lineHeight));
+            }
+        },
+        addStickerToStory(sticker) {
+            this.storyOverlays.push({
+                id: Date.now(),
+                type: 'sticker',
+                content: sticker,
+                x: 50, // Center X
+                y: 50, // Center Y
+                scale: 1,
+                rotation: 0
+            });
+            this.showStoryStickerPicker = false;
+        },
+        startDragOverlay(e, overlay) {
+            const isTouchEvent = e.touches && e.touches.length > 0;
+            const startX = isTouchEvent ? e.touches[0].clientX : e.clientX;
+            const startY = isTouchEvent ? e.touches[0].clientY : e.clientY;
+            const startLeft = overlay.x;
+            const startTop = overlay.y;
+            const container = this.$refs.storyPreviewArea.getBoundingClientRect();
+
+            const moveHandler = (ev) => {
+                ev.preventDefault();
+                const currentX = isTouchEvent ? ev.touches[0].clientX : ev.clientX;
+                const currentY = isTouchEvent ? ev.touches[0].clientY : ev.clientY;
+                const deltaX = ((currentX - startX) / container.width) * 100;
+                const deltaY = ((currentY - startY) / container.height) * 100;
+                overlay.x = Math.max(0, Math.min(100, startLeft + deltaX));
+                overlay.y = Math.max(0, Math.min(100, startTop + deltaY));
+            };
+            const upHandler = () => {
+                window.removeEventListener('mousemove', moveHandler); window.removeEventListener('mouseup', upHandler);
+                window.removeEventListener('touchmove', moveHandler); window.removeEventListener('touchend', upHandler);
+            };
+            window.addEventListener('mousemove', moveHandler); window.addEventListener('mouseup', upHandler);
+            window.addEventListener('touchmove', moveHandler, { passive: false }); window.addEventListener('touchend', upHandler);
+        },
+        handleStoryTap(e) {
+            if (Date.now() - this.pressStartTime > 200) return;
+            if (this.zoomScale > 1) {
+                return;
+            }
+            if (e.clientX > window.innerWidth / 2) {
+                this.storyProgress = 100;
+            } else {
+                if (this.viewingStory.index > 0) {
+                    this.viewingStory.index--;
+                    this.storyProgress = 0;
+                    this.handleStoryMusic();
+                }
+            }
+        },
+        handleProfileAvatarChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.editUser.avatar = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        },
+        async setReaction(post, reaction) {
+            if (!post) return;
+            
+            const currentReaction = post.myReaction || null;
+            const isUnreacting = currentReaction === reaction;
+            const isReactingForTheFirstTime = !currentReaction;
+
+            // Optimistic UI update
+            if (isUnreacting) {
+                post.myReaction = null;
+                post.likes--;
+            } else {
+                if (isReactingForTheFirstTime) post.likes++;
+                post.myReaction = reaction;
+            }
+
+            await this.apiFetch('/api/toggle_reaction', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ 
+                    post_id: post.id,
+                    reaction: reaction
+                })
+            });
+        },
+        
+        getReactionIcon(reaction) {
+            const icons = {
+                like: 'fa-solid fa-thumbs-up',
+                heart: 'fa-solid fa-heart',
+                care: 'fa-solid fa-face-grin-hearts',
+                laugh: 'fa-solid fa-face-laugh-squint',
+                wow: 'fa-solid fa-face-surprise',
+                sad: 'fa-solid fa-face-sad-tear',
+                angry: 'fa-solid fa-face-angry',
+            };
+            return icons[reaction] || 'fa-regular fa-thumbs-up';
+        },
+        getReactionColor(reaction) {
+            const colors = {
+                like: 'text-blue-600',
+                heart: 'text-rose-500',
+                care: 'text-yellow-500',
+                laugh: 'text-yellow-500',
+                wow: 'text-yellow-500',
+                sad: 'text-yellow-500',
+                angry: 'text-orange-600',
+            };
+            return colors[reaction] || 'text-gray-500 dark:text-gray-400';
+        },
+        async toggleSave(post) {
+            if (!post) return;
+            post.saved = !post.saved; // Optimistic update
+            
+            await this.apiFetch('/api/toggle_save', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ post_id: post.id })
+            });
+        },
+        reportStory() {
+            if (!this.viewingStory) return;
+            const currentStory = this.viewingStory.list[this.viewingStory.index];
+            // Ensure user_id is available
+            if (!currentStory.user_id && this.viewingStory.user) {
+                currentStory.user_id = this.viewingStory.user.id;
+            }
+            this.openReportModal('story', currentStory);
+        },
+        reportUser(user) {
+            if (!user) return; 
+            this.openReportModal('user', user);
+        }, 
+        reportPost(post) {
+            if (!post) return;
+            this.openReportModal('post', post);
+        },
+        startChatWithUser(userToChat) {
+            if (!userToChat) return;
+            this.showUserProfile = false; // Close profile modal
+            
+            let chat = this.chats.find(c => c.id == userToChat.id && c.type !== 'group');
+            
+            if (!chat) {
+                chat = {
+                    id: userToChat.id,
+                    name: userToChat.name,
+                    avatar: userToChat.avatar,
+                    lastMsg: 'Start a conversation',
+                    time: 'Now',
+                    unread: false,
+                    is_admin: userToChat.is_admin,
+                    status: userToChat.online ? 'online' : 'offline'
+                };
+                if (!this.chats.some(c => c.id == chat.id)) {
+                    this.chats.unshift(chat);
+                }
+            }
+            
+            this.activeChat = chat;
+            this.isMessaging = true;
+        },
+        startCall(type) {
+            if (!this.activeChat) return;
+            this.isCalling = true;
+            this.isCallMinimized = false;
+            this.isCallChatOpen = false;
+            this.callType = type;
+            this.callStatus = 'Calling...';
+            this.callDuration = 0;
+            this.isMicMuted = false;
+            this.isCameraOff = false;
+            this.facingMode = 'user';
+            this.isPoorConnection = false;
+            this.isReconnecting = false;
+            this.isScreenSharing = false;
+            document.getElementById('ringing-sound').play().catch(()=>{});
+
+            navigator.mediaDevices.getUserMedia({
+                video: type === 'video' ? { facingMode: this.facingMode } : false,
+                audio: true
+            }).then(stream => {
+                this.localStream = Alpine.raw(stream);
+                if (type === 'video') {
+                    this.$refs.localVideo.srcObject = stream;
+                }
+                
+                this.setupPeerConnection();
+                this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
+
+                // Create Offer
+                this.peerConnection.createOffer().then(offer => {
+                    this.peerConnection.setLocalDescription(offer);
+                    // Optimize: Send via Socket directly
+                    this.socket.emit('call_user', {
+                        userToCall: this.activeChat.id,
+                        signalData: offer,
+                        from: this.user.id,
+                        name: this.user.name,
+                        avatar: this.user.avatar,
+                        type: type
+                    });
+                });
+            }).catch(err => {
+                let errorMsg = 'Could not access camera/microphone.';
+                
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMsg = 'Permission denied. Please allow access to camera/microphone.';
+                } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                    errorMsg = 'No camera or microphone found.';
+                } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                    errorMsg = 'Camera/microphone is already in use.';
+                }
+
+                this.showToast('Call Error', errorMsg, 'error');
+                console.error('getUserMedia error:', err);
+                this.endCall();
+            });
+        },
+        setupPeerConnection() {
+            const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
+            this.peerConnection = new RTCPeerConnection(servers);
+
+            this.peerConnection.onicecandidate = event => {
+                if (event.candidate && this.activeChat) {
+                    this.socket.emit('ice_candidate', {
+                        to: this.activeChat.id,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            this.peerConnection.ontrack = event => {
+                if (this.$refs.remoteVideo) {
+                    this.$refs.remoteVideo.srcObject = event.streams[0];
+                }
+                if (this.$refs.remoteAudio) {
+                    this.$refs.remoteAudio.srcObject = event.streams[0];
+                }
+            };
+        },
+        pollCallStatus() {
+            // Polling deprecated in favor of Socket events (call_accepted, call_ended)
+        },
+        acceptCall() {
+            const callData = this.incomingCall;
+            this.incomingCall = null;
+            document.getElementById('ringing-sound').pause();
+
+            // Setup UI
+            let caller = this.friends.find(f => f.id == callData.caller_id);
+            if (!caller) caller = { id: callData.caller_id, name: callData.name, avatar: callData.avatar };
+            this.activeChat = caller;
+            this.isCalling = true;
+            this.callType = callData.type;
+            this.currentCallId = callData.id;
+            this.callStatus = 'Connected';
+            this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
+
+            navigator.mediaDevices.getUserMedia({
+                video: this.callType === 'video',
+                audio: true
+            }).then(stream => {
+                this.localStream = Alpine.raw(stream);
+                if (this.callType === 'video') this.$refs.localVideo.srcObject = stream;
+                
+                this.setupPeerConnection();
+                this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
+
+                this.peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(callData.sdp)));
+                this.peerConnection.createAnswer().then(answer => {
+                    this.peerConnection.setLocalDescription(answer);
+                    this.socket.emit('answer_call', {
+                        to: callData.caller_id,
+                        signal: answer
+                    });
+                });
+            });
+        },
+        rejectCall() {
+            if (!this.incomingCall) return;
+            this.socket.emit('reject_call', { to: this.incomingCall.caller_id });
+            this.incomingCall = null;
+            document.getElementById('ringing-sound').pause();
+        },
+        endCall() {
+            if (this.isCallRecording && this.callRecorder && this.callRecorder.state !== 'inactive') {
+                this.callRecorder.stop();
+                this.isCallRecording = false;
+            }
+            
+            // Notify via Socket
+            if (this.activeChat) {
+                this.socket.emit('end_call', { to: this.activeChat.id });
+            }
+
+            const wasConnected = this.callStatus === 'Connected';
+            this.isCalling = false;
+            clearInterval(this.callTimer);
+            clearInterval(this.connectionInterval);
+            this.isPoorConnection = false;
+            this.isReconnecting = false;
+            document.getElementById('ringing-sound').pause();
+            document.getElementById('ringing-sound').currentTime = 0;
+            this.localStream?.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+            if (this.peerConnection) this.peerConnection.close();
+            this.peerConnection = null;
+            this.currentCallId = null;
+            this.$refs.remoteVideo.pause();
+            this.$refs.remoteVideo.src = '';
+
+            if (this.activeChat) {
+                if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
+                
+                let messageContent = '';
+                if (wasConnected) {
+                    messageContent = `${this.callType === 'voice' ? 'Voice' : 'Video'} call ended • ${this.formatRecordingTime(this.callDuration)}`;
+                } else {
+                    messageContent = `Missed ${this.callType === 'voice' ? 'voice' : 'video'} call`;
+                }
+
+                // Send call log to chat
+                this.sendMessage(messageContent, 'call_log');
+            }
+            
+            this.callStatus = '';
+            this.callDuration = 0;
+            this.isCallMinimized = false;
+            this.isCallChatOpen = false;
+            this.minimizedCallTransform = { x: 0, y: 0 };
+        },
+        toggleSpeaker() {
+            this.isSpeakerOn = !this.isSpeakerOn;
+            // This is a simplified toggle for UI/UX purposes.
+            // A real implementation would use setSinkId() on the audio/video element.
+            if (this.$refs.remoteAudio) this.$refs.remoteAudio.muted = !this.isSpeakerOn;
+            if (this.$refs.remoteVideo) this.$refs.remoteVideo.muted = !this.isSpeakerOn;
+        },
+        toggleCallRecording() {
+            if (this.isCallRecording) {
+                this.callRecorder.stop();
+                this.isCallRecording = false;
+            } else {
+                if (!this.localStream) return;
+                try {
+                    this.callChunks = [];
+                    this.callRecorder = Alpine.raw(new MediaRecorder(this.localStream));
+                    this.callRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) this.callChunks.push(e.data);
+                    };
+                    this.callRecorder.onstop = () => {
+                        const blob = new Blob(this.callChunks, { type: this.callType === 'video' ? 'video/webm' : 'audio/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        a.download = `call_recording_${Date.now()}.webm`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                    };
+                    this.callRecorder.start();
+                    this.isCallRecording = true;
+                } catch (err) {
+                    console.error("Error recording:", err);
+                    this.showToast('Error', 'Could not start recording.', 'error');
+                }
+            }
+        },
+        updateBatteryStatus(battery) {
+            this.batteryLevel = battery.level * 100;
+            this.isCharging = battery.charging;
+        },
+        switchCamera() {
+            if (this.callType !== 'video' || this.isScreenSharing) return;
+            this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+            if (this.localStream) {
+                this.localStream.getTracks().forEach(track => track.stop());
+            }
+            navigator.mediaDevices.getUserMedia({
+                video: { facingMode: this.facingMode },
+                audio: true
+            }).then(stream => {
+                this.localStream = Alpine.raw(stream);
+                this.$refs.localVideo.srcObject = stream;
+                if (this.isMicMuted) stream.getAudioTracks().forEach(track => track.enabled = false);
+            }).catch(err => {
+                console.error('Error switching camera:', err);
+                this.showToast('Error', 'Could not switch camera.', 'error');
+            });
+        },
+        toggleScreenShare() {
+            if (this.callType !== 'video') return;
+            if (this.isScreenSharing) {
+                this.isScreenSharing = false;
+                if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: this.facingMode }, audio: true }).then(stream => {
+                    this.localStream = Alpine.raw(stream);
+                    this.$refs.localVideo.srcObject = stream;
+                    if (this.isMicMuted) stream.getAudioTracks().forEach(track => track.enabled = false);
+                });
+            } else {
+                navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }).then(stream => {
+                    this.isScreenSharing = true;
+                    if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = Alpine.raw(stream);
+                    this.$refs.localVideo.srcObject = stream;
+                    stream.getVideoTracks()[0].onended = () => { if (this.isScreenSharing) this.toggleScreenShare(); };
+                }).catch(err => console.error('Error sharing screen:', err));
+            }
+        },
+        dragStart(event) {
+            this.isDragging = true;
+            const touch = event.touches ? event.touches[0] : null;
+            this.dragInfo.startX = touch ? touch.clientX : event.clientX;
+            this.dragInfo.startY = touch ? touch.clientY : event.clientY;
+            this.dragInfo.initialX = this.minimizedCallTransform.x;
+            this.dragInfo.initialY = this.minimizedCallTransform.y;
+        },
+        dragMove(event) {
+            if (!this.isDragging) return;
+            const touch = event.touches ? event.touches[0] : null;
+            const currentX = touch ? touch.clientX : event.clientX;
+            const currentY = touch ? touch.clientY : event.clientY;
+            const dx = currentX - this.dragInfo.startX;
+            const dy = currentY - this.dragInfo.startY;
+            this.minimizedCallTransform.x = this.dragInfo.initialX + dx;
+            this.minimizedCallTransform.y = this.dragInfo.initialY + dy;
+        },
+        dragEnd() {
+            this.isDragging = false;
+        },
+        startCreatePostDrag(e) {
+            if (window.innerWidth >= 1024) {
+                this.isCreatePostDragging = true;
+                this.createPostStart.x = e.clientX - this.createPostOffset.x;
+                this.createPostStart.y = e.clientY - this.createPostOffset.y;
+            }
+        },
+        handleCreatePostDrag(e) {
+            if (this.isCreatePostDragging) {
+                this.createPostOffset.x = e.clientX - this.createPostStart.x;
+                this.createPostOffset.y = e.clientY - this.createPostStart.y;
+            }
+        },
+        stopCreatePostDrag() {
+            this.isCreatePostDragging = false;
+        },
+        setupReelsObserver() {
+            if (this.observer) this.observer.disconnect();
+            if (!this.$refs.reelsContainer) return;
+
+            const options = {
+                root: this.$refs.reelsContainer,
+                threshold: 0.6,
+            };
+
+            this.observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    const video = entry.target.querySelector('video');
+                    if (!video) return;
+
+                    const reelId = entry.target.dataset.reelId;
+                    const reel = this.reels.find(r => r.id == reelId);
+
+                    if (entry.isIntersecting) {
+                        video.play().catch(e => {});
+
+                        // Increment view count
+                        if (reel && !this.viewedReels.has(reel.id)) {
+                            this.viewedReels.add(reel.id);
+                            reel.views = (reel.views || 0) + 1; // Optimistic update
+                                this.apiFetch('/api/increment_reel_view', {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-Token': CSRF_TOKEN
+                                },
+                                body: JSON.stringify({ post_id: reel.id })
+                            });
+                        }
+                    } else {
+                        video.pause();
+                        video.currentTime = 0;
+                    }
+                });
+            }, options);
+
+            // New logic for loading more
+             const lastReel = this.$refs.reelsContainer.querySelector('.snap-start:last-child');
+            if (lastReel) {
+                this.observer.observe(lastReel);
+            }
+
+
+
+             this.$refs.reelsContainer.querySelectorAll('.snap-start').forEach(reel => {
+                this.observer.observe(reel);
+            });
+        },
+        stopAllReels() {
+            document.querySelectorAll('video[id^="reel-video-"]').forEach(video => {
+                video.pause();
+            });
+        },
+        scrollToNextReel(index) {
+            if (index < this.reels.length - 1) {
+                const reelHeight = this.$refs.reelsContainer.clientHeight;
+                this.$refs.reelsContainer.scrollTo({ top: reelHeight * (index + 1), behavior: 'smooth' });
+            }
+        },
+        refreshHomeFeed(withAnimation = true) {
+            this.page = 1;
+            let url = '/api/get_posts?page=1';
+            if (this.activeHashtag) {
+                url += `&hashtag=${encodeURIComponent(this.activeHashtag)}`;
+            }
+            
+            this.apiFetch(url)
+                .then(data => {
+                    if (data) this.posts = data;
+                }).finally(() => {
+                if (!withAnimation) return;
+                this.isRefreshing = false;
+                this.pullStartY = 0;
+                this.pullDistance = 0;
+            }).catch(() => this.isRefreshing = false);
+        },
+        loadMorePosts() {
+            if (this.isLoadingMore) return;
+            this.isLoadingMore = true;
+            this.page++;
+            let url = `/api/get_posts?page=${this.page}`;
+            if (this.activeHashtag) {
+                url += `&hashtag=${encodeURIComponent(this.activeHashtag)}`;
+            }
+
+            this.apiFetch(url)
+                .then(data => {
+                    if (data.length > 0) {
+                        this.posts = [...this.posts, ...data];
+                    }
+                    this.isLoadingMore = false;
+                });
+        },
+        loadMoreReels() {
+            if (this.isLoadingMoreReels) return;
+            this.isLoadingMoreReels = true;
+            this.reelPage++;
+            this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
+                .then(data => {
+                    if (data && data.length > 0) {
+                        this.reels = [...this.reels, ...data];
+                    }
+                    this.isLoadingMoreReels = false;
+                }).catch(() => {
+                    this.isLoadingMoreReels = false;
+                });
+        },
+        handleScroll(el) {
+            this.showScrollTop = (el.scrollTop > 300);
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+                this.loadMorePosts();
+            }
+        },
+        scrollReel(direction) {
+            if (this.activeTab !== 'reels') return;
+            const container = this.$refs.reelsContainer;
+            const reelHeight = container.clientHeight;
+            const currentIndex = Math.round(container.scrollTop / reelHeight);
+            const nextIndex = Math.max(0, Math.min(this.reels.length - 1, currentIndex + direction));
+            container.scrollTo({
+                top: reelHeight * nextIndex,
+                behavior: 'smooth'
+            });
+        },
+        shareReel(reel) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Check out this reel on Maiga Social!',
+                    text: reel.caption,
+                    url: window.location.href
+                }).then(() => {
+                    reel.shares++;
+                    this.showToast('Shared', 'Reel shared successfully!', 'success');
+                }).catch((error) => console.log('Error sharing', error));
+            } else {
+                this.sharingPost = { ...reel, mediaType: 'video' };
+                this.showShareModal = true;
+            }
+        },
+        markNotInterested(reel) {
+            this.reels = this.reels.filter(r => r.id !== reel.id);
+            this.showToast('Feedback', 'We will show less like this.', 'info');
+            this.showReelOptions = false;
+        },
+        reportReel(reel) {
+            if (!reel || (!reel.user_id && (!reel.user || !reel.user.id))) {
+                this.showToast('Error', 'Cannot report this reel.', 'error');
+                this.showReelOptions = false;
+                return;
+            }
+            this.openReportModal('reel', reel);
+        },
+        openReportModal(type, target) {
+            this.reportForm = {
+                title: '', description: '', screenshot: null, preview: null,
+                targetType: type,
+                targetId: target.id,
+                targetUserId: type === 'user' ? target.id : (target.user_id || (target.user ? target.user.id : null))
+            };
+            this.showPostOptions = false;
+            this.showReelOptions = false;
+            this.showStoryShareOptions = false;
+            this.showUserProfile = false;
+            this.isReporting = true;
+        },
+        handleReportScreenshot(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.reportForm.screenshot = file;
+            const reader = new FileReader();
+            reader.onload = (e) => { this.reportForm.preview = e.target.result; };
+            reader.readAsDataURL(file);
+        },
+        submitReport() {
+            if (!this.reportForm.title || !this.reportForm.description) {
+                this.showToast('Error', 'Please fill in all fields.', 'error');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('user_id', this.reportForm.targetUserId);
+            formData.append('reason', this.reportForm.title);
+            formData.append('details', this.reportForm.description + `\n(Reported ${this.reportForm.targetType} ID: ${this.reportForm.targetId})`);
+            if (this.reportForm.screenshot) {
+                formData.append('screenshot', this.reportForm.screenshot);
+            }
+
+            this.apiFetch('/api/report_user', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': CSRF_TOKEN },
+                body: formData
+            }).then(data => {
+                if (data && data.success) {
+                    this.showToast('Report Submitted', 'Thank you for your report.', 'success');
+                    this.isReporting = false;
+                } else {
+                    this.showToast('Error', data.error || 'Failed to submit report.', 'error');
+                }
+            });
+        },
+         isCallMenuOpen: false,
+        startVoiceSearch() {
+            if (!('webkitSpeechRecognition' in window)) {
+                this.showToast('Error', 'Voice search not supported in your browser.', 'error');
+                return;
+            }
+
+            const recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                this.showToast('Voice Search', 'Listening...', 'info');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                this.homeSearchQuery = transcript;
+                this.showToast('Voice Search', `Recognized: "${transcript}"`, 'success');
+            };
+
+            recognition.onerror = (event) => {
+                this.showToast('Error', `Voice search error: ${event.error}`, 'error');
+            };
+
+            recognition.onend = () => {
+                // Optional: Add a toast to indicate listening has stopped if needed
+            };
+
+            recognition.start();
+        },
+        async initPushNotifications() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+            // Register Service Worker if not already done
+            let registration = await navigator.serviceWorker.getRegistration();
+            if (!registration) {
+                try {
+                    registration = await navigator.serviceWorker.register('/sw.js');
+                } catch (e) { console.warn("SW Register failed", e); return; }
+            }
+
+            // Get VAPID Key from backend safely
+            try {
+                const response = await fetch('/api/vapid_public_key');
+                if (!response.ok) return; // Silently fail if endpoint missing
+                const { publicKey } = await response.json();
+                
+                if (!publicKey || publicKey.includes('REPLACE')) return;
+
+                const convertedVapidKey = this.urlBase64ToUint8Array(publicKey);
+
+                // Subscribe
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidKey
+                });
+
+                // Send subscription to backend
+                await this.apiFetch('/api/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                    body: JSON.stringify(subscription)
+                });
+            } catch (e) {
+                // Ignore push notification errors in dev/offline mode
+                console.log("Push notifications not configured or backend unavailable.");
+            }
+        },
+        urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        },
+        // --- E2EE CRYPTO HELPERS ---
+        crypto: {
+            db: null,
+            dbName: 'maiga_crypto',
+            storeName: 'keys',
+            keyAlgo: {
+                name: "RSA-OAEP",
+                modulusLength: 2048,
+                publicExponent: new Uint8Array([1, 0, 1]),
+                hash: "SHA-256",
+            },
+            aesAlgo: { name: "AES-GCM", length: 256 },
+            app: null,
+
+            async init(appInstance) {
+                this.app = appInstance;
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.dbName, 1);
+                    request.onupgradeneeded = e => {
+                        this.db = e.target.result;
+                        if (!this.db.objectStoreNames.contains(this.storeName)) {
+                            this.db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        }
+                    };
+                    request.onsuccess = e => { this.db = e.target.result; resolve(); };
+                    request.onerror = e => { console.error("IndexedDB error:", e.target.error); reject(e.target.error); };
+                });
+            },
+
+            async _get(key) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(this.storeName, 'readonly');
+                    const store = tx.objectStore(this.storeName);
+                    const request = store.get(key);
+                    request.onsuccess = e => resolve(e.target.result?.value);
+                    request.onerror = e => reject(e.target.error);
+                });
+            },
+
+            async _set(key, value) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(this.storeName, 'readwrite');
+                    const store = tx.objectStore(this.storeName);
+                    store.put({ id: key, value: value });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = e => reject(e.target.error);
+                });
+            },
+
+            async hasKeys() {
+                return !!(await this._get('privateKey'));
+            },
+
+            async generateAndStoreKeys() {
+                const keyPair = await window.crypto.subtle.generateKey(this.keyAlgo, true, ["encrypt", "decrypt"]);
+                await this._set('privateKey', keyPair.privateKey);
+                await this._set('publicKey', keyPair.publicKey);
+                
+                const publicKeyJwk = await window.crypto.subtle.exportKey("jwk", keyPair.publicKey);
+                await this.uploadPublicKey(publicKeyJwk);
+            },
+
+            async uploadPublicKey(jwk) {
+                await this.app.apiFetch('/api/update_public_key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                    body: JSON.stringify({ public_key: JSON.stringify(jwk) })
+                });
+            },
+
+            getPrivateKey() { return this._get('privateKey'); },
+            getPublicKey() { return this._get('publicKey'); },
+
+            async fetchPublicKey(userId) {
+                const data = await this.app.apiFetch(`/api/get_public_key?user_id=${userId}`);
+                if (!data || !data.public_key) return null;
+                const jwk = JSON.parse(data.public_key);
+                return window.crypto.subtle.importKey("jwk", jwk, this.keyAlgo, true, ["encrypt"]);
+            },
+
+            // Hybrid Encryption
+            async encrypt(text, theirPublicKey) {
+                const symKey = await window.crypto.subtle.generateKey(this.aesAlgo, true, ["encrypt", "decrypt"]);
+                const iv = window.crypto.getRandomValues(new Uint8Array(12));
+                
+                const encodedText = new TextEncoder().encode(text);
+                const encryptedText = await window.crypto.subtle.encrypt({ name: "AES-GCM", iv }, symKey, encodedText);
+                
+                const exportedSymKey = await window.crypto.subtle.exportKey("raw", symKey);
+                const encryptedSymKey = await window.crypto.subtle.encrypt(this.keyAlgo, theirPublicKey, exportedSymKey);
+
+                // Helper to convert ArrayBuffer to Base64
+                const bufferToBase64 = buffer => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+
+                return {
+                    key: bufferToBase64(encryptedSymKey),
+                    iv: bufferToBase64(iv),
+                    data: bufferToBase64(encryptedText)
+                };
+            },
+
+            // Hybrid Decryption
+            async decrypt(payload, myPrivateKey) {
+                if (!myPrivateKey) throw new Error("Private key not available.");
+                
+                const { key, iv, data } = JSON.parse(payload);
+
+                // Helper to convert Base64 to ArrayBuffer
+                const base64ToBuffer = base64 => Uint8Array.from(atob(base64), c => c.charCodeAt(0)).buffer;
+
+                const encryptedSymKey = base64ToBuffer(key);
+                const ivBuffer = base64ToBuffer(iv);
+                const encryptedText = base64ToBuffer(data);
+
+                const decryptedSymKeyData = await window.crypto.subtle.decrypt(this.keyAlgo, myPrivateKey, encryptedSymKey);
+                const symKey = await window.crypto.subtle.importKey("raw", decryptedSymKeyData, this.aesAlgo, true, ["encrypt", "decrypt"]);
+
+                const decryptedText = await window.crypto.subtle.decrypt({ name: "AES-GCM", iv: ivBuffer }, symKey, encryptedText);
+
+                return new TextDecoder().decode(decryptedText);
+            },
+
+            async editMessage(messageId, newContent) {
+                // This is a simplified version. A real implementation would need to consider
+                // which user's public key to use if the original was E2EE.
+                // For now, we assume we are editing our own message and re-encrypting for the same recipient.
+                const originalMessage = this.app.chatMessages[this.app.activeChat.id].find(m => m.id === messageId);
+                if (!originalMessage) return;
+
+                let contentToSend = newContent;
+                let mediaType = 'text';
+
+                // If original was E2EE, re-encrypt
+                if (originalMessage.type === 'e2ee' || originalMessage.media_type === 'e2ee') {
+                    const theirPublicKey = await this.fetchPublicKey(this.app.activeChat.id);
+                    if (theirPublicKey) {
+                        const encryptedPayload = await this.encrypt(newContent, theirPublicKey);
+                        contentToSend = JSON.stringify(encryptedPayload);
+                        mediaType = 'e2ee';
+                    } 
+                }
+
+                // The API needs to be updated to handle `media_type` on edit
+                await this.app.apiFetch('/api/edit_message', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': CSRF_TOKEN
+                    },
+                    body: JSON.stringify({ message_id: messageId, content: contentToSend, media_type: mediaType })
+                });
+            }
+        }
+    }));
+};
+
+// Handle registration for both immediate load and deferred Alpine load
+document.addEventListener('alpine:init', initMaiga);
+if (window.Alpine) initMaiga();

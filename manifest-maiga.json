@@ -1,0 +1,21 @@
+{
+  "name": "Maiga Social",
+  "short_name": "Maiga",
+  "description": "Connect with your campus community.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#667eea",
+  "icons": [
+    {
+      "src": "img/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "img/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
