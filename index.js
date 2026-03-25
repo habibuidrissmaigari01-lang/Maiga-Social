@@ -31,7 +31,11 @@ if (process.env.NODE_ENV) {
 const { User, Post, Story, Comment, Message } = require('./models.js');
 
 // Connect to Database
-const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017/maiga';
+const mongoUrl = process.env.MONGO_URL;
+if (!mongoUrl) {
+    console.error('FATAL ERROR: MONGO_URL is not defined in the environment.');
+    process.exit(1);
+}
 
 // Log the connection string (masking the password) to verify credentials are loaded
 const maskedUrl = mongoUrl.replace(/:([^:@]{1,})@/, ':****@');
@@ -44,18 +48,22 @@ mongoose.connect(mongoUrl)
     })
     .catch(err => {
         console.error('MongoDB Connection Error:', err.message);
-        if (err.name === 'MongooseServerSelectionError') {
-            console.log('\nTIP: This error means your app can find the database, but can\'t connect. Please check:\n1. Your IP address is whitelisted in MongoDB Atlas (Network Access tab).\n2. Your firewall or antivirus is not blocking the connection to port 27017.\n3. Your MONGO_URL in the .env file includes your database name (e.g., ...mongodb.net/myDatabase?ssl=true...).\n4. The database username/password are correct.');
-        } else if (err.code === 'ECONNREFUSED' && err.syscall === 'querySrv') {
-            console.log('\nTIP: This is a DNS error. Please try:\n1. Check your internet connection.\n2. Whitelist your current IP address in MongoDB Atlas (Network Access tab).\n3. Use a different DNS (e.g., 8.8.8.8).');
-        }
+        process.exit(1); // Exit on connection error
     });
 
 const app = express();
 const server = http.createServer(app);
+
+// --- Production-Ready CORS Setup ---
+const allowedOrigins = [
+    'http://localhost:3000', // For local development
+    // TODO: Add your production frontend URL here. Example:
+    // 'https://www.maiga.social'
+];
+
 const io = new Server(server, {
     cors: {
-        origin: "*", // Allow all origins for development
+        origin: allowedOrigins,
         methods: ["GET", "POST"]
     }
 });
@@ -63,18 +71,31 @@ const io = new Server(server, {
 // --- Middleware ---
 
 // Enable CORS for all routes to allow frontend to connect
-app.use(cors());
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 
 // Parse incoming JSON request bodies
 app.use(express.json());
 
-// Serve static files (HTML, CSS, JS, images) from the root directory
-// This will serve the modified index.html and other assets.
-app.use(express.static(__dirname));
-
 // Session Middleware
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+    console.error('FATAL ERROR: SESSION_SECRET is not defined in the environment.');
+    process.exit(1);
+}
+
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'maiga_secret_key',
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false, // Don't create session until something stored
     store: MongoStore.create({ 
@@ -94,33 +115,60 @@ const s3 = new S3Client({
     },
 });
 
-// File Upload Setup (Multer with S3 for R2)
+// File Upload Setup (Multer for local temporary storage)
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = 'uploads/';
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, `${Date.now()}-${file.originalname}`);
+    }
+});
 const upload = multer({
-    storage: multerS3({
-        s3: s3,
-        bucket: process.env.R2_BUCKET_NAME,
-        acl: 'public-read', // Make files publicly readable
-        metadata: function (req, file, cb) {
-            cb(null, { fieldName: file.fieldname });
-        },
-        key: function (req, file, cb) {
-            // Create a unique file name
-            cb(null, Date.now().toString() + path.extname(file.originalname))
-        }
-    })
+    storage: storage,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
 });
 
-// --- Notification Model ---
-const notificationSchema = new mongoose.Schema({
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Recipient
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Actor
-    type: String, // 'like', 'comment', 'follow'
-    content: String,
-    target_id: mongoose.Schema.Types.ObjectId,
-    is_read: { type: Boolean, default: false },
-    createdAt: { type: Date, default: Date.now }
-});
-const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
+// --- R2 Helper Functions ---
+
+// Helper function to upload a file from a local path to R2
+async function uploadToR2(filePath, originalFileName) {
+    const fileStream = fs.createReadStream(filePath);
+    const key = Date.now().toString() + path.extname(originalFileName);
+
+    const uploadParams = {
+        Bucket: process.env.R2_BUCKET_NAME,
+        Key: key,
+        Body: fileStream,
+        ACL: 'public-read',
+    };
+
+    await s3.send(new PutObjectCommand(uploadParams));
+
+    if (!process.env.R2_PUBLIC_URL) {
+        console.warn('[WARNING] R2_PUBLIC_URL is not set in .env. The returned URL might not be publicly accessible.');
+        return `${process.env.R2_S3_API_URL}/${process.env.R2_BUCKET_NAME}/${key}`;
+    }
+    return `${process.env.R2_PUBLIC_URL}/${key}`;
+}
+
+// Helper to delete a file from R2 given its public URL
+async function deleteFromR2(fileUrl) {
+    if (!fileUrl || !process.env.R2_PUBLIC_URL || !fileUrl.startsWith(process.env.R2_PUBLIC_URL)) {
+        console.log(`[R2] Skipping deletion for non-R2 URL: ${fileUrl}`);
+        return;
+    }
+    try {
+        const key = path.basename(new URL(fileUrl).pathname);
+        const deleteParams = { Bucket: process.env.R2_BUCKET_NAME, Key: key };
+        await s3.send(new DeleteObjectCommand(deleteParams));
+        console.log(`[R2] Deleted: ${key}`);
+    } catch (err) {
+        console.error(`[R2] Failed to delete ${fileUrl}:`, err.message);
+    }
+}
 
 // --- Rate Limiter (In-Memory) ---
 const rateLimitMap = new Map();
@@ -690,9 +738,20 @@ app.post('/api/update_profile', auth, upload.single('avatar'), async (req, res) 
             if (nameParts.length > 1) updates.surname = nameParts.slice(1).join(' ');
         }
 
+        // Find the user to get the old avatar URL before updating
+        const userToUpdate = await User.findById(req.session.userId);
+
         if (req.file) {
-            // The full URL of the uploaded file from R2
-            updates.avatar = req.file.location;
+            // A new avatar is being uploaded
+            const newAvatarUrl = await uploadToR2(req.file.path, req.file.originalname);
+            fs.unlinkSync(req.file.path); // Clean up temp file
+
+            // If there was an old avatar, delete it from R2
+            if (userToUpdate && userToUpdate.avatar) {
+                await deleteFromR2(userToUpdate.avatar);
+            }
+
+            updates.avatar = newAvatarUrl;
         }
 
         const user = await User.findByIdAndUpdate(
@@ -703,12 +762,8 @@ app.post('/api/update_profile', auth, upload.single('avatar'), async (req, res) 
 
         res.json({ success: true, user });
     } catch (err) {
-        console.error('Profile update error:', err.message);
-        // Clean up uploaded file if an error occurs
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-        res.status(500).json({ message: 'Failed to update profile' });
+        console.error('Profile update error:', err);
+        res.status(500).json({ message: 'Server Error' });
     }
 });
 
@@ -778,7 +833,7 @@ app.get('/api/get_posts', auth, async (req, res) => {
             findQuery.mediaType = { $ne: 'video' };
         }
 
-        const posts = await Post.find(findQuery).sort({ createdAt: -1 }).populate('user', 'firstName surname avatar');
+        const posts = await Post.find(findQuery).sort({ created_at: -1 }).populate('user', 'firstName surname avatar');
         
         // Convert savedPosts ObjectIds to strings for comparison
         const savedPostIds = currentUser.savedPosts ? currentUser.savedPosts.map(id => id.toString()) : [];
@@ -792,7 +847,7 @@ app.get('/api/get_posts', auth, async (req, res) => {
             content: post.content,
             media: post.media,
             mediaType: post.mediaType,
-            time: new Date(post.createdAt).toLocaleString(),
+            time: new Date(post.created_at).toLocaleString(),
             likes: post.likes.length,
             comments: post.comments.length,
             shares: 0,
@@ -818,7 +873,7 @@ app.get('/api/get_saved_posts', auth, async (req, res) => {
         const savedPostIds = currentUser.savedPosts || [];
 
         const posts = await Post.find({ _id: { $in: savedPostIds } })
-            .sort({ createdAt: -1 })
+            .sort({ created_at: -1 })
             .populate('user', 'firstName surname avatar');
 
         const formattedPosts = posts.map(post => ({
@@ -829,7 +884,7 @@ app.get('/api/get_saved_posts', auth, async (req, res) => {
             content: post.content,
             media: post.media,
             mediaType: post.mediaType,
-            time: new Date(post.createdAt).toLocaleString(),
+            time: new Date(post.created_at).toLocaleString(),
             likes: post.likes.length,
             comments: post.comments.length,
             shares: 0,
@@ -907,9 +962,9 @@ app.get('/api/get_stories', auth, async (req, res) => {
         // Calculate 24 hours ago
         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         
-        const stories = await Story.find({ createdAt: { $gt: oneDayAgo } })
+        const stories = await Story.find({ created_at: { $gt: oneDayAgo } })
             .populate('user', 'firstName surname avatar')
-            .sort({ createdAt: 1 });
+            .sort({ created_at: 1 });
 
         // Format for frontend
         const formattedStories = stories.map(story => ({
@@ -920,7 +975,7 @@ app.get('/api/get_stories', auth, async (req, res) => {
             avatar: story.user.avatar,
             media: story.media,
             type: story.type,
-            created_at: story.createdAt,
+            created_at: story.created_at,
             has_music: story.hasMusic,
             music_track: story.musicTrack,
             audience: story.audience,
@@ -951,7 +1006,7 @@ app.get('/api/get_reels', auth, async (req, res) => {
         const reels = await Post.find(findQuery)
             .skip((page - 1) * limit)
             .limit(limit)
-            .sort({ createdAt: -1 })
+            .sort({ created_at: -1 })
             .populate('user', 'firstName surname avatar');
         
         // Format for frontend
@@ -987,10 +1042,8 @@ app.post('/api/add_comment', auth, upload.single('media'), async (req, res) => {
         let mediaType = null;
         
         if (req.file) {
-            // Upload the original file to R2 without processing
             mediaUrl = await uploadToR2(req.file.path, req.file.originalname);
-            fs.unlinkSync(req.file.path); // Clean up temp file
-
+            fs.unlinkSync(req.file.path);
             mediaType = req.file.mimetype.split('/')[0];
         }
 
@@ -1063,7 +1116,7 @@ app.get('/api/get_comments', auth, async (req, res) => {
                 path: 'replies',
                 populate: { path: 'user', select: 'firstName surname avatar' }
             })
-            .sort({ createdAt: -1 });
+            .sort({ created_at: -1 });
 
         const formatComment = (c) => ({
             id: c._id,
@@ -1073,7 +1126,7 @@ app.get('/api/get_comments', auth, async (req, res) => {
             text: c.content,
             media: c.media,
             media_type: c.mediaType,
-            time: new Date(c.createdAt).toLocaleString(),
+            time: new Date(c.created_at).toLocaleString(),
             replies: c.replies ? c.replies.map(formatComment) : [],
             parent_comment_id: c.parentComment
         });
@@ -1118,7 +1171,7 @@ app.post('/api/delete_comment', auth, async (req, res) => {
 app.get('/api/get_notifications', auth, async (req, res) => {
     try {
         const notifications = await Notification.find({ user: req.session.userId })
-            .sort({ createdAt: -1 })
+            .sort({ created_at: -1 })
             .populate('trigger_user', 'firstName surname avatar')
             .limit(20);
 
@@ -1127,7 +1180,7 @@ app.get('/api/get_notifications', auth, async (req, res) => {
             content: n.content,
             avatar: n.trigger_user ? n.trigger_user.avatar : 'img/default-avatar.png',
             type: n.type,
-            time: new Date(n.createdAt).toLocaleString(),
+            time: new Date(n.created_at).toLocaleString(),
             unread: !n.is_read
         })));
     } catch (err) {

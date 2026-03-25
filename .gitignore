@@ -8,3 +8,6 @@
 *.log
 email.txt
 email.html
+
+# Temporary upload folder for processing
+uploads/
