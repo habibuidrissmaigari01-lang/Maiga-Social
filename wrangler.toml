@@ -1,0 +1,12 @@
+name = "maiga-social"
+main = "index.js"
+compatibility_date = "2024-03-25"
+
+[assets]
+# This points to the current directory. 
+# Wrangler will use your .wranglerignore to skip node_modules.
+directory = "."
+binding = "ASSETS"
+
+[observability]
+enabled = true
