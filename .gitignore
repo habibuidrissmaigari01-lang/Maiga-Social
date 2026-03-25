@@ -10,4 +10,4 @@ email.txt
 email.html
 
 # Temporary upload folder for processing
-uploads/
+uploads/node_modules
