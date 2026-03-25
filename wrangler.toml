@@ -1,6 +1,7 @@
 name = "maiga-social"
 main = "index.js"
 compatibility_date = "2024-03-25"
+compatibility_flags = [ "nodejs_compat" ]
 
 [assets]
 # This points to the current directory. 
