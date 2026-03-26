@@ -9,3 +9,11 @@ binding = "ASSETS"
 
 [observability]
 enabled = true
+
+[vars]
+BACKEND_URL = "https://your-deployed-express-app.com"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "6cbcd3bde4ea4ab5acdf325cbdf9da00"
+# preview_id = "YOUR_PREVIEW_ID" # Optional: Used for local development
