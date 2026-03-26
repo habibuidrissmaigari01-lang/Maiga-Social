@@ -63,7 +63,7 @@ export default {
                                     'content-type': 'application/json'
                                 },
                                 body: JSON.stringify({
-                                    sender: { name: 'Maiga Social', email: 'no-reply@yourdomain.com' },
+                                    sender: { name: 'Maiga Social', email: 'admin@maigasocial.com' },
                                     to: [{ email: identity }],
                                     subject: 'Your Verification Code',
                                     textContent: `Your Maiga Social verification code is: ${otp}`
@@ -121,7 +121,11 @@ export default {
                             body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
                             redirect: 'follow'
                         });
-                        return await fetch(backendRequest);
+                        const backendResponse = await fetch(backendRequest);
+                        if (!backendResponse.ok) {
+                            console.error(`[Backend Proxy Error] Status: ${backendResponse.status}, URL: ${backendRequest.url}, Response: ${await backendResponse.text()}`);
+                        }
+                        return backendResponse;
                     }
                     
                     return new Response(JSON.stringify({ error: `Action '${action}' not found and no backend configured.` }), { status: 404, headers: { 'Content-Type': 'application/json' } });
