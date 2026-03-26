@@ -347,7 +347,7 @@
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                     </div>
-                    <button type="button" onclick="nextStep(7)" class="btn-primary">Verify</button>
+                    <button type="button" onclick="verifyOTP()" class="btn-primary">Verify</button>
                     <div class="text-center">
                        <p id="timerContainer" class="text-xs text-gray-400">Resend code in <span id="timer" class="font-bold text-indigo-500">00:59</span></p>
                        <a href="#" id="resendBtn" onclick="resendOTP(event)" class="hidden text-xs font-bold text-indigo-600 underline">Resend code</a>
@@ -616,6 +616,41 @@
                 }
             });
         });
+
+        async function verifyOTP() {
+            const otpInputs = document.querySelectorAll('#otp-inputs .otp-box');
+            const otp = Array.from(otpInputs).map(i => i.value).join('');
+            const email = document.querySelector('input[name="reg_email"]').value;
+            const phone = document.querySelector('input[name="phone"]').value;
+            const identity = email || phone;
+
+            if (otp.length !== 6) {
+                showMessage('Please enter the full 6-digit OTP.', 'error');
+                return;
+            }
+            if (!identity) {
+                showMessage('Contact identity missing. Please go back and re-enter.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identity, otp })
+                });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showMessage(result.message, 'success');
+                    nextStep(7); // Proceed to the next registration step (password)
+                } else {
+                    showMessage(result.message || 'OTP verification failed.', 'error');
+                }
+            } catch (error) {
+                showMessage(error.message || 'Network error during OTP verification.', 'error');
+            }
+        }
 
         function resendOTP(e) {
             e.preventDefault();

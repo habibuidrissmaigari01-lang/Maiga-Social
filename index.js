@@ -428,20 +428,32 @@ export default {
                     console.log(`[OTP DEBUG] Sending code ${otp} to ${identity}`);
 
                     // --- ACTUAL EMAIL SENDING LOGIC (Example for Brevo/Sendinblue) ---
-                    if (env.BREVO_API_KEY) {
-                        await fetch('https://api.brevo.com/v3/smtp/email', {
-                            method: 'POST',
-                            headers: {
-                                'api-key': env.BREVO_API_KEY,
-                                'content-type': 'application/json'
-                            },
-                            body: JSON.stringify({
-                                sender: { name: 'Maiga Social', email: 'no-reply@yourdomain.com' },
-                                to: [{ email: identity }],
-                                subject: 'Your Verification Code',
-                                textContent: `Your Maiga Social verification code is: ${otp}`
-                            })
-                        });
+                    if (env.BREVO_API_KEY && identity) { // Ensure identity is not empty for sending email
+                        try {
+                            const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+                                method: 'POST',
+                                headers: {
+                                    'api-key': env.BREVO_API_KEY,
+                                    'content-type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    sender: { name: 'Maiga Social', email: 'no-reply@yourdomain.com' },
+                                    to: [{ email: identity }],
+                                    subject: 'Your Verification Code',
+                                    textContent: `Your Maiga Social verification code is: ${otp}`
+                                })
+                            });
+                            if (!brevoResponse.ok) console.error(`[BREVO ERROR] Failed to send email: ${brevoResponse.status} ${await brevoResponse.text()}`);
+                        } catch (e) {
+                            console.error(`[BREVO NETWORK ERROR] Could not reach Brevo API: ${e.message}`);
+                        }
+                    }
+
+                    // Store OTP in KV with an expiration (e.g., 5 minutes = 300 seconds)
+                    // Use the identity (email/phone) as part of the key
+                    if (env.OTP_KV) {
+                        await env.OTP_KV.put(`otp:${identity}`, otp, { expirationTtl: 300 });
+                        console.log(`[OTP DEBUG] Stored OTP for ${identity} in KV.`);
                     }
 
                     return new Response(JSON.stringify({ 
@@ -454,7 +466,31 @@ export default {
                     return new Response(JSON.stringify({ success: true, message: `Account found. Code sent to ${identity}.` }), { headers: { 'Content-Type': 'application/json' } });
                 }
                 case 'verify-otp': {
-                    return new Response(JSON.stringify({ success: true, message: 'OTP Verified.' }), { headers: { 'Content-Type': 'application/json' } });
+                    const { identity, otp } = body; // Expect identity and otp from frontend
+
+                    if (!identity || !otp) {
+                        return new Response(JSON.stringify({ success: false, message: 'Identity and OTP are required.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                    }
+
+                    if (!env.OTP_KV) {
+                        console.error("[OTP ERROR] OTP_KV binding is not configured.");
+                        return new Response(JSON.stringify({ success: false, message: 'OTP service is unavailable.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+                    }
+
+                    const storedOtp = await env.OTP_KV.get(`otp:${identity}`);
+
+                    if (!storedOtp) {
+                        return new Response(JSON.stringify({ success: false, message: 'OTP expired or not found. Please request a new one.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                    }
+
+                    if (storedOtp === otp) {
+                        await env.OTP_KV.delete(`otp:${identity}`); // OTP consumed, delete it
+                        console.log(`[OTP DEBUG] OTP verified and deleted for ${identity}.`);
+                        return new Response(JSON.stringify({ success: true, message: 'OTP Verified.' }), { headers: { 'Content-Type': 'application/json' } });
+                    } else {
+                        console.log(`[OTP DEBUG] Invalid OTP for ${identity}. Provided: ${otp}, Stored: ${storedOtp}`);
+                        return new Response(JSON.stringify({ success: false, message: 'Invalid OTP.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                    }
                 }
                 case 'reset-password': {
                     return new Response(JSON.stringify({ success: true, message: 'Password changed successfully.' }), { headers: { 'Content-Type': 'application/json' } });
