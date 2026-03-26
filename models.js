@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -130,15 +130,13 @@ const bookmarkSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = {
-    User: mongoose.model('User', userSchema),
-    Post: mongoose.model('Post', postSchema),
-    Comment: mongoose.model('Comment', commentSchema),
-    Message: mongoose.model('Message', messageSchema),
-    Group: mongoose.model('Group', groupSchema),
-    Story: mongoose.model('Story', storySchema),
-    Notification: mongoose.model('Notification', notificationSchema),
-    Call: mongoose.model('Call', callSchema),
-    Report: mongoose.model('Report', reportSchema),
-    Bookmark: mongoose.model('Bookmark', bookmarkSchema)
-};
+export const User = mongoose.model('User', userSchema);
+export const Post = mongoose.model('Post', postSchema);
+export const Comment = mongoose.model('Comment', commentSchema);
+export const Message = mongoose.model('Message', messageSchema);
+export const Group = mongoose.model('Group', groupSchema);
+export const Story = mongoose.model('Story', storySchema);
+export const Notification = mongoose.model('Notification', notificationSchema);
+export const Call = mongoose.model('Call', callSchema);
+export const Report = mongoose.model('Report', reportSchema);
+export const Bookmark = mongoose.model('Bookmark', bookmarkSchema);

@@ -9,31 +9,18 @@ import MongoStore from 'connect-mongo';
 import { Server } from "socket.io";
 import multer from 'multer';
 import fs from 'node:fs';
-import Brevo from '@getbrevo/brevo';
+import { Brevo } from '@getbrevo/brevo';
 import { body, validationResult } from 'express-validator';
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 // Removed fluent-ffmpeg: Cloudflare Workers cannot run binaries.
 
-/**
- * --- Environment Configuration ---
- * Loads variables from a base .env file first.
- * Then, loads and overrides with variables from an environment-specific file
- * like .env.development or .env.production, based on the NODE_ENV variable.
- */
-dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-if (process.env.NODE_ENV) {
-  dotenv.config({ path: path.resolve(__dirname, `.env.${process.env.NODE_ENV}`), override: true });
-}
-
-// Import DB connection and models from db.js
-const { User, Post, Story, Comment, Message } = require('./models.js');
+// Import models using ESM syntax
+import { User, Post, Story, Comment, Message, Notification } from './models.js';
 
 // Connect to Database
 const mongoUrl = process.env.MONGO_URL;
 if (!mongoUrl) {
     console.error('FATAL ERROR: MONGO_URL is not defined in the environment.');
-    process.exit(1);
 }
 
 // Log the connection string (masking the password) to verify credentials are loaded
@@ -47,7 +34,6 @@ mongoose.connect(mongoUrl)
     })
     .catch(err => {
         console.error('MongoDB Connection Error:', err.message);
-        process.exit(1); // Exit on connection error
     });
 
 const app = express();
@@ -85,7 +71,6 @@ app.use(express.json());
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
     console.error('FATAL ERROR: SESSION_SECRET is not defined in the environment.');
-    process.exit(1);
 }
 
 app.use(session({
@@ -120,9 +105,9 @@ const upload = multer({
 // --- R2 Helper Functions ---
 
 // Helper function to upload a file from a local path to R2
-async function uploadToR2(filePath, originalFileName) {
-    // For Workers, filePath will now be a Buffer if using memoryStorage
-    const fileBody = filePath; 
+async function uploadToR2(file, originalFileName) {
+    // For Workers, file is an object from multer.memoryStorage()
+    const fileBody = file.buffer; 
     const key = Date.now().toString() + path.extname(originalFileName);
 
     const uploadParams = {
@@ -730,8 +715,7 @@ app.post('/api/update_profile', auth, upload.single('avatar'), async (req, res) 
 
         if (req.file) {
             // A new avatar is being uploaded
-            const newAvatarUrl = await uploadToR2(req.file.path, req.file.originalname);
-            fs.unlinkSync(req.file.path); // Clean up temp file
+            const newAvatarUrl = await uploadToR2(req.file, req.file.originalname);
 
             // If there was an old avatar, delete it from R2
             if (userToUpdate && userToUpdate.avatar) {
@@ -1029,8 +1013,7 @@ app.post('/api/add_comment', auth, upload.single('media'), async (req, res) => {
         let mediaType = null;
         
         if (req.file) {
-            mediaUrl = await uploadToR2(req.file.path, req.file.originalname);
-            fs.unlinkSync(req.file.path);
+            mediaUrl = await uploadToR2(req.file, req.file.originalname);
             mediaType = req.file.mimetype.split('/')[0];
         }
 
@@ -1187,46 +1170,11 @@ app.post('/api/create_post', auth, upload.single('media'), async (req, res) => {
         let mediaType = 'text';
         
         if (req.file) {
-            const originalPath = req.file.path;
             const isVideo = req.file.mimetype.startsWith('video');
             mediaType = isVideo ? 'video' : 'image';
 
-            if (isVideo) {
-                // --- Video Processing Example ---
-                const processedPath = path.join('uploads', `processed-${req.file.filename}`);
-                
-                await new Promise((resolve, reject) => {
-                    ffmpeg(originalPath)
-                        .setStartTime('00:00:00') // Example: Start at the beginning
-                        .setDuration(10)          // Example: Trim video to 10 seconds
-                        .input('assets/watermark.png') // Assumes you have this image in an 'assets' folder
-                        .complexFilter([
-                            // Scale video to 720p width, keeping aspect ratio. Then overlay watermark.
-                            '[0:v]scale=720:-2[bg];[1:v]scale=100:-1[wm];[bg][wm]overlay=W-w-20:H-h-20'
-                        ])
-                        .on('end', () => {
-                            console.log('FFmpeg processing finished.');
-                            resolve();
-                        })
-                        .on('error', (err) => {
-                            console.error('FFmpeg error:', err.message);
-                            reject(err);
-                        })
-                        .save(processedPath);
-                });
-
-                // Upload processed video to R2
-                mediaUrl = await uploadToR2(processedPath, req.file.filename);
-
-                // Clean up local files
-                fs.unlinkSync(originalPath);
-                fs.unlinkSync(processedPath);
-
-            } else {
-                // --- For non-video files, just upload directly ---
-                mediaUrl = await uploadToR2(originalPath, req.file.originalname);
-                fs.unlinkSync(originalPath); // Clean up original file
-            }
+            // Direct upload to R2 (processing logic removed as binaries aren't supported)
+            mediaUrl = await uploadToR2(req.file, req.file.originalname);
         }
 
         const newPost = new Post({
@@ -1244,10 +1192,6 @@ app.post('/api/create_post', auth, upload.single('media'), async (req, res) => {
         res.json({ success: true, post: newPost });
     } catch (err) {
         console.error('Post creation error:', err.message);
-        // If a file was uploaded but an error occurred, try to clean it up
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
         res.status(500).json({ error: 'Failed to create post' });
     }
 });
@@ -1266,8 +1210,7 @@ app.post('/api/create_story', auth, upload.single('media'), async (req, res) => 
         }
 
         // Upload story media to R2 (no processing for this example, but you could add it)
-        const mediaUrl = await uploadToR2(req.file.path, req.file.originalname);
-        fs.unlinkSync(req.file.path);
+        const mediaUrl = await uploadToR2(req.file, req.file.originalname);
 
         const newStory = new Story({
             user: req.session.userId,
@@ -1283,10 +1226,6 @@ app.post('/api/create_story', auth, upload.single('media'), async (req, res) => 
         res.json({ success: true, story: newStory });
     } catch (err) {
         console.error('Story creation error:', err.message);
-        // Clean up uploaded file if an error occurs
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
         res.status(500).json({ success: false, error: 'Failed to create story' });
     }
 });
@@ -1315,8 +1254,7 @@ app.post('/api/send_message', auth, upload.single('media'), async (req, res) => 
 
         if (req.file) {
             // Upload chat media to R2
-            messageData.media = await uploadToR2(req.file.path, req.file.originalname);
-            fs.unlinkSync(req.file.path);
+            messageData.media = await uploadToR2(req.file, req.file.originalname);
             messageData.media_type = req.file.mimetype.split('/')[0]; // 'image', 'video', 'audio'
         }
 
@@ -1332,10 +1270,6 @@ app.post('/api/send_message', auth, upload.single('media'), async (req, res) => 
 
     } catch (err) {
         console.error('Send message error:', err.message);
-        // Clean up uploaded file if an error occurs
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
         res.status(500).json({ success: false, error: 'Failed to send message' });
     }
 });
