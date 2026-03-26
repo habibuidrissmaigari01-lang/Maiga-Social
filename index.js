@@ -1,19 +1,18 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const path = require('path');
-const session = require('express-session');
-const MongoStore = require('connect-mongo');
-const http = require('http');
-const { Server } = require("socket.io");
-const multer = require('multer');
-const fs = require('fs');
-const Brevo = require('@getbrevo/brevo');
-const { body, validationResult } = require('express-validator');
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
-const ffmpeg = require('fluent-ffmpeg');
+import express from 'express';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'node:path';
+import session from 'express-session';
+import MongoStore from 'connect-mongo';
+import { Server } from "socket.io";
+import multer from 'multer';
+import fs from 'node:fs';
+import Brevo from '@getbrevo/brevo';
+import { body, validationResult } from 'express-validator';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+// Removed fluent-ffmpeg: Cloudflare Workers cannot run binaries.
 
 /**
  * --- Environment Configuration ---
@@ -52,7 +51,6 @@ mongoose.connect(mongoUrl)
     });
 
 const app = express();
-const server = http.createServer(app);
 
 // --- Production-Ready CORS Setup ---
 const allowedOrigins = [
@@ -61,12 +59,8 @@ const allowedOrigins = [
     // 'https://www.maiga.social'
 ];
 
-const io = new Server(server, {
-    cors: {
-        origin: allowedOrigins,
-        methods: ["GET", "POST"]
-    }
-});
+// Socket.io requires a stateful server. 
+// On Cloudflare Workers, you must use Durable Objects or a managed WebSocket provider.
 
 // --- Middleware ---
 
@@ -116,16 +110,8 @@ const s3 = new S3Client({
 });
 
 // File Upload Setup (Multer for local temporary storage)
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = 'uploads/';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
-    }
-});
+// Use MemoryStorage instead of DiskStorage
+const storage = multer.memoryStorage(); 
 const upload = multer({
     storage: storage,
     limits: { fileSize: 100 * 1024 * 1024 } // 100 MB limit
@@ -135,13 +121,14 @@ const upload = multer({
 
 // Helper function to upload a file from a local path to R2
 async function uploadToR2(filePath, originalFileName) {
-    const fileStream = fs.createReadStream(filePath);
+    // For Workers, filePath will now be a Buffer if using memoryStorage
+    const fileBody = filePath; 
     const key = Date.now().toString() + path.extname(originalFileName);
 
     const uploadParams = {
         Bucket: process.env.R2_BUCKET_NAME,
         Key: key,
-        Body: fileStream,
+        Body: fileBody,
         ACL: 'public-read',
     };
 
@@ -1532,6 +1519,9 @@ io.on('connection', (socket) => {
 });
 
 // --- Server Start ---
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+// Workers Entry Point
+export default {
+    async fetch(request, env, ctx) {
+        return app(request, env, ctx);
+    },
+};
