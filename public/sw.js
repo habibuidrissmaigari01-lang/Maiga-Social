@@ -1,68 +1,99 @@
-// Advanced Service Worker for Maiga/YSU Social
+const CACHE_NAME = 'maiga-offline-v1';
+const OFFLINE_URL = '/offline.html';
 
-const getAppType = () => {
-  const params = new URL(self.location.href).searchParams;
-  return params.get('app') || 'maiga';
-};
-
-const APP_TYPE = getAppType();
-const CACHE_NAME = `maiga-social-${APP_TYPE}-v1`;
-
-// Base assets common to both versions
-const COMMON_ASSETS = [
-  '/alpine.js',
+// List of essential assets to pre-cache
+const ASSETS_TO_CACHE = [
+  OFFLINE_URL,
+  '/', // Main entry point for Maiga
+  '/index.html', // Assuming this is the main entry point for Maiga
+  '/ysu.html', // YSU login page
   '/maiga.js',
+  '/alpine.js', // Alpine.js library
+  '/sw.js', // Cache the service worker itself for updates
+  '/manifest-maiga.json',
+  '/manifest-ysu.json',
+  '/img/logo.png',
+  '/img/ysu-logo.jpg',
   'https://cdn.tailwindcss.com',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
 ];
 
-// App specific assets
-const APP_ASSETS = APP_TYPE === 'ysu' 
-  ? ['/ysu', '/manifest-ysu.json', '/img/ysu-logo.jpg'] 
-  : ['/', '/manifest-maiga.json', '/img/logo.png'];
-
-const ASSETS_TO_CACHE = [...COMMON_ASSETS, ...APP_ASSETS];
-
+// 1. Install Event: Cache the offline page
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Cache resources individually to prevent one error from stopping installation
+      console.log('[Service Worker] Pre-caching offline page and essential assets');
+      // Use Promise.all to ensure all assets are attempted to be cached
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
-          // For external CDNs, use no-cors to avoid CORS errors
-          const request = url.startsWith('http') ? new Request(url, { mode: 'no-cors' }) : url;
-          return fetch(request)
-            .then(response => cache.put(request, response))
-            .catch(err => console.warn(`Failed to cache: ${url}`, err));
+          return cache.add(new Request(url, { cache: 'reload' })).catch(err => {
+            console.warn(`[Service Worker] Failed to cache ${url}: ${err}`);
+            return Promise.resolve(); // Don't fail the whole install if one asset fails
+          });
         })
       );
     })
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
+// 2. Fetch Event: Serve offline page on network failure
+// This now includes a cache-first strategy for other static assets
+self.addEventListener('fetch', (event) => {
+  console.log(`[Service Worker] Fetching: ${event.request.url}`);
+  const isNavigate = event.request.mode === 'navigate';
+  const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
+                       event.request.url.startsWith('https://cdn.tailwindcss.com') ||
+                       event.request.url.startsWith('https://cdnjs.cloudflare.com') ||
+                       event.request.url.startsWith('https://fonts.googleapis.com');
+
+  if (isNavigate) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        console.log('[Service Worker] Network failed for navigation, serving offline page.');
+        return caches.open(CACHE_NAME).then((cache) => {
+          return cache.match(OFFLINE_URL);
+        });
+      })
+    );
+  } else if (isLocalAsset) {
+    event.respondWith(
+      caches.match(event.request).then((response) => {
+        if (response) {
+          console.log(`[Service Worker] Serving from cache: ${event.request.url}`);
+          return response;
+        }
+        console.log(`[Service Worker] Fetching from network and caching: ${event.request.url}`);
+        return fetch(event.request).then((fetchResponse) => {
+          return caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, fetchResponse.clone());
+            return fetchResponse;
+          });
+        }).catch((error) => {
+          console.error(`[Service Worker] Fetch failed for ${event.request.url}: ${error}`);
+          // For non-navigate requests, if network fails and not in cache, return a generic error response
+          return new Response(null, { status: 503, statusText: 'Service Unavailable' });
+        });
+      })
+    );
+  }
+  // For other requests (e.g., API calls, external images not in ASSETS_TO_CACHE),
+  // let the browser handle them normally (network-only or default caching)
 });
 
-self.addEventListener('push', function(event) {
-  const data = event.data.json();
-  
+// 3. Push Notification Implementation
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : { title: 'New Message', body: 'You have a new update.' };
+
   const options = {
     body: data.body,
     icon: data.icon || '/img/logo.png',
-    badge: '/img/logo.png',
-    data: { url: data.url }
+    badge: '/img/logo.png', // Small icon for status bar
+    vibrate: [100, 50, 100],
+    data: {
+      url: data.url || '/'
+    }
   };
 
   event.waitUntil(
@@ -70,36 +101,10 @@ self.addEventListener('push', function(event) {
   );
 });
 
-self.addEventListener('notificationclick', function(event) {
+// 4. Handle Notification Click
+self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  if (event.notification.data.url) {
-    event.waitUntil(
-      clients.openWindow(event.notification.data.url)
-    );
-  }
-});
-
-self.addEventListener('fetch', function(event) {
-  event.respondWith(
-    caches.match(event.request).then(function(response) {
-      if (response) return response;
-
-      return fetch(event.request).then(function(response) {
-        // Dynamically cache the main app page only when accessed successfully (logged in)
-        if (event.request.method === 'GET' && response.status === 200) {
-           const url = new URL(event.request.url);
-           if (url.pathname === '/maiga') {
-               const responseClone = response.clone();
-               caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
-           }
-        }
-        return response;
-      }).catch(function() {
-        // Fallback for navigation requests to the main app page if offline
-        if (event.request.mode === 'navigate') {
-           return caches.match(APP_TYPE === 'ysu' ? '/ysu' : '/');
-        }
-      });
-    })
+  event.waitUntil(
+    clients.openWindow(event.notification.data.url)
   );
 });

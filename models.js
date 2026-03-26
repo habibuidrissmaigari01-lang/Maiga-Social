@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
     name: String,
@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
     blocked_users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     is_admin: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
+    blocked: { type: Boolean, default: false },
     online: { type: Boolean, default: false },
     last_seen: Date,
     public_key: String,
@@ -130,13 +131,15 @@ const bookmarkSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-export const User = mongoose.model('User', userSchema);
-export const Post = mongoose.model('Post', postSchema);
-export const Comment = mongoose.model('Comment', commentSchema);
-export const Message = mongoose.model('Message', messageSchema);
-export const Group = mongoose.model('Group', groupSchema);
-export const Story = mongoose.model('Story', storySchema);
-export const Notification = mongoose.model('Notification', notificationSchema);
-export const Call = mongoose.model('Call', callSchema);
-export const Report = mongoose.model('Report', reportSchema);
-export const Bookmark = mongoose.model('Bookmark', bookmarkSchema);
+module.exports = {
+    User: mongoose.model('User', userSchema),
+    Post: mongoose.model('Post', postSchema),
+    Comment: mongoose.model('Comment', commentSchema),
+    Message: mongoose.model('Message', messageSchema),
+    Group: mongoose.model('Group', groupSchema),
+    Story: mongoose.model('Story', storySchema),
+    Notification: mongoose.model('Notification', notificationSchema),
+    Call: mongoose.model('Call', callSchema),
+    Report: mongoose.model('Report', reportSchema),
+    Bookmark: mongoose.model('Bookmark', bookmarkSchema),
+};

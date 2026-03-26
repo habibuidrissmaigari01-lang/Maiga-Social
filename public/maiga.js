@@ -1,6 +1,11 @@
 // Define CSRF_TOKEN globally to prevent ReferenceErrors
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-const API_BASE_URL = ''; // Use relative path so it works on any IP
+
+// Automatically switch between local and production backend
+const API_BASE_URL = (function() {
+    const host = window.location.hostname;
+    return (host === 'localhost' || host === '127.0.0.1') ? 'http://localhost:3000' : '';
+})();
 
 let isMaigaInitialized = false;
 const initMaiga = () => {
@@ -135,11 +140,9 @@ const initMaiga = () => {
         connectionSearchQuery: '',
         isCreatingPost: false,
         isCreatingStory: false,
-        newStoryContent: '',
         postFile: null, // Store raw file for posts
         storyFile: null,
         storyMediaPreview: null,
-        storyMediaType: null,
         textStoryStyleIndex: 0,
         showMusicPicker: false,
         musicTracks: [], // Will fetch from backend
@@ -161,9 +164,6 @@ const initMaiga = () => {
         ],
         showStoryStickerPicker: false,
         storyStickers: [], // Will fetch from backend
-        storyOverlays: [],
-        storyMediaType: null,
-        followingList: [],
         groupSearchQuery: '',
         friendsSearchQuery: '',
         friendsTab: 'suggestions',
@@ -455,6 +455,7 @@ const initMaiga = () => {
             followingIds: []
         },
         following: [],
+        followingList: [],
         selectedLanguage: 'English',
         selectedTopic: null,
         showUserProfile: false,
@@ -464,9 +465,8 @@ const initMaiga = () => {
         showSeenList: false, // ... other properties
         isUploadingStory: false,
         showCloseFriendsManager: false,
-        storyOverlays: [],
-        isAddingStoryText: false,
         newStoryText: '',
+        newStoryContent: '',
         newStoryTextColor: '#ffffff',
         storyTextColors: ['#ffffff', '#000000', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#00ffff', '#ff00ff'],
         tempStory: null,
@@ -676,7 +676,7 @@ const initMaiga = () => {
             this.socket.on('connect', () => {
                 console.log('Socket connected:', this.socket.id);
                 if (this.user && this.user.id) {
-                    this.socket.emit('join_room', this.user.id);
+                    this.socket.emit('join_room', this.user.id); // This should be the user's actual ID from the backend
                     // Join group rooms for real-time updates
                     this.groups.forEach(g => {
                         this.socket.emit('join_group', g.id);
@@ -788,7 +788,7 @@ const initMaiga = () => {
             // --- User Status Listener (Online/Offline) ---
             this.socket.on('user_status', (data) => {
                 const chat = this.chats.find(c => c.id == data.userId);
-                if (chat) {
+                if (chat && chat.type !== 'group') { // Only update for direct chats
                     chat.status = data.status;
                 }
 
@@ -867,10 +867,14 @@ const initMaiga = () => {
             
             // If full screen was active on last visit, try to restore it
             if (this.isFullScreen) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    // this.showToast('Error', 'Could not restore full screen mode.', 'error'); // Suppress for cleaner UI
-                    this.isFullScreen = false; // Reset if it fails
-                });
+                // Re-trigger fullscreen on the first user interaction if the preference exists
+                const triggerFs = () => {
+                    if (!document.fullscreenElement) {
+                        document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                    window.removeEventListener('click', triggerFs);
+                };
+                window.addEventListener('click', triggerFs);
             }
             document.addEventListener('fullscreenchange', () => {
                 this.isFullScreen = !!document.fullscreenElement;
@@ -1401,7 +1405,7 @@ const initMaiga = () => {
                     this.showToast('Success', 'Post created successfully!', 'success');
 
                         // Optimistic Update: Add post to feed immediately
-                    this.homePosts.unshift({
+                    this.posts.unshift({
                         id: data.post ? data.post._id : Date.now(),
                         user_id: this.user.id,
                         author: this.user.name,
@@ -1998,8 +2002,7 @@ const initMaiga = () => {
             if (this.replyingToComment) {
                 formData.append('parent_comment_id', this.replyingToComment.id);
             }
-            formData.append('content', this.commentInput);
-                if (audioBlob) {
+            if (audioBlob) {
                 formData.append('media', audioBlob, 'comment_audio.webm');
             } else {
                 formData.append('content', this.commentInput);
@@ -2224,7 +2227,7 @@ const initMaiga = () => {
                         if (foundUser) {
                             this.openUserProfile(foundUser.id);
                         } else {
-                            this.showToast('User not found', `Could not find user @`, 'error');
+                            this.showToast('User not found', `Could not find user @${name}`, 'error');
                         }
                     });
             }
@@ -2419,7 +2422,6 @@ const initMaiga = () => {
         },
         get userPosts() {
             return this.posts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
-            return this.homePosts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
         },
         addToRecent(term) {
             if (!term) return;
@@ -3039,52 +3041,6 @@ const initMaiga = () => {
             this.isAddingStoryText = false;
             this.newStoryText = '';
         },
-        removeStoryOverlay(id) {
-            this.storyOverlays = this.storyOverlays.filter(o => o.id !== id);
-        },
-        startDragOverlay(e, overlay) {
-            // Bring the selected overlay to the front for reordering
-            const targetArray = this.isMediaEditorOpen ? this.editorOverlays : this.storyOverlays;
-            const containerRef = this.isMediaEditorOpen ? this.$refs.editorArea : this.$refs.storyPreviewArea;
-
-            const index = targetArray.findIndex(o => o.id === overlay.id);
-            if (index > -1 && index < targetArray.length - 1) {
-                targetArray.splice(index, 1);
-                targetArray.push(overlay);
-            }
-
-            const isTouchEvent = e.touches && e.touches.length > 0;
-            const startX = isTouchEvent ? e.touches[0].clientX : e.clientX;
-            const startY = isTouchEvent ? e.touches[0].clientY : e.clientY;
-            const startLeft = overlay.x;
-            const startTop = overlay.y;
-            const container = containerRef.getBoundingClientRect();
-
-            const moveHandler = (ev) => {
-                ev.preventDefault();
-                const currentX = isTouchEvent ? ev.touches[0].clientX : ev.clientX;
-                const currentY = isTouchEvent ? ev.touches[0].clientY : ev.clientY;
-                
-                const deltaX = ((currentX - startX) / container.width) * 100;
-                const deltaY = ((currentY - startY) / container.height) * 100;
-                
-                overlay.x = Math.max(0, Math.min(100, startLeft + deltaX));
-                overlay.y = Math.max(0, Math.min(100, startTop + deltaY));
-            };
-
-            const upHandler = () => {
-                window.removeEventListener('mousemove', moveHandler);
-                window.removeEventListener('mouseup', upHandler);
-                window.removeEventListener('touchmove', moveHandler);
-                window.removeEventListener('touchend', upHandler);
-                if (this.isMediaEditorOpen) this.saveEditorState();
-            };
-
-            window.addEventListener('mousemove', moveHandler);
-            window.addEventListener('mouseup', upHandler);
-            window.addEventListener('touchmove', moveHandler, { passive: false });
-            window.addEventListener('touchend', upHandler);
-        },
         async postStory(audience) {
             if (!this.tempStory) return;
             this.isPostingStory = true;
@@ -3333,9 +3289,6 @@ const initMaiga = () => {
 
             this.isSharingStoryToChat = false;
             this.showStoryShareOptions = false;
-        },
-        removeStoryOverlay(id) {
-            this.storyOverlays = this.storyOverlays.filter(o => o.id !== id);
         },
 
         // --- GENERIC MEDIA EDITOR FUNCTIONS ---
