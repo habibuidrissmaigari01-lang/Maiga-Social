@@ -428,7 +428,6 @@ export default {
                     console.log(`[OTP DEBUG] Sending code ${otp} to ${identity}`);
 
                     // --- ACTUAL EMAIL SENDING LOGIC (Example for Brevo/Sendinblue) ---
-                    /*
                     if (env.BREVO_API_KEY) {
                         await fetch('https://api.brevo.com/v3/smtp/email', {
                             method: 'POST',
@@ -444,7 +443,6 @@ export default {
                             })
                         });
                     }
-                    */
 
                     return new Response(JSON.stringify({ 
                         success: true, 
