@@ -98,6 +98,11 @@ export default {
         const url = new URL(request.url);
         let path = url.pathname;
 
+        // Handle favicon to prevent 404 console errors
+        if (path === '/favicon.ico') {
+            return new Response(null, { status: 204 });
+        }
+
         // Re-initialize mock data for each request (stateless worker)
         getMockData();
 
@@ -416,11 +421,39 @@ export default {
                     return new Response(JSON.stringify({ content: 'These are mock terms and conditions.' }), { headers: { 'Content-Type': 'application/json' } });
                 }
                 case 'send-reg-otp': {
-                    // Mock OTP sending
-                    return new Response(JSON.stringify({ success: true, message: `OTP sent to ${body.identity || 'user'} (mock).` }), { headers: { 'Content-Type': 'application/json' } });
+                    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                    const identity = body.identity || 'user';
+                    
+                    // This logs the code to your Cloudflare Dashboard (Workers -> Logs -> Real-time Logs)
+                    console.log(`[OTP DEBUG] Sending code ${otp} to ${identity}`);
+
+                    // --- ACTUAL EMAIL SENDING LOGIC (Example for Brevo/Sendinblue) ---
+                    /*
+                    if (env.BREVO_API_KEY) {
+                        await fetch('https://api.brevo.com/v3/smtp/email', {
+                            method: 'POST',
+                            headers: {
+                                'api-key': env.BREVO_API_KEY,
+                                'content-type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                sender: { name: 'Maiga Social', email: 'no-reply@yourdomain.com' },
+                                to: [{ email: identity }],
+                                subject: 'Your Verification Code',
+                                textContent: `Your Maiga Social verification code is: ${otp}`
+                            })
+                        });
+                    }
+                    */
+
+                    return new Response(JSON.stringify({ 
+                        success: true, 
+                        message: `OTP sent to ${identity}. (Mock: Use code ${otp} to proceed)` 
+                    }), { headers: { 'Content-Type': 'application/json' } });
                 }
                 case 'forgot-password': {
-                    return new Response(JSON.stringify({ success: true, message: 'Account found. Code sent.' }), { headers: { 'Content-Type': 'application/json' } });
+                    const identity = body.forgot_identity || 'user';
+                    return new Response(JSON.stringify({ success: true, message: `Account found. Code sent to ${identity}.` }), { headers: { 'Content-Type': 'application/json' } });
                 }
                 case 'verify-otp': {
                     return new Response(JSON.stringify({ success: true, message: 'OTP Verified.' }), { headers: { 'Content-Type': 'application/json' } });
