@@ -8,18 +8,20 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+const multer = require('multer'); // Import multer
+const fs = require('fs'); // Import fs for file operations
 const webpush = require('web-push'); // Assuming web-push is used
-
-// Import web-push library
-const webpush = require('web-push');
 
 const authRoutes = require('./routes/auth');
 const mainRoutes = require('./routes/main');
-const { User, Message } = require('../models'); // Corrected path to models.js
+const { User, Message, Post, Comment } = require('../models'); // Corrected path to models.js
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
+// Configure Multer for file uploads
+const upload = multer({ dest: 'uploads/' }); // Files will be temporarily stored in 'uploads/'
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3000;
@@ -105,6 +107,44 @@ app.post('/api/register', async (req, res, next) => {
         await newUser.save();
 
         res.status(201).json({ message: 'User registered successfully!' });
+    } catch (error) {
+        next(error); // Pass error to generic error handler
+    }
+});
+
+app.post('/api/add_comment', upload.single('media'), async (req, res, next) => {
+    try {
+        const { post_id, content, parent_comment_id } = req.body;
+        const mediaFile = req.file; // This will contain the uploaded file info
+
+        let commentContent = content;
+        let media = null;
+        let media_type = 'text';
+
+        if (mediaFile) {
+            // Rename and move the file to a permanent location
+            const newFileName = `${Date.now()}-${mediaFile.originalname}`;
+            const newFilePath = path.join(__dirname, 'uploads', newFileName);
+            fs.renameSync(mediaFile.path, newFilePath);
+
+            media = `/uploads/${newFileName}`; // Store the URL path
+            media_type = mediaFile.mimetype.startsWith('audio') ? 'audio' : mediaFile.mimetype.split('/')[0];
+        }
+
+        const newComment = new Comment({
+            post: post_id,
+            user: req.session.userId, // Assuming user is authenticated
+            content: commentContent,
+            media: media,
+            media_type: media_type,
+            parent_comment: parent_comment_id || null
+        });
+
+        await newComment.save();
+        // Update post comments count
+        await Post.findByIdAndUpdate(post_id, { $inc: { comments_count: 1 } });
+
+        res.status(201).json({ message: 'Comment added successfully!' });
     } catch (error) {
         next(error); // Pass error to generic error handler
     }

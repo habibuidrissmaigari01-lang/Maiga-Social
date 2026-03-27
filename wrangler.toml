@@ -11,7 +11,7 @@ binding = "ASSETS"
 enabled = true
 
 [vars]
-BACKEND_URL = "https://maiga-social.habibuidrissmaigari01.workers.dev" # <--- FIX THIS
+BACKEND_URL = "https://maiga-social-production.up.railway.app"
 
 [[kv_namespaces]]
 binding = "KV"

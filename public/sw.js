@@ -1,7 +1,64 @@
-const CACHE_NAME = 'maiga-offline-v1';
+// Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
+const urlParams = new URL(self.location).searchParams;
+const APP_TYPE = urlParams.get('app') || 'maiga'; 
+
+const CACHE_NAME = `${APP_TYPE}-offline-v1`;
 const OFFLINE_URL = '/offline.html';
+const DB_NAME = 'maiga_crypto';
+const STORE_NAME = 'pending_messages';
 
 // List of essential assets to pre-cache
+
+// 6. Background Sync: Send messages when connection is restored
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'send-pending-messages') {
+    event.waitUntil(sendPendingMessages());
+  }
+});
+
+async function sendPendingMessages() {
+  const db = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 2);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  const tx = db.transaction(STORE_NAME, 'readonly');
+  const store = tx.objectStore(STORE_NAME);
+  const messages = await new Promise(res => {
+    const req = store.getAll();
+    req.onsuccess = () => res(req.result);
+  });
+
+  for (const msg of messages) {
+    const formData = new FormData();
+    formData.append('content', msg.content);
+    formData.append('media_type', msg.media_type);
+    if (msg.is_group) formData.append('group_id', msg.chat_id);
+    else formData.append('receiver_id', msg.chat_id);
+    if (msg.reply_to_id) formData.append('reply_to_id', msg.reply_to_id);
+
+    try {
+      const response = await fetch('/api/send_message', {
+        method: 'POST',
+        body: formData
+      });
+      if (response.ok) {
+        const delTx = db.transaction(STORE_NAME, 'readwrite');
+        delTx.objectStore(STORE_NAME).delete(msg.id);
+      }
+    } catch (err) {
+      console.error('[SW] Sync failed for message', msg.id, err);
+    }
+  }
+}
+
+// 7. Handle manual update skipping
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 const ASSETS_TO_CACHE = [
   OFFLINE_URL,
   '/', // Main entry point for Maiga
@@ -38,7 +95,28 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// 2. Fetch Event: Serve offline page on network failure
+// 2. Activate Event: Clean up old caches and take control immediately
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      // Take control of all open tabs/clients immediately
+      self.clients.claim(),
+      // Delete any caches that don't match the current CACHE_NAME
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('[Service Worker] Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      })
+    ])
+  );
+});
+
+// 3. Fetch Event: Serve offline page on network failure
 // This now includes a cache-first strategy for other static assets
 self.addEventListener('fetch', (event) => {
   console.log(`[Service Worker] Fetching: ${event.request.url}`);
@@ -82,14 +160,14 @@ self.addEventListener('fetch', (event) => {
   // let the browser handle them normally (network-only or default caching)
 });
 
-// 3. Push Notification Implementation
+// 4. Push Notification Implementation
 self.addEventListener('push', (event) => {
   const data = event.data ? event.data.json() : { title: 'New Message', body: 'You have a new update.' };
 
   const options = {
     body: data.body,
-    icon: data.icon || '/img/logo.png',
-    badge: '/img/logo.png', // Small icon for status bar
+    icon: data.icon || (APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png'),
+    badge: APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png', // Small icon for status bar
     vibrate: [100, 50, 100],
     data: {
       url: data.url || '/'
@@ -101,7 +179,7 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// 4. Handle Notification Click
+// 5. Handle Notification Click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(

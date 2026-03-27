@@ -302,6 +302,24 @@ const initMaiga = () => {
             await this.apiFetch('/api/logout');
             window.location.href = 'index.html';
         },
+        async checkForUpdates() {
+            if (!('serviceWorker' in navigator)) return;
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg) {
+                this.showToast('Checking', 'Checking for app updates...', 'info');
+                await reg.update();
+                
+                if (reg.waiting) {
+                    this.showToast('Update Ready', 'A new version is available. Refreshing...', 'success');
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    setTimeout(() => window.location.reload(), 1000);
+                } else if (reg.installing) {
+                    this.showToast('Updating', 'Downloading update...', 'info');
+                } else {
+                    this.showToast('Up to date', 'You are running the latest version.', 'success');
+                }
+            }
+        },
         async installPwa() {
             if (!this.installPrompt) return;
             this.installPrompt.prompt();
@@ -1580,19 +1598,32 @@ const initMaiga = () => {
                 if (container) container.scrollTop = container.scrollHeight;
             });
 
-            this.apiFetch('/api/send_message', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-Token': CSRF_TOKEN
-                }
-            })
-            .then(data => {
-                if (data && data.success) {
-                    // Update with real message data if needed or just rely on optimistic
-                    document.getElementById('sent-sound').play().catch(()=>{}); // Play sent sound
-                }
-            });
+            if (navigator.onLine) {
+                this.apiFetch('/api/send_message', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-CSRF-Token': CSRF_TOKEN }
+                }).then(data => {
+                    if (data && data.success) {
+                        document.getElementById('sent-sound').play().catch(()=>{});
+                    }
+                });
+            } else if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                // Background Sync Logic
+                const pendingMsg = {
+                    chat_id: this.activeChat.id,
+                    is_group: this.activeChat.type === 'group',
+                    content: content,
+                    media_type: finalType,
+                    reply_to_id: this.replyingTo?.id || null,
+                    timestamp: Date.now()
+                };
+                
+                await this.crypto.savePendingMessage(pendingMsg);
+                const reg = await navigator.serviceWorker.ready;
+                await reg.sync.register('send-pending-messages');
+                this.showToast('Offline', 'Message will be sent automatically when online.', 'info');
+            }
 
             this.newMessage = '';
             this.replyingTo = null;
@@ -4583,11 +4614,14 @@ const initMaiga = () => {
             async init(appInstance) {
                 this.app = appInstance;
                 return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(this.dbName, 1);
+                    const request = indexedDB.open(this.dbName, 2); // Bump version to add store
                     request.onupgradeneeded = e => {
                         this.db = e.target.result;
                         if (!this.db.objectStoreNames.contains(this.storeName)) {
                             this.db.createObjectStore(this.storeName, { keyPath: 'id' });
+                        }
+                        if (!this.db.objectStoreNames.contains('pending_messages')) {
+                            this.db.createObjectStore('pending_messages', { keyPath: 'id', autoIncrement: true });
                         }
                     };
                     request.onsuccess = e => { this.db = e.target.result; resolve(); };
@@ -4610,6 +4644,16 @@ const initMaiga = () => {
                     const tx = this.db.transaction(this.storeName, 'readwrite');
                     const store = tx.objectStore(this.storeName);
                     store.put({ id: key, value: value });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = e => reject(e.target.error);
+                });
+            },
+
+            async savePendingMessage(msg) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('pending_messages', 'readwrite');
+                    const store = tx.objectStore('pending_messages');
+                    store.add(msg);
                     tx.oncomplete = () => resolve();
                     tx.onerror = e => reject(e.target.error);
                 });
