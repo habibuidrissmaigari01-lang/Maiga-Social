@@ -1,13 +1,3 @@
-# Environment variables
+# Node.js
+node_modules/
 .env
-
-# Node dependencies
-/node_modules
-
-# Log files and local email mocks
-*.log
-email.txt
-email.html
-
-# Temporary upload folder for processing
-uploads/node_modules

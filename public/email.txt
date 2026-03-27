@@ -1,0 +1,104 @@
+
+****************************************
+ OTP CODE: 390157
+****************************************
+Date: 3/21/2026, 10:04:22 AM
+To: musajibrin@gmail.com
+Subject: Maiga Verification Code
+----------------
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f5; padding: 20px; }
+        .email-container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; }
+        .header { background: #6366f1; padding: 20px; text-align: center; color: white; }
+        .content { padding: 30px; text-align: center; color: #333; }
+        .otp-box { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px; margin: 20px auto; width: fit-content; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #4f46e5; }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header"><h1>Maiga Verification Code</h1></div>
+        <div class="content">
+            <p>Your verification code is</p>
+            <div class="otp-box">390157</div>
+        </div>
+    </div>
+</body>
+</html>
+================
+
+============================================================
+Date: 3/21/2026, 12:24:11 PM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 877746
+============================================================
+
+============================================================
+Date: 3/21/2026, 1:56:03 PM
+To: mbmaigari419@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 145669
+============================================================
+
+============================================================
+Date: 3/21/2026, 4:12:52 PM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 576167
+============================================================
+
+============================================================
+Date: 3/21/2026, 4:14:51 PM
+To: mbmaigari419@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 405477
+============================================================
+
+============================================================
+Date: 3/22/2026, 10:00:34 AM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 257913
+============================================================
+
+============================================================
+Date: 3/22/2026, 3:50:24 PM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 300401
+============================================================
+
+============================================================
+Date: 3/23/2026, 6:30:04 AM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 836194
+============================================================
+
+============================================================
+Date: 3/23/2026, 6:32:48 AM
+To: habibuidrissmaigari01@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 519073
+============================================================
+
+============================================================
+Date: 3/23/2026, 6:36:07 AM
+To: mbmaigari419@gmail.com
+Subject: Maiga Verification Code
+
+Your verification code is: 357353
+============================================================
