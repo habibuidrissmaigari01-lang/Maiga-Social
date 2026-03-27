@@ -1589,7 +1589,6 @@ const initMaiga = () => {
                 author: this.user.name,
                 avatar: this.user.avatar,
                 sender: 'me',
-                type: finalType === 'e2ee' ? 'text' : finalType
                 type: finalType === 'e2ee' ? 'text' : finalType,
                 pending: !navigator.onLine
             };
@@ -2705,7 +2704,7 @@ const initMaiga = () => {
         },
         getInviteLink(code) {
             const baseUrl = window.location.href.split('?')[0];
-            return `?invite_code=`;
+            return `${baseUrl}?invite_code=${code}`;
         },
         copyGroupLink(code) {
             const link = this.getInviteLink(code);

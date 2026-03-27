@@ -96,7 +96,7 @@ export default {
                                                             </tr>
                                                             <tr>
                                                                 <td style="padding: 20px 40px; background-color: #f9fafb; text-align: center; border-top: 1px solid #f3f4f6;">
-                                                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">&copy; 2024 Maiga Social. All rights reserved.</p>
+                                                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">&copy; 2026 Maiga Social. All rights reserved.</p>
                                                                 </td>
                                                             </tr>
                                                         </table>
@@ -175,7 +175,7 @@ export default {
                                                             </tr>
                                                             <tr>
                                                                 <td style="padding: 20px 40px; background-color: #f9fafb; text-align: center; border-top: 1px solid #f3f4f6;">
-                                                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">&copy; 2024 Maiga Social. All rights reserved.</p>
+                                                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">&copy; 2026 Maiga Social. All rights reserved.</p>
                                                                 </td>
                                                             </tr>
                                                         </table>
