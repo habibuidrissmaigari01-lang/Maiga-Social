@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { exec } = require('child_process');
-const { User } = require('../models');
+const { User } = require('../../models');
 
 // Stores for OTP
 const regOtpStore = new Map();

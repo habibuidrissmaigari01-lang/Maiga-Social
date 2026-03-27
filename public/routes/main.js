@@ -3,8 +3,8 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const webpush = require('web-push');
-const { isAuthenticated } = require('../middleware');
-const { User, Post, Message, Group, Call } = require('../models');
+const { isAuthenticated } = require('../../middleware');
+const { User, Post, Message, Group, Call } = require('../../models');
 
 // File Upload Config
 const storage = multer.diskStorage({

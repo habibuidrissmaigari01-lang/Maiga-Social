@@ -15,6 +15,7 @@ const webpush = require('web-push');
 // Updated paths because routes were moved into the public folder
 const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
+const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
 const { User, Message, Post, Comment } = require('./models'); 
 
@@ -24,10 +25,16 @@ const io = new Server(server);
 
 const upload = multer({ dest: 'uploads/' });
 
+// Ensure uploads directory exists at startup
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
+
 // --- Configuration ---
 const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URL; 
-const SESSION_SECRET = 'your_secret_key'; 
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev_secret_key'; 
 
 // --- Middleware ---
 app.use(cors());
@@ -51,7 +58,7 @@ app.use(session({
     cookie: { httpOnly: true }
 }));
 
-// MongoDB Connection corrected for Atlas and v6.7
+// MongoDB Connection
 if (!MONGO_URI) {
     console.error('CRITICAL ERROR: MONGO_URL is not defined in environment variables.');
 }
@@ -97,8 +104,6 @@ app.post('/api/register', async (req, res, next) => {
             password: hashedPassword,
             dept: 'New Student',
             account_type: account_type || 'maiga',
-            created_at: new Date(),
-            last_seen: new Date(),
             bio: 'New to Maiga Social!',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
         });
@@ -107,7 +112,7 @@ app.post('/api/register', async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
-app.post('/api/add_comment', upload.single('media'), async (req, res, next) => {
+app.post('/api/add_comment', isAuthenticated, upload.single('media'), async (req, res, next) => {
     try {
         const { post_id, content, parent_comment_id } = req.body;
         const mediaFile = req.file;
@@ -116,8 +121,7 @@ app.post('/api/add_comment', upload.single('media'), async (req, res, next) => {
 
         if (mediaFile) {
             const newFileName = `${Date.now()}-${mediaFile.originalname}`;
-            const newFilePath = path.join(process.cwd(), 'uploads', newFileName);
-            if (!fs.existsSync(path.join(process.cwd(), 'uploads'))) fs.mkdirSync(path.join(process.cwd(), 'uploads'));
+            const newFilePath = path.join(uploadsDir, newFileName);
             fs.renameSync(mediaFile.path, newFilePath);
             media = `/uploads/${newFileName}`;
             media_type = mediaFile.mimetype.startsWith('audio') ? 'audio' : mediaFile.mimetype.split('/')[0];
@@ -201,16 +205,15 @@ io.on('connection', (socket) => {
 
 app.get('/api/vapid_public_key', (req, res) => res.json({ publicKey: publicVapidKey }));
 
-app.post('/api/subscribe', async (req, res) => {
+app.post('/api/subscribe', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
-    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     try {
         await User.findByIdAndUpdate(userId, { pushSubscription: req.body });
         res.status(201).json({ message: 'Subscription saved' });
     } catch (error) { res.status(500).json({ message: 'Failed to save subscription' }); }
 });
 
-app.post('/api/send-push', async (req, res) => {
+app.post('/api/send-push', isAuthenticated, async (req, res) => {
     const { title, body, url = '/', userId } = req.body;
     if (!userId) return res.status(400).json({ message: 'Target user ID is required.' });
     try {

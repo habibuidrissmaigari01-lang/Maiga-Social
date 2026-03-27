@@ -22,14 +22,13 @@ const userSchema = new mongoose.Schema({
     birthday: Date,
     phone: String,
     push_subscription: Object
-});
+}, { timestamps: true });
 
 const postSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     content: String,
     media: String,
     mediaType: String,
-    created_at: { type: Date, default: Date.now },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     saved_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     shares: { type: Number, default: 0 },
@@ -37,7 +36,7 @@ const postSchema = new mongoose.Schema({
     views: { type: Number, default: 0 },
     viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     music_track: String
-});
+}, { timestamps: true });
 
 const commentSchema = new mongoose.Schema({
     post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
@@ -46,8 +45,7 @@ const commentSchema = new mongoose.Schema({
     media: String,
     media_type: String,
     parent_comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment' },
-    created_at: { type: Date, default: Date.now }
-});
+}, { timestamps: true });
 
 const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -56,7 +54,6 @@ const messageSchema = new mongoose.Schema({
     content: String,
     media: String,
     media_type: { type: String, default: 'text' },
-    created_at: { type: Date, default: Date.now },
     is_read: { type: Boolean, default: false },
     read_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     is_edited: { type: Boolean, default: false },
@@ -66,7 +63,7 @@ const messageSchema = new mongoose.Schema({
         question: String,
         options: [{ text: String, votes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] }]
     }
-});
+}, { timestamps: true });
 
 const groupSchema = new mongoose.Schema({
     name: String,
@@ -84,18 +81,17 @@ const groupSchema = new mongoose.Schema({
     approve_members: { type: Boolean, default: false },
     invite_link_code: String,
     join_requests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
-});
+}, { timestamps: true });
 
 const storySchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     media: String,
     type: String,
-    created_at: { type: Date, default: Date.now },
     views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     audience: { type: String, default: 'public' }, // 'public', 'close_friends'
     has_music: { type: Boolean, default: false },
     music_track: String
-});
+}, { timestamps: true });
 
 const notificationSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
