@@ -1590,6 +1590,8 @@ const initMaiga = () => {
                 avatar: this.user.avatar,
                 sender: 'me',
                 type: finalType === 'e2ee' ? 'text' : finalType
+                type: finalType === 'e2ee' ? 'text' : finalType,
+                pending: !navigator.onLine
             };
             if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
             this.chatMessages[this.activeChat.id].push(messagePayload);
@@ -1597,6 +1599,13 @@ const initMaiga = () => {
                 const container = document.getElementById('messageContainer');
                 if (container) container.scrollTop = container.scrollHeight;
             });
+
+            // Update chat list preview with pending state
+            const chatInList = this.chats.find(c => c.id == this.activeChat.id);
+            if (chatInList) {
+                chatInList.lastMsg = content;
+                chatInList.pending = !navigator.onLine;
+            }
 
             if (navigator.onLine) {
                 this.apiFetch('/api/send_message', {

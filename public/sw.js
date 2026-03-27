@@ -186,3 +186,20 @@ self.addEventListener('notificationclick', (event) => {
     clients.openWindow(event.notification.data.url)
   );
 });
+
+// 6. Periodic Background Sync: Refresh data in the background
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'refresh-feed') {
+    event.waitUntil(async function() {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        // Fetch fresh posts and update the cache
+        const response = await fetch('/api/get_posts?page=1');
+        if (response.ok) {
+          await cache.put('/api/get_posts?page=1', response.clone());
+          console.log('[SW] Periodic Sync: Feed refreshed');
+        }
+      } catch (err) { console.error('[SW] Periodic Sync failed', err); }
+    }());
+  }
+});
