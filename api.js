@@ -54,7 +54,7 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({ mongoUrl: MONGO_URI || 'mongodb://localhost:27017/maiga' }),
+    store: MongoStore.create({ client: mongoose.connection.getClient() }),
     cookie: { httpOnly: true }
 }));
 
@@ -86,32 +86,6 @@ if (!publicVapidKey || !privateVapidKey) {
 app.use('/api', authRoutes);
 app.use('/api', mainRoutes);
 
-app.post('/api/register', async (req, res, next) => {
-    try {
-        const { email, username, password, account_type, first_name, surname } = req.body;
-        if (!email || !username || !password || !first_name || !surname) {
-            return res.status(400).json({ message: 'Please fill all fields.' });
-        }
-        const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User with that email or username already exists.' });
-        }
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({
-            name: `${first_name} ${surname}`,
-            username: username,
-            email: email,
-            password: hashedPassword,
-            dept: 'New Student',
-            account_type: account_type || 'maiga',
-            bio: 'New to Maiga Social!',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
-        });
-        await newUser.save();
-        res.status(201).json({ message: 'User registered successfully!' });
-    } catch (error) { next(error); }
-});
-
 app.post('/api/add_comment', isAuthenticated, upload.single('media'), async (req, res, next) => {
     try {
         const { post_id, content, parent_comment_id } = req.body;
@@ -138,30 +112,6 @@ app.post('/api/add_comment', isAuthenticated, upload.single('media'), async (req
         await newComment.save();
         await Post.findByIdAndUpdate(post_id, { $inc: { comments_count: 1 } });
         res.status(201).json({ message: 'Comment added successfully!' });
-    } catch (error) { next(error); }
-});
-
-app.post('/api/login', async (req, res, next) => {
-    try {
-        const { login_identity, login_password } = req.body;
-        if (!login_identity || !login_password) {
-            return res.status(400).json({ message: 'Please provide email/username and password.' });
-        }
-        const user = await User.findOne({ $or: [{ email: login_identity }, { username: login_identity }] }).select('+password');
-        if (!user) return res.status(400).json({ message: 'Invalid credentials.' });
-        const isMatch = await bcrypt.compare(login_password, user.password);
-        if (!isMatch) return res.status(400).json({ message: 'Invalid credentials.' });
-        if (user.blocked) return res.status(403).json({ message: 'This account has been blocked.' });
-        req.session.userId = user._id;
-        res.json({ message: 'Login successful', user: { id: user._id, username: user.username, name: user.name, avatar: user.avatar } });
-    } catch (error) { next(error); }
-});
-
-app.get('/api/check_username', async (req, res, next) => {
-    try {
-        const { username } = req.query;
-        const user = await User.findOne({ username });
-        res.json({ available: !user });
     } catch (error) { next(error); }
 });
 
