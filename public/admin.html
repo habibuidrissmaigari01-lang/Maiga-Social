@@ -347,16 +347,18 @@
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-md">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="font-bold text-sm">Report from <span x-text="report.first_name + ' ' + report.surname"></span></p>
+                            <p class="font-bold text-sm">Report from <span x-text="report.reporter.name"></span></p>
                             <p class="text-xs text-gray-500">Regarding: <span class="font-medium text-gray-700 dark:text-gray-300" x-text="report.reason"></span></p>
+                            <template x-if="report.reported_user"><p class="text-xs text-red-500 font-bold mt-1">Reported User: <span x-text="report.reported_user.name"></span></p></template>
                         </div>
                         <span class="text-xs text-gray-400" x-text="report.time"></span>
                     </div>
                     <p class="text-sm mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg" x-text="report.details"></p>
                     <div class="mt-3 flex justify-end space-x-3">
-                        <button @click="dismissReport(report.id)" class="text-sm font-bold text-gray-500 hover:text-gray-700">Dismiss</button>
-                        <a :href="'/home?viewPost=' + report.content_id" target="_blank" class="text-sm font-bold text-green-600 hover:underline">View Content</a>
-                        <button @click="sendMessageToUser(report.reporter_id)" class="text-sm font-bold text-blue-600 hover:underline">Chat with User</button>
+                        <button @click="dismissReport(report.id)" class="text-sm font-bold text-gray-500 hover:text-gray-700">Resolve</button>
+                        <template x-if="report.reported_user"><button @click="warnUser(report)" class="text-sm font-bold text-orange-600 hover:underline">Warn</button></template>
+                        <template x-if="report.reported_user"><button @click="blockAndResolveReport(report)" class="text-sm font-bold text-red-600 hover:underline">Block & Resolve</button></template>
+                        <button @click="sendMessageToUser(report.reporter.id)" class="text-sm font-bold text-blue-600 hover:underline">Chat with Reporter</button>
                     </div>
                 </div>
             </template>
@@ -793,7 +795,7 @@
 
                     if (!confirm(confirmMessage)) return;
 
-                    fetch(`/api?action=${action}`, {
+                    fetch(`/api/admin/${user.blocked ? 'unblock_user' : 'ban_user'}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                         body: JSON.stringify({ user_id: user.id })
@@ -1008,15 +1010,46 @@
                 },
                 dismissReport(id) {
                     this.reports = this.reports.filter(r => r.id !== id);
-                    fetch('/api?action=update_report_status', {
+                    fetch('/api/admin/dismiss_report', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ report_id: id, status: 'dismissed' })
+                        body: JSON.stringify({ report_id: id })
+                    });
+                },
+                blockAndResolveReport(report) {
+                    if (!confirm(`Block ${report.reported_user.name} and resolve report?`)) return;
+                    this.reports = this.reports.filter(r => r.id !== report.id);
+                    fetch('/api/admin/block_and_resolve_report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            report_id: report.id, 
+                            user_id: report.reported_user.id || report.reported_user._id 
+                        })
+                    });
+                },
+                warnUser(report) {
+                    const message = prompt(`Enter warning message for ${report.reported_user.name}:`, "Please follow our community guidelines. Further violations may lead to account suspension.");
+                    if (!message) return;
+
+                    fetch('/api/admin/warn_user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            user_id: report.reported_user.id || report.reported_user._id,
+                            message: message,
+                            report_id: report.id
+                        })
+                    }).then(res => res.json()).then(data => {
+                        if (data.success) {
+                            this.reports = this.reports.filter(r => r.id !== report.id);
+                            alert('Warning sent and report resolved.');
+                        }
                     });
                 },
                 removePost(id, reportId) {
                     if(confirm('Delete this post?')) {
-                        fetch('/api?action=delete_post', {
+                        fetch('/api/admin/delete_post', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ post_id: id })
@@ -1169,8 +1202,6 @@
                     });
                 },
                 saveAdminProfile() {
-                    // This is a placeholder. You need a backend endpoint to handle this.
-                    console.log('Saving admin profile:', this.editAdmin);
                     this.admin = { ...this.editAdmin };
                     alert('Admin profile updated!');
                     this.isEditingAdminProfile = false;

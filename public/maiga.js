@@ -24,6 +24,14 @@ const initMaiga = () => {
     Alpine.data('appData', () => ({
         init() {
             this.mainInit();
+            this.arAssets.hat.src = 'img/ar/party-hat.png'; // Initialize AR assets
+            this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
+            // Load recently used stickers from local storage
+            const savedRecents = localStorage.getItem('recent_stickers');
+            if (savedRecents) {
+                this.recentlyUsedStickers = JSON.parse(savedRecents);
+            }
+            
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 this.installPrompt = e;
@@ -32,8 +40,7 @@ const initMaiga = () => {
         installPrompt: null,
         // Initialize State Variables
         darkMode: localStorage.getItem('darkMode') === 'true',
-        isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',
-        
+        isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         // Helper to prevent apiFetch crash if missing
         getMockData(url) {
             // Mocks removed to force backend connection for implemented features.
@@ -67,20 +74,17 @@ const initMaiga = () => {
                     const data = await response.json();
                     if (!response.ok || data.error) {
                         this.showToast('Error', data.error || `Request failed with status ${response.status}`, 'error');
-                        console.error('API Error:', data);
                         return null;
                     }
                     return data;
                 } else {
                     const errorText = await response.text();
-                    console.error('Non-JSON response from server:', errorText);
                     // If server returns 404 (e.g. endpoint not found), try mock data
                     const mock = this.getMockData(url);
                     if (mock) return mock;
                     return null; 
                 }
             } catch (error) {
-                console.error('Fetch Error:', error);
                 // Fallback to mock data if connection fails (server down)
                 const mock = this.getMockData(url);
                 if (mock) return mock;
@@ -101,7 +105,43 @@ const initMaiga = () => {
         editorOverlays: [],
         editorFilter: 'none',
         editorMusic: null,
-        editorStickers: [], // Will fetch from backend
+        stickerGroups: {
+            smileys: ['😀','😃','😄','😁','😆','🥹','😅','😂','🤣','🥲','☺️','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','🙂‍↕️','😏','😒','🙂‍↔️','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😶‍🌫️','😱','😨','😰','😥','😓','🤗','🤔','🫣','🤭','🫢','🫡','🤫','🫠','🤥','😶','🫥','😐','🫤','😑','🫨','😬','🙄','😯','😦','😧','😮','😲','🥱','🫩','😴','🤤','😪','😮‍💨','😵','😵‍💫','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👻','💀','☠️'],
+            gestures: ['🫶','🤲','👐','👏','🤝','👍','👎','👊','✊','🤛','🤜','🫷','🫸','🤞','✌️','🫰','🤟','🤘','👌','🤌','🤏','🫳','🫴','👈','👉','👆','👇','👆','☝️','✋','🤚','🖐️','🖖','👋','🤙','🫲','🫱','💪','🖕','✍️','🙏'],
+            body: ['🫵','🦶','🦵','👄','🫦','🦷','👅','👂','🦻','👃','🫆','👥','🫂','🗣️','👤','🧠','👀','👁️','🐵','🙈','🙉','🙊','🐒'],
+            hearts: ['🩷','❤️','🧡','💛','💚','🩵','💙','💜','🖤','🩶','🤍','🤎','💔','❤️‍🔥','❤️‍🩹','❣️','💕','💞','💓','💗','💖','💘','💝','💟'],
+            symbols: ['❌','⭕','🛑','⛔','📛','🚫','💯','💢','♨️','🚷','🚯','🚳','🚱','🔞','📵','🚭','❗','‼️','❓','❔','❎','🛜','🧑‍🧒','🧑‍🧒‍🧒','🧑‍🧑','🧑','📶','🎦','0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣','🔟','🔢','#️⃣','*️⃣','☑️','✔️','🔈','🔇','🔉','🔊']
+        },
+        activeStickerCategory: 'smileys',
+        stickerSearchQuery: '',
+        
+        // Simple Fuzzy Match Helper
+        fuzzyMatch(query, text) {
+            query = query.toLowerCase().replace(/\s/g, '');
+            text = text.toLowerCase();
+            let searchIndex = 0;
+            for (let charIndex = 0; charIndex < text.length && searchIndex < query.length; charIndex++) {
+                if (text[charIndex] === query[searchIndex]) searchIndex++;
+            }
+            return searchIndex === query.length;
+        },
+
+        get filteredStickers() {
+            if (!this.stickerSearchQuery.trim()) return this.stickerGroups[this.activeStickerCategory];
+            
+            // Combine all groups for search
+            const allStickers = Object.values(this.stickerGroups).flat();
+            // Note: In a production app, you'd match against a keyword map. 
+            // Here we just return the matches from the global list.
+            return allStickers.filter(s => this.fuzzyMatch(this.stickerSearchQuery, s));
+        },
+
+        recentlyUsedStickers: [],
+        recordStickerUse(sticker) {
+            this.recentlyUsedStickers = [sticker, ...this.recentlyUsedStickers.filter(s => s !== sticker)].slice(0, 12);
+            localStorage.setItem('recent_stickers', JSON.stringify(this.recentlyUsedStickers));
+        },
+
         editorHistory: [],
         editorHistoryIndex: -1,
         showEditorStickers: false,
@@ -144,9 +184,16 @@ const initMaiga = () => {
         storyFile: null,
         storyMediaPreview: null,
         textStoryStyleIndex: 0,
+        musicPickerSource: 'editor', // 'editor' or 'camera'
         showMusicPicker: false,
         musicTracks: [], // Will fetch from backend
         selectMusic(track) {
+            if (this.musicPickerSource === 'camera') {
+                this.cameraMusic = track;
+                this.$refs.cameraMusicPlayer.src = track.src;
+                this.showMusicPicker = false;
+                return;
+            }
             this.tempStory.hasMusic = this.tempStory.musicTrack?.src !== track.src;
             this.tempStory.musicTrack = this.tempStory.hasMusic ? track : null;
             this.showMusicPicker = false;
@@ -163,7 +210,6 @@ const initMaiga = () => {
             { background: '#ffffff', color: '#18181b' },
         ],
         showStoryStickerPicker: false,
-        storyStickers: [], // Will fetch from backend
         groupSearchQuery: '',
         friendsSearchQuery: '',
         friendsTab: 'suggestions',
@@ -255,7 +301,6 @@ const initMaiga = () => {
         showStickerPicker: false,
         showLikesModal: false,
         likersList: [],
-        stickers: ['😀', '😃', '😄', '😁'],
          viewingComments: null,
         replyingToComment: null,
         commentInput: '',
@@ -266,6 +311,534 @@ const initMaiga = () => {
         selectedPostForMenu: null,
         selectedReel: null,
         lastReelClick: 0,
+
+        // --- CAMERA INTERFACE STATE ---
+        isCameraOpen: false,
+        cameraStream: null,
+        cameraMusic: null,
+        audioMixer: null,
+        audioDestination: null,
+        cameraSource: 'post', // 'post' or 'story'
+        facingMode: 'user', // 'user' or 'environment'
+        cameraMode: 'photo', // '15s', '30s', '60s', 'photo'
+        isCountdownActive: false,
+        countdownValue: 3,
+        isCameraRecording: false,
+        recordingProgress: 0,
+        cameraRecorder: null,
+        cameraChunks: [],
+        beautyFilter: 'none',
+        dollyZoomScale: 1,
+        isGlitchActive: false,
+        isDoubleExposureActive: false,
+        secondaryVideoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-light-leaks-and-bokeh-textures-2504-large.mp4',
+
+        handleOverlayUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (this.secondaryVideoUrl && this.secondaryVideoUrl.startsWith('blob:')) {
+                URL.revokeObjectURL(this.secondaryVideoUrl);
+            }
+
+            this.secondaryVideoUrl = URL.createObjectURL(file);
+            this.isDoubleExposureActive = true;
+            this.showToast('Overlay Updated', 'Custom exposure video loaded.', 'success');
+        },
+
+        micVolume: 0,
+        micAnalyser: null,
+        micDataArray: null,
+        voiceEffect: 'none', // 'none', 'deep', 'chipmunk'
+        arFilterMode: 'mask', // 'mask', 'hat'
+        isFaceMeshActive: false,
+        faceMesh: null,
+        faceLandmarks: null,
+        isBackgroundRemovalActive: false,
+        selfieSegmentation: null,
+        segmentationMask: null,
+        arAssets: {
+            hat: new Image(),
+            background: new Image()
+        },
+        isGreenScreenActive: false,
+        isAutoCaptureActive: false,
+        faceDetector: null,
+        isGhostModeActive: false,
+        ghostFrame: null,
+        qrDetector: null,
+        filters: [
+            { name: 'Normal', value: 'none' },
+            { name: 'Beauty', value: 'brightness(1.1) saturate(1.1) contrast(1.05)' },
+            { name: 'Vintage', value: 'sepia(0.4) contrast(1.2)' },
+            { name: 'B&W', value: 'grayscale(1)' }
+        ],
+        filterIndex: 0,
+
+        toggleBeautyFilter() {
+            this.filterIndex = (this.filterIndex + 1) % this.filters.length;
+            this.beautyFilter = this.filters[this.filterIndex].value;
+            this.showToast('Filter', `Applied: ${this.filters[this.filterIndex].name}`, 'info');
+        },
+
+        async initFaceMesh() {
+            if (this.faceMesh) return;
+            // Dynamically load MediaPipe from CDN
+            await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+            this.faceMesh = new FaceMesh({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            });
+            this.faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+            this.faceMesh.onResults((results) => {
+                this.faceLandmarks = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null;
+            });
+        },
+
+        loadScript(src) {
+            return new Promise(resolve => {
+                const s = document.createElement('script');
+                s.src = src; s.onload = resolve;
+                document.head.appendChild(s);
+            });
+        },
+
+        async initSelfieSegmentation() {
+            if (this.selfieSegmentation) return;
+            await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js');
+            this.selfieSegmentation = new SelfieSegmentation({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+            });
+            this.selfieSegmentation.setOptions({ modelSelection: 1 });
+            this.selfieSegmentation.onResults((results) => {
+                this.segmentationMask = results.segmentationMask;
+            });
+        },
+
+        async openCamera(source = 'post') {
+            this.cameraSource = source;
+            this.isCameraOpen = true;
+            this.isCreatingPost = false;
+            this.isCreatingStory = false;
+
+            if ('BarcodeDetector' in window) {
+                this.qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
+            }
+            if ('FaceDetector' in window) {
+                this.faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+            }
+            
+            if (this.isFaceMeshActive) {
+                await this.initFaceMesh();
+            }
+            
+            if (this.isBackgroundRemovalActive) {
+                await this.initSelfieSegmentation();
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: this.facingMode,
+                        width: { ideal: 1080 },
+                        height: { ideal: 1920 }
+                    },
+                    audio: true
+                });
+                this.cameraStream = stream;
+                this.$refs.cameraFeed.srcObject = stream;
+
+                // Setup Lip Sync Analyser
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const sourceNode = audioContext.createMediaStreamSource(stream);
+                this.micAnalyser = audioContext.createAnalyser();
+                this.micAnalyser.fftSize = 64;
+                sourceNode.connect(this.micAnalyser);
+                this.micDataArray = new Uint8Array(this.micAnalyser.frequencyBinCount);
+
+                this.$refs.cameraFeed.onloadedmetadata = () => {
+                    const video = this.$refs.cameraFeed;
+                    const canvas = this.$refs.cameraCanvas;
+                    // Match canvas to video stream resolution
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    this.startCanvasLoop();
+                };
+            } catch (err) {
+                this.showToast('Camera Error', 'Could not access camera. Please check permissions.', 'error');
+                this.isCameraOpen = false;
+            }
+        },
+
+        startCanvasLoop() {
+            const video = this.$refs.cameraFeed;
+            const canvas = this.$refs.cameraCanvas;
+            const ctx = canvas.getContext('2d');
+            let lastQrScan = 0;
+            let lastFaceDetect = 0;
+            let lastFaceMeshUpdate = 0;
+            let lastSegmentationUpdate = 0;
+            let faceStayCount = 0;
+
+            const render = async () => {
+                if (!this.isCameraOpen) return;
+
+                // 0. Update Lip Sync volume
+                if (this.micAnalyser) {
+                    this.micAnalyser.getByteFrequencyData(this.micDataArray);
+                    this.micVolume = this.micDataArray.reduce((a, b) => a + b, 0) / this.micDataArray.length;
+                }
+
+                // 0. Process Selfie Segmentation
+                if (this.isBackgroundRemovalActive && this.selfieSegmentation && Date.now() - lastSegmentationUpdate > 40) {
+                    lastSegmentationUpdate = Date.now();
+                    await this.selfieSegmentation.send({ image: video });
+                }
+
+                // 0. Process Face Mesh (Throttled for performance)
+                if (this.isFaceMeshActive && this.faceMesh && Date.now() - lastFaceMeshUpdate > 30) {
+                    lastFaceMeshUpdate = Date.now();
+                    await this.faceMesh.send({ image: video });
+                }
+
+                // 0. Process Double Exposure (Background Overlay)
+                if (this.isDoubleExposureActive && this.$refs.secondaryVideo) {
+                    ctx.globalCompositeOperation = 'screen';
+                    ctx.globalAlpha = 0.5;
+                    ctx.drawImage(this.$refs.secondaryVideo, 0, 0, canvas.width, canvas.height);
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // 0. Glitch Pixel Manipulation (Applied at the end of capture)
+                if (this.isGlitchActive && Math.random() > 0.7) {
+                    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    const width = canvas.width;
+                    const height = canvas.height;
+
+                    // RGB Split & Horizontal Shift logic
+                    for (let i = 0; i < 5; i++) {
+                        const sliceY = Math.floor(Math.random() * height);
+                        const sliceH = Math.floor(Math.random() * 30) + 10;
+                        const offset = Math.floor(Math.random() * 40) - 20;
+
+                        for (let y = sliceY; y < sliceY + sliceH && y < height; y++) {
+                            for (let x = 0; x < width; x++) {
+                                const idx = (y * width + x) * 4;
+                                const targetX = (x + offset + width) % width;
+                                const targetIdx = (y * width + targetX) * 4;
+                                
+                                data[targetIdx] = data[idx]; // Red split
+                                data[targetIdx + 2] = data[(idx + 8) % data.length]; // Blue split
+                            }
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                }
+
+                // --- COMPOSITING ENGINE ---
+                if (this.isBackgroundRemovalActive && this.segmentationMask) {
+                    // 1. Draw Background Image
+                    ctx.drawImage(this.arAssets.background, 0, 0, canvas.width, canvas.height);
+                    
+                    // 2. Create mask for person
+                    const offCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+                    const offCtx = offCanvas.getContext('2d');
+                    offCtx.drawImage(this.segmentationMask, 0, 0, canvas.width, canvas.height);
+                    offCtx.globalCompositeOperation = 'source-in';
+                    offCtx.filter = this.beautyFilter;
+                    offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    // 3. Composite person over background
+                    ctx.drawImage(offCanvas, 0, 0);
+                } else if (this.isGreenScreenActive) {
+                    ctx.fillStyle = '#003366'; // Corporate blue background placeholder
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    // ... existing chroma key logic
+                }
+
+                // 1. Ghost Frame Overlay (Bottom Layer)
+                if (this.isGhostModeActive && this.ghostFrame) {
+                    ctx.globalAlpha = 0.4;
+                    ctx.drawImage(this.ghostFrame, 0, 0, canvas.width, canvas.height);
+                    ctx.globalAlpha = 1.0;
+                }
+
+                // 2. Live Camera Feed
+                if (this.isGreenScreenActive) {
+                    // Offscreen processing for Chroma Key
+                    const offCanvas = new OffscreenCanvas(canvas.width, canvas.height);
+                    const offCtx = offCanvas.getContext('2d');
+                    offCtx.filter = this.beautyFilter;
+                    offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imgData = offCtx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imgData.data;
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Key out green pixels (Green > Red and Blue)
+                        if (data[i + 1] > 100 && data[i + 1] > data[i] * 1.4 && data[i + 1] > data[i + 2] * 1.4) {
+                            data[i + 3] = 0;
+                        }
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                } else {
+                    ctx.filter = this.beautyFilter;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                }
+                ctx.filter = 'none';
+
+                // 3. Draw AR Filter Elements
+                if (this.isFaceMeshActive && this.faceLandmarks) {
+                    this.drawARFilter(ctx);
+                }
+
+                // 3. QR Code Detection (Throttled to 1 second)
+                if (this.qrDetector && !this.isCameraRecording && Date.now() - lastQrScan > 1000) {
+                    lastQrScan = Date.now();
+                    const codes = await this.qrDetector.detect(canvas);
+                    if (codes.length > 0) {
+                        const raw = codes[0].rawValue;
+                        if (confirm(`QR Detected: ${raw}\n\nOpen link?`)) window.open(raw, '_blank');
+                    }
+                }
+
+                // 4. Auto-Capture Face/Smile Detection (Throttled)
+                if (this.faceDetector && this.isAutoCaptureActive && !this.isCameraRecording && Date.now() - lastFaceDetect > 500) {
+                    lastFaceDetect = Date.now();
+                    const faces = await this.faceDetector.detect(canvas);
+                    if (faces.length > 0) {
+                        faceStayCount++;
+                        if (faceStayCount >= 3) { // Trigger after 1.5 seconds of detection
+                            faceStayCount = 0;
+                            this.takeCameraPhoto();
+                            if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                        }
+                    } else { faceStayCount = 0; }
+                }
+
+                requestAnimationFrame(render);
+            };
+            requestAnimationFrame(render);
+        },
+
+        drawARFilter(ctx) {
+            if (!this.faceLandmarks) return;
+            const landmarks = this.faceLandmarks;
+            const canvas = this.$refs.cameraCanvas;
+            
+            if (this.arFilterMode === 'mask') {
+                const leftEye = landmarks[33];
+                const rightEye = landmarks[263];
+                const eyeCenter = landmarks[168];
+                const eyeDist = Math.abs(rightEye.x - leftEye.x) * canvas.width;
+                const maskWidth = eyeDist * 2.5;
+                const maskHeight = maskWidth * 0.4;
+
+                ctx.save();
+                ctx.translate(eyeCenter.x * canvas.width, eyeCenter.y * canvas.height);
+                ctx.rotate(Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x));
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.fillRect(-maskWidth/2, -maskHeight/2, maskWidth, maskHeight);
+                ctx.restore();
+            } else if (this.arFilterMode === 'hat' && this.arAssets.hat.complete) {
+                const topHead = landmarks[10];
+                const width = Math.abs(landmarks[454].x - landmarks[234].x) * canvas.width * 1.8;
+                const height = width * (this.arAssets.hat.height / this.arAssets.hat.width);
+                ctx.save();
+                ctx.translate(topHead.x * canvas.width, topHead.y * canvas.height);
+                ctx.rotate(Math.atan2(landmarks[454].y - landmarks[234].y, landmarks[454].x - landmarks[234].x));
+                ctx.drawImage(this.arAssets.hat, -width/2, -height * 0.8, width, height);
+                ctx.restore();
+            }
+        },
+
+        closeCamera() {
+            if (this.cameraStream) {
+                this.cameraStream.getTracks().forEach(track => track.stop());
+            }
+            if (this.recordingTimer) clearInterval(this.recordingTimer);
+            this.isCameraOpen = false;
+            this.isCameraRecording = false;
+            if (this.cameraSource === 'post') this.isCreatingPost = true;
+            if (this.cameraSource === 'story') this.isCreatingStory = true;
+        },
+
+        async triggerShutter() {
+            if (this.cameraMode === 'photo') return this.takeCameraPhoto();
+            if (this.isCameraRecording) return this.stopCameraRecording();
+            
+            // Start Countdown for Video Modes
+            this.isCountdownActive = true;
+            this.countdownValue = 3;
+            
+            const countInterval = setInterval(() => {
+                this.countdownValue--;
+                if (this.countdownValue <= 0) {
+                    clearInterval(countInterval);
+                    this.isCountdownActive = false;
+                    this.startCameraRecording();
+                } else {
+                    if (navigator.vibrate) navigator.vibrate(50); // Haptic feedback per tick
+                }
+            }, 1000);
+        },
+
+        takeCameraPhoto() {
+            const dataUrl = this.$refs.cameraCanvas.toDataURL('image/jpeg', 0.9);
+            
+            // Capture frame for Ghost Mode
+            const img = new Image();
+            img.src = dataUrl;
+            this.ghostFrame = img;
+
+            this.selectedMedia = dataUrl;
+            this.mediaType = 'image';
+            
+            // Convert to file for actual upload
+            fetch(dataUrl).then(res => res.blob()).then(blob => {
+                const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                if (this.cameraSource === 'post') {
+                    this.postFile = file;
+                    this.selectedMedia = dataUrl;
+                } else {
+                    this.storyFile = file;
+                    this.storyMediaPreview = dataUrl;
+                    this.storyMediaType = 'image';
+                }
+                this.closeCamera();
+            });
+        },
+
+        startCameraRecording() {
+            this.isCameraRecording = true;
+            this.recordingProgress = 0;
+            this.cameraChunks = [];
+            
+            // Capture filtered stream from canvas
+            const stream = this.$refs.cameraCanvas.captureStream(30);
+
+            // --- AUDIO MIXING ENGINE ---
+            if (!this.audioMixer) {
+                this.audioMixer = new (window.AudioContext || window.webkitAudioContext)();
+                this.audioDestination = this.audioMixer.createMediaStreamDestination();
+            }
+            
+            // 1. Add Microphone to mix with effects
+            const micSource = this.audioMixer.createMediaStreamSource(this.cameraStream);
+            let audioChain = micSource;
+
+            if (this.voiceEffect === 'deep') {
+                const filter = this.audioMixer.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
+                audioChain.connect(filter);
+                audioChain = filter;
+            } else if (this.voiceEffect === 'chipmunk') {
+                const filter = this.audioMixer.createBiquadFilter();
+                filter.type = 'highpass';
+                filter.frequency.value = 1200;
+                audioChain.connect(filter);
+                audioChain = filter;
+            }
+
+            audioChain.connect(this.audioDestination);
+
+            // 2. Add Music to mix (if selected)
+            if (this.cameraMusic) {
+                if (!this.musicSourceNode) {
+                    this.musicSourceNode = this.audioMixer.createMediaElementSource(this.$refs.cameraMusicPlayer);
+                }
+                this.musicSourceNode.connect(this.audioDestination);
+                this.musicSourceNode.connect(this.audioMixer.destination); // Play locally so user can hear it
+                this.$refs.cameraMusicPlayer.currentTime = 0;
+                this.$refs.cameraMusicPlayer.play();
+            }
+
+            // 3. Attach mixed audio to the video stream
+            this.audioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
+
+            this.cameraRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            this.cameraRecorder.ondataavailable = (e) => this.cameraChunks.push(e.data);
+            this.cameraRecorder.onstop = () => {
+                const blob = new Blob(this.cameraChunks, { type: 'video/webm' });
+                const file = new File([blob], `reel_${Date.now()}.webm`, { type: 'video/webm' });
+                if (this.cameraSource === 'post') {
+                    this.postFile = file;
+                    this.mediaType = 'video';
+                    this.selectedMedia = URL.createObjectURL(file);
+                } else {
+                    this.storyFile = file;
+                    this.storyMediaType = 'video';
+                    this.storyMediaPreview = URL.createObjectURL(file);
+                }
+                this.closeCamera();
+            };
+
+            const duration = parseInt(this.cameraMode);
+            let elapsed = 0;
+            this.cameraRecorder.start();
+
+            this.recordingTimer = setInterval(() => {
+                elapsed += 100;
+                this.recordingProgress = (elapsed / (duration * 1000)) * 100;
+                if (elapsed >= duration * 1000) this.stopCameraRecording();
+            }, 100);
+        },
+
+        stopCameraRecording() {
+            if (this.cameraRecorder && this.cameraRecorder.state !== 'inactive') this.cameraRecorder.stop();
+            if (this.cameraMusic) this.$refs.cameraMusicPlayer.pause();
+            clearInterval(this.recordingTimer);
+            this.isCameraRecording = false;
+        },
+
+        async shareFile() {
+            if (!this.postFile) return;
+            if (navigator.canShare && navigator.canShare({ files: [this.postFile] })) {
+                try {
+                    await navigator.share({
+                        files: [this.postFile],
+                        title: 'Maiga Social Capture',
+                    });
+                } catch (err) {
+                    if (err.name !== 'AbortError') this.showToast('Share Error', 'Could not save media.', 'error');
+                }
+            } else {
+                this.showToast('Not Supported', 'Your browser does not support file saving/sharing.', 'info');
+            }
+        },
+
+        async flipCamera() {
+            this.facingMode = this.facingMode === 'user' ? 'environment' : 'user';
+            this.closeCamera();
+            this.openCamera();
+        },
+
+        // Message Info State
+        showMsgInfo: false,
+        messageInfoData: [],
+        groupActivityData: [],
+        async openMessageInfo(msg) {
+            this.showMessageOptions = false;
+            const data = await this.apiFetch(`/api/get_message_read_details?message_id=${msg.id}`);
+            if (data) {
+                this.messageInfoData = data;
+                this.showMsgInfo = true;
+            }
+        },
+
+        async fetchGroupActivity(groupId) {
+            const data = await this.apiFetch(`/api/admin/group_activity_report?group_id=${groupId}`);
+            if (data) {
+                // Format for your chart library (e.g., Chart.js or simple CSS bars)
+                this.groupActivityData = data;
+            }
+        },
+
         typingIndicatorTimeout: null,
         isRecording: false,
         mediaRecorder: null,
@@ -520,22 +1093,7 @@ const initMaiga = () => {
         savedPostList: [], // Store saved posts here
         forumTopics: [], // Will fetch from backend
         notifications: [],
-        reports: [
-            { 
-                id: 1, 
-                reporter: { name: 'Aisha Yusuf', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aisha' }, 
-                reason: 'Harassment', 
-                details: 'Another user is sending me inappropriate messages.',
-                time: '2h ago'
-            },
-            { 
-                id: 2, 
-                reporter: { name: 'Musa Ibrahim', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Musa' }, 
-                reason: 'Spam Post', 
-                details: 'The post with ID #4521 seems to be a spam link.',
-                time: '5h ago'
-            }
-        ],
+        reports: [],
         chats: [],
         chatMessages: {}, // Will populate via API
         reels: [],
@@ -599,7 +1157,7 @@ const initMaiga = () => {
             p.visible = true;
             p.minimized = true; 
             p.audioObj.src = track.src;
-            p.audioObj.play().catch(e => console.error(e));
+            p.audioObj.play().catch(e => { });
         },
 
         toggleGlobalPlayback() {
@@ -642,7 +1200,7 @@ const initMaiga = () => {
                     const prev = document.getElementById(this.activeAudioId);
                     if (prev) prev.pause();
                 }
-                el.play().catch(e => console.error(e));
+                el.play().catch(e => { });
             }
         },
         
@@ -692,7 +1250,6 @@ const initMaiga = () => {
 
             // 2. Join a room based on the user's ID once connected and user is loaded
             this.socket.on('connect', () => {
-                console.log('Socket connected:', this.socket.id);
                 if (this.user && this.user.id) {
                     this.socket.emit('join_room', this.user.id); // This should be the user's actual ID from the backend
                     // Join group rooms for real-time updates
@@ -704,7 +1261,6 @@ const initMaiga = () => {
 
             // 3. Listen for incoming messages
             this.socket.on('receive_message', async (data) => {
-                console.log('Received message:', data);
                 document.getElementById('receive-sound').play().catch(()=>{}); // Play notification sound
 
                 // Make sure it's not our own message coming back
@@ -717,7 +1273,6 @@ const initMaiga = () => {
                         data.content = await this.crypto.decrypt(data.content, privKey);
                         data.type = 'text'; 
                     } catch (e) {
-                        console.error("Decryption failed", e);
                         data.content = '🔒 Encrypted Message';
                         data.type = 'text';
                     }
@@ -785,6 +1340,13 @@ const initMaiga = () => {
                 }
             });
 
+            this.socket.on('message_deleted', (data) => {
+                const chatId = this.activeChat?.id;
+                if (chatId && this.chatMessages[chatId]) {
+                    this.chatMessages[chatId] = this.chatMessages[chatId].filter(m => m.id != data.message_id);
+                }
+            });
+
             this.socket.on('hide_typing', (data) => {
                 if (this.activeChat && this.activeChat.id == data.chat_id) {
                     this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
@@ -794,7 +1356,9 @@ const initMaiga = () => {
             // --- Notification Listener ---
             this.socket.on('new_notification', (data) => {
                 this.notifications.unshift(data);
-                this.showToast('New Notification', data.content, 'info');
+                
+                let toastType = data.type === 'system' ? 'error' : 'info';
+                this.showToast(data.type === 'system' ? 'System Warning' : 'New Notification', data.content, toastType);
                 
                 // If it's a follow notification, you might want to refresh friend suggestions or follower count
                 if (data.type === 'follow') {
@@ -824,14 +1388,31 @@ const initMaiga = () => {
             });
 
             // --- Message Edited Listener ---
-            this.socket.on('message_edited', (data) => {
-                // If viewing the chat where the edit happened, refresh to handle decryption or update
-                if (this.activeChat) {
-                    const hasMessage = this.chatMessages[this.activeChat.id]?.some(m => m.id == data.id);
-                    if (hasMessage) {
-                        // Re-fetch messages to handle E2EE decryption cleanly
-                        this.fetchMessages(this.activeChat, false);
+            this.socket.on('message_edited', async (data) => {
+                const chatId = data.group_id || (data.sender_id == this.user.id ? data.receiver_id : data.sender_id);
+                const messages = this.chatMessages[chatId];
+                if (!messages) return;
+
+                const msg = messages.find(m => m.id == data.id);
+                if (msg) {
+                    let content = data.content;
+                    let type = data.media_type;
+
+                    if (type === 'e2ee') {
+                        try {
+                            const privKey = await this.crypto.getPrivateKey();
+                            content = await this.crypto.decrypt(content, privKey);
+                            type = 'text';
+                        } catch (e) {
+                            content = '🔒 Encrypted Message (Edited)';
+                            type = 'text';
+                        }
                     }
+
+                    msg.content = content;
+                    msg.type = type;
+                    msg.is_edited = true;
+                    this.showToast('Info', 'A message was edited.');
                 }
             });
 
@@ -846,6 +1427,19 @@ const initMaiga = () => {
                     });
                 }
             });
+
+    // --- Read Receipt Listener ---
+    // Updates UI checkmarks and "Seen by" lists real-time
+    this.socket.on('read_receipt', (data) => {
+        for (let chatId in this.chatMessages) {
+            const msg = this.chatMessages[chatId].find(m => m.id == data.message_id);
+            if (msg) {
+                msg.read = data.is_read;
+                msg.read_by = data.read_by;
+                break; 
+            }
+        }
+    });
 
             // Offline Detection
             window.addEventListener('online', () => { 
@@ -864,7 +1458,7 @@ const initMaiga = () => {
                         await this.crypto.generateAndStoreKeys(this);
                         this.showToast('Security', 'Encryption keys generated and stored securely.', 'success');
                     }
-                } catch (e) { console.warn("Crypto init skipped due to error", e); }
+                } catch (e) { /* Crypto init skipped */ }
             }
             this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
             
@@ -942,6 +1536,11 @@ const initMaiga = () => {
                     }
             });
 
+            // Fetch Reports (for in-app admin view)
+            this.apiFetch('/api/admin/get_reports').then(data => {
+                if (Array.isArray(data)) this.reports = data;
+            });
+
             // Fetch Blocked Users
             this.apiFetch('/api/get_blocked_users')
                 .then(data => {
@@ -967,7 +1566,7 @@ const initMaiga = () => {
                     this.pinnedChats = data;
                     this.pinnedChats = Array.isArray(data) ? data : [];
                 })
-                .catch(err => console.error("Error fetching pinned chats:", err));
+                .catch(err => { });
 
             // Fetch Reels
             this.apiFetch('/api/get_reels?page=1&limit=5')
@@ -1330,7 +1929,6 @@ const initMaiga = () => {
                         this.viewingUser.followers_count--;
                     }
                 }
-                console.error(err);
                 this.showToast('Error', 'Network error', 'error');
             })
             .finally(() => {
@@ -1430,13 +2028,13 @@ const initMaiga = () => {
                         avatar: this.user.avatar,
                         content: content,
                         media: mediaPreview,
-                        mediaType: mediaType,
+                        media_type: mediaType,
                         time: 'Just now',
                         likes: 0,
                         comments: 0,
                         shares: 0,
                         saved: false,
-                        verified: this.user.isVerified || false
+                        verified: this.user.is_verified || false
                     });
                     
                     this.newPostContent = '';
@@ -1542,7 +2140,6 @@ const initMaiga = () => {
                         formData.append('media_type', type);
                     }
                 } catch (e) {
-                    console.error("Encryption failed", e);
                     this.showToast('Error', 'Could not encrypt message.', 'error');
                     formData.append('content', content);
                     formData.append('media_type', type);
@@ -1760,6 +2357,7 @@ const initMaiga = () => {
             chat.unread = true; // Optimistic update
         },
         sendSticker(sticker) {
+            this.recordStickerUse(sticker);
             this.sendMessage(sticker, 'sticker');
             this.showStickerPicker = false;
         },
@@ -1981,6 +2579,47 @@ const initMaiga = () => {
             }
             this.showMessageOptions = false;
         },
+        reportMessage() {
+            const msg = this.selectedMessageForOptions;
+            if (!msg) return;
+
+            const reason = prompt("Why are you reporting this message? (e.g., Harassment, Spam, Hate Speech)");
+            if (!reason) return;
+
+            // For E2EE, we send the decrypted content context so admins can actually review it.
+            this.apiFetch('/api/report_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message_id: msg.id,
+                    reason: reason,
+                    context: msg.content 
+                })
+            }).then(data => {
+                if (data && data.success) {
+                    this.showToast('Success', 'Message reported to administrators.', 'success');
+                }
+            });
+            this.showMessageOptions = false;
+        },
+        blockAndResolveReport(report) {
+            if (!confirm(`Are you sure you want to block ${report.reported_user.name} and resolve this report?`)) return;
+            
+            this.apiFetch('/api/admin/block_and_resolve_report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    report_id: report.id,
+                    user_id: report.reported_user.id || report.reported_user._id
+                })
+            }).then(data => {
+                if (data && data.success) {
+                    this.reports = this.reports.filter(r => r.id !== report.id);
+                    this.showToast('Success', 'User blocked and report resolved.', 'success');
+                }
+            });
+            this.showMessageOptions = false;
+        },
         editMessage() {
             const msg = this.selectedMessageForOptions;
             if (!msg || msg.type !== 'text') return;
@@ -2093,7 +2732,6 @@ const initMaiga = () => {
                 }
             })
             .catch(err => {
-                console.error('Add comment error:', err);
                 this.showToast('Error', 'Could not send comment. Please check your connection.', 'error');
             })
             .finally(() => {
@@ -2152,8 +2790,6 @@ const initMaiga = () => {
                 avatar: report.reporter.avatar,
                 lastMsg: report.details
             };
-            // For now, just log it.
-            console.log("Starting report chat:", chat);
             this.activeChat = chat;
         },
         openShareModal(post) {
@@ -2188,7 +2824,7 @@ const initMaiga = () => {
             if (!this.sharingPost) return;
             this.myStories.push({
                 id: Date.now(),
-                type: this.sharingPost.mediaType || 'text',
+                type: this.sharingPost.media_type || 'text',
                 media: this.sharingPost.media || this.sharingPost.avatar,
                 time: Date.now(),
                 seenBy: [],
@@ -2201,7 +2837,7 @@ const initMaiga = () => {
         },
         copyPostLink() {
             if (!this.sharingPost) return;
-            navigator.clipboard.writeText(`https://maiga-social.com/post/${this.sharingPost.id}`);
+            navigator.clipboard.writeText(`https://maigasocial.com/post/${this.sharingPost.id}`);
             this.showShareModal = false;
             this.sharingPost.shares++;
             this.showToast('Copied', 'Link copied to clipboard!', 'success');
@@ -2345,7 +2981,6 @@ const initMaiga = () => {
                 }
             })
             .catch(err => {
-                console.error(err);
                 this.showToast('Error', 'Network error.', 'error');
             });
         },
@@ -3085,6 +3720,13 @@ const initMaiga = () => {
             this.isPostingStory = true;
             this.uploadProgress = 0;
 
+            // Check if we need to export as video due to animated stickers
+            const hasAnimations = this.storyOverlays.some(o => o.isAnimated);
+            if (hasAnimations && this.tempStory.type === 'image') {
+                this.tempStory.type = 'video';
+                fileToUpload = await this.recordCanvasToVideo(null, this.newStoryContent, this.storyOverlays);
+            }
+
             let fileToUpload = this.tempStory.file;
 
             // Merge overlays for Image
@@ -3239,9 +3881,22 @@ const initMaiga = () => {
             if (meAsViewer) {
                 meAsViewer.liked = !meAsViewer.liked;
             }
+            this.apiFetch('/api/toggle_story_reaction', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ 
+                    story_id: currentStory.id
+                })
+            })
+            .then(data => {
+                if (!data || !data.success) {
+                    this.showToast('Error', 'Could not save like.', 'error');
+                }
+            });
         },
-    
-
         blockUser(userId) {
             // This is usually for admin, but if used for self-blocking logic:
             this.viewingUser = { id: userId }; // Hack to reuse toggleBlock logic or implement direct call
@@ -3437,6 +4092,7 @@ const initMaiga = () => {
         },
 
         addEditorSticker(sticker) {
+            this.recordStickerUse(sticker);
             this.editorOverlays.push({
                 id: Date.now(),
                 type: 'sticker',
@@ -3771,13 +4427,13 @@ const initMaiga = () => {
             };
             xhr.send(formData);
         },
-               generateFinalStoryImage(baseFile, text, overlays) {
+        async generateFinalStoryImage(baseFile, text, overlays) {
             return new Promise(resolve => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 canvas.width = 1080;
                 canvas.height = 1920;
-                const drawOperations = async () => {
+                const drawFrame = async () => {
                     // 1. Draw background (either style or image)
                     if (baseFile) {
                         const img = new Image();
@@ -3805,16 +4461,58 @@ const initMaiga = () => {
                     for (const overlay of overlays) {
                         const x = (overlay.x / 100) * canvas.width;
                         const y = (overlay.y / 100) * canvas.height;
-                        ctx.font = '150px sans-serif'; // Sticker font size
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(overlay.content, x, y);
+                        
+                        ctx.save();
+                        ctx.translate(x, y);
+                        if (overlay.type === 'svg') {
+                            const size = 300 * (overlay.scale || 1);
+                            ctx.drawImage(overlay.img, -size/2, -size/2, size, size);
+                        } else {
+                            ctx.font = '150px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(overlay.content, 0, 0);
+                        }
+                        ctx.restore();
                     }
-
-                    canvas.toBlob(blob => resolve(new File([blob], "story.jpg", { type: "image/jpeg" })), 'image/jpeg', 0.9);
                 };
 
-                drawOperations();
+                drawFrame().then(() => {
+                    canvas.toBlob(blob => resolve(new File([blob], "story.jpg", { type: "image/jpeg" })), 'image/jpeg', 0.9);
+                });
+            });
+        },
+        
+        // New method to record animated canvas to video
+        recordCanvasToVideo(baseFile, text, overlays) {
+            return new Promise(async (resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 1080; canvas.height = 1920;
+                const ctx = canvas.getContext('2d');
+                
+                const stream = canvas.captureStream(30);
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+                const chunks = [];
+                
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    resolve(new File([blob], "story_animated.webm", { type: "video/webm" }));
+                };
+
+                recorder.start();
+                
+                // Run animation for 5 seconds
+                const startTime = Date.now();
+                const animate = async () => {
+                    await this.drawFrameOnCanvas(ctx, canvas, baseFile, text, overlays);
+                    if (Date.now() - startTime < 5000) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        recorder.stop();
+                    }
+                };
+                animate();
             });
         },
         mergeImageAndText(file, text) {
@@ -3863,9 +4561,26 @@ const initMaiga = () => {
             }
         },
         addStickerToStory(sticker) {
+            this.recordStickerUse(sticker);
             this.storyOverlays.push({
                 id: Date.now(),
                 type: 'sticker',
+                isAnimated: false,
+                content: sticker,
+                x: 50, // Center X
+                y: 50, // Center Y
+                scale: 1,
+                rotation: 0
+            });
+            this.showStoryStickerPicker = false;
+        },
+        addAnimatedStickerToStory(stickerObj) {
+            this.storyOverlays.push({
+                id: Date.now(),
+                type: 'svg',
+                isAnimated: true,
+                content: stickerObj.url,
+                img: Object.assign(new Image(), { src: stickerObj.url }),
                 content: sticker,
                 x: 50, // Center X
                 y: 50, // Center Y
@@ -4083,7 +4798,6 @@ const initMaiga = () => {
                 }
 
                 this.showToast('Call Error', errorMsg, 'error');
-                console.error('getUserMedia error:', err);
                 this.endCall();
             });
         },
@@ -4234,7 +4948,6 @@ const initMaiga = () => {
                     this.callRecorder.start();
                     this.isCallRecording = true;
                 } catch (err) {
-                    console.error("Error recording:", err);
                     this.showToast('Error', 'Could not start recording.', 'error');
                 }
             }
@@ -4257,7 +4970,6 @@ const initMaiga = () => {
                 this.$refs.localVideo.srcObject = stream;
                 if (this.isMicMuted) stream.getAudioTracks().forEach(track => track.enabled = false);
             }).catch(err => {
-                console.error('Error switching camera:', err);
                 this.showToast('Error', 'Could not switch camera.', 'error');
             });
         },
@@ -4278,7 +4990,7 @@ const initMaiga = () => {
                     this.localStream = Alpine.raw(stream);
                     this.$refs.localVideo.srcObject = stream;
                     stream.getVideoTracks()[0].onended = () => { if (this.isScreenSharing) this.toggleScreenShare(); };
-                }).catch(err => console.error('Error sharing screen:', err));
+                }).catch(err => { });
             }
         },
         dragStart(event) {
@@ -4457,7 +5169,7 @@ const initMaiga = () => {
                     this.showToast('Shared', 'Reel shared successfully!', 'success');
                 }).catch((error) => console.log('Error sharing', error));
             } else {
-                this.sharingPost = { ...reel, mediaType: 'video' };
+                this.sharingPost = { ...reel, media_type: 'video' };
                 this.showShareModal = true;
             }
         },
@@ -4557,19 +5269,15 @@ const initMaiga = () => {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
             // Register Service Worker if not already done
-            let registration = await navigator.serviceWorker.getRegistration();
-            if (!registration) {
-                try {
-                    registration = await navigator.serviceWorker.register('/sw.js');
-                } catch (e) { console.warn("SW Register failed", e); return; }
-            }
-
-            // Get VAPID Key from backend safely
             try {
-                const response = await fetch('/api/vapid_public_key');
-                if (!response.ok) return; // Silently fail if endpoint missing
-                const { publicKey } = await response.json();
-                
+                await navigator.serviceWorker.register('/sw.js');
+                const appType = this.user.account_type || 'maiga';
+                await navigator.serviceWorker.register(`/sw.js?app=${appType}`);
+                const registration = await navigator.serviceWorker.ready;
+                const vapidResp = await fetch('/api/vapid_public_key');
+                if (!vapidResp.ok) return;
+                const { publicKey } = await vapidResp.json();
+
                 if (!publicKey || publicKey.includes('REPLACE')) return;
 
                 const convertedVapidKey = this.urlBase64ToUint8Array(publicKey);
@@ -4587,8 +5295,7 @@ const initMaiga = () => {
                     body: JSON.stringify(subscription)
                 });
             } catch (e) {
-                // Ignore push notification errors in dev/offline mode
-                console.log("Push notifications not configured or backend unavailable.");
+                console.warn("Service Worker or Push registration failed:", e);
             }
         },
         urlBase64ToUint8Array(base64String) {

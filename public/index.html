@@ -97,6 +97,11 @@
             transform: scale(0.98);
         }
 
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
         .progress-bar {
             height: 6px;
             background: #edf2f7;
@@ -618,6 +623,9 @@
         });
 
         async function verifyOTP() {
+            const btn = document.querySelector('#reg-6 .btn-primary');
+            const originalBtnHtml = btn.innerHTML;
+
             const otpInputs = document.querySelectorAll('#otp-inputs .otp-box');
             const otp = Array.from(otpInputs).map(i => i.value).join('');
             const email = document.querySelector('input[name="reg_email"]').value;
@@ -632,6 +640,9 @@
                 showMessage('Contact identity missing. Please go back and re-enter.', 'error');
                 return;
             }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Verifying...';
 
             try {
                 const response = await fetch(API_BASE_URL + '/api/verify-otp', {
@@ -649,6 +660,9 @@
                 }
             } catch (error) {
                 showMessage(error.message || 'Network error during OTP verification.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
             }
         }
 
@@ -765,6 +779,11 @@
 
             // If moving to OTP step, request OTP from backend first
             if (step === 6 && currentStep === 5) {
+                const btn = document.querySelector('#reg-5 .btn-primary');
+                const originalBtnHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Sending...';
+
                 const email = document.querySelector('input[name="reg_email"]').value;
                 const phone = document.querySelector('input[name="phone"]').value;
                 const identity = email || phone;
@@ -797,9 +816,14 @@
                             updateProgress();
                             startTimer();
                         }
-                    }).catch(err => {
+                    })
+                    .catch(err => {
                         console.error(err);
                         showMessage(err.message || 'Network error. Could not send code.', 'error');
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = originalBtnHtml;
                     });
                 }
                 return; // Prevent default step transition
@@ -924,6 +948,14 @@
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
 
+            const submitBtn = document.querySelector('.step-content.active button[type="submit"]');
+            let originalBtnHtml = '';
+            if (submitBtn) {
+                originalBtnHtml = submitBtn.innerHTML;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Processing...';
+            }
+
             // Consolidate password fields
             delete data['otp[]']; // remove otp array
 
@@ -1035,6 +1067,11 @@
 
             } catch (error) {
                 showMessage(error.message, 'error');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
             }
         });
 

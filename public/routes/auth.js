@@ -4,60 +4,60 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { exec } = require('child_process');
-const { User } = require('../../models');
+const { User, Otp } = require('../../models');
 
-// Stores for OTP
-const regOtpStore = new Map();
-const passwordResetStore = new Map();
 
 // Helper Email Function
 async function sendEmail(to, subject, text) {
+    if (!process.env.BREVO_API_KEY) {
+        return;
+    }
+
     const codeMatch = text.match(/\d{6}/);
     const code = codeMatch ? codeMatch[0] : '';
     const cleanText = text.replace(code, '').replace(':', '').trim();
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: sans-serif; background-color: #f4f4f5; padding: 20px; }
-        .email-container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; }
-        .header { background: #6366f1; padding: 20px; text-align: center; color: white; }
-        .content { padding: 30px; text-align: center; color: #333; }
-        .otp-box { background: #f8fafc; border: 2px dashed #cbd5e1; padding: 15px; margin: 20px auto; width: fit-content; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #4f46e5; }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="header"><h1>${subject}</h1></div>
-        <div class="content">
-            <p>${cleanText}</p>
-            ${code ? `<div class="otp-box">${code}</div>` : ''}
-        </div>
-    </div>
-</body>
-</html>`;
-
-    const emailContent = `
-****************************************
- OTP CODE: ${code || 'N/A'}
-****************************************
-Date: ${new Date().toLocaleString()}
-To: ${to}
-Subject: ${subject}
-----------------
-${htmlContent}
-================
-`;
     try {
-        await fs.promises.writeFile('email.txt', emailContent);
-        // Auto-open email.txt
-        const openCmd = process.platform === 'win32' ? 'start' : (process.platform === 'darwin' ? 'open' : 'xdg-open');
-        exec(`${openCmd} email.txt`);
+        await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'api-key': process.env.BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: { 
+                    name: 'Maiga Social', 
+                    email: process.env.SENDER_EMAIL || 'admin@maiga.social' 
+                },
+                to: [{ email: to }],
+                subject: subject,
+                htmlContent: `
+                    <!DOCTYPE html>
+                    <html>
+                    <body style="font-family: sans-serif; background-color: #f3f4f6; padding: 40px 20px;">
+                        <table width="100%" maxWidth="600" style="max-width: 600px; background-color: #ffffff; margin: 0 auto; border-radius: 16px; overflow: hidden;">
+                            <tr>
+                                <td style="background-color: #4f46e5; padding: 20px; text-align: center; color: white;">
+                                    <h1 style="margin: 0;">Maiga Social</h1>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 40px;">
+                                    <h2 style="color: #111827;">${subject}</h2>
+                                    <p style="color: #4b5563; font-size: 16px;">${cleanText}</p>
+                                    ${code ? `
+                                    <div style="text-align: center; background-color: #f9fafb; border: 2px dashed #e5e7eb; border-radius: 12px; padding: 24px; margin: 24px 0;">
+                                        <span style="font-size: 42px; font-weight: 800; color: #4f46e5; letter-spacing: 10px;">${code}</span>
+                                    </div>` : ''}
+                                    <p style="color: #9ca3af; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </body>
+                    </html>`
+            })
+        });
     } catch (err) {
-        console.error('[EMAIL] Failed:', err);
     }
 }
 
@@ -69,8 +69,14 @@ router.post('/send-reg-otp', async (req, res) => {
     const existingUser = await User.findOne({ $or: [{ email: identity.toLowerCase() }, { phone: identity }] });
     if (existingUser) return res.status(400).json({ success: false, message: 'Account already exists.' });
 
+    // Check for cooldown (60 seconds)
+    const existingOtp = await Otp.findOne({ identity: identity.toLowerCase(), type: 'registration' });
+    if (existingOtp && (Date.now() - existingOtp.createdAt.getTime() < 60000)) {
+        return res.status(429).json({ success: false, message: 'Please wait 60 seconds before requesting a new code.' });
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    regOtpStore.set(identity, { otp, expires: Date.now() + 10 * 60 * 1000 });
+    await Otp.findOneAndUpdate({ identity: identity.toLowerCase(), type: 'registration' }, { otp, attempts: 0, createdAt: new Date() }, { upsert: true });
     await sendEmail(identity, 'Maiga Verification Code', `Your verification code is: ${otp}`);
     res.json({ success: true, message: 'Verification code sent.' });
 });
@@ -89,22 +95,30 @@ router.post('/register', [
     try {
         const { username, email, password, first_name, surname, birthday, gender, phone, otp } = req.body;
         
-        const identity = email || phone;
-        const record = regOtpStore.get(identity);
-        if (!record || record.otp !== otp || Date.now() > record.expires) {
+        const identity = (email || phone).toLowerCase();
+        const record = await Otp.findOne({ identity, type: 'registration' });
+        if (!record) {
             return res.status(400).json({ message: 'Invalid or expired verification code.' });
+        }
+
+        if (record.attempts >= 5) {
+            return res.status(429).json({ message: 'Too many failed attempts. Please request a new code.' });
+        }
+
+        if (record.otp !== otp) {
+            await Otp.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
+            return res.status(400).json({ message: 'Invalid verification code.' });
         }
 
         const existingUser = await User.findOne({ $or: [{ username }, { email }] });
         if (existingUser) return res.status(400).json({ message: 'Username or email already exists' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
         const user = new User({
-            name: `${first_name} ${surname}`,
-            username, email, password: hashedPassword, birthday, gender, phone
+            name: (first_name + ' ' + surname).trim(),
+            username, email, password, birthday, gender, phone
         });
         await user.save();
-        regOtpStore.delete(identity);
+        await Otp.deleteOne({ _id: record._id });
         res.json({ message: 'Registration successful' });
     } catch (err) {
         res.status(400).json({ message: 'Registration failed', error: err.message });
@@ -130,7 +144,6 @@ router.post('/login', async (req, res) => {
         await user.save();
         res.json({ message: 'Login successful' });
     } catch (err) {
-        console.error(err); // Log exact error to console for debugging
         res.status(500).json({ message: 'Server error' });
     }
 });
@@ -151,27 +164,60 @@ router.post('/forgot-password', async (req, res) => {
     const user = await User.findOne({ $or: [{ email: forgot_identity.toLowerCase() }, { phone: forgot_identity }] });
     if (!user) return res.status(404).json({ message: 'No account found.' });
 
+    // Check for cooldown (60 seconds)
+    const existingOtp = await Otp.findOne({ identity: forgot_identity.toLowerCase(), type: 'password_reset' });
+    if (existingOtp && (Date.now() - existingOtp.createdAt.getTime() < 60000)) {
+        return res.status(429).json({ success: false, message: 'Please wait 60 seconds before requesting a new code.' });
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    passwordResetStore.set(forgot_identity, { otp, expires: Date.now() + 10 * 60 * 1000 });
+    await Otp.findOneAndUpdate({ identity: forgot_identity.toLowerCase(), type: 'password_reset' }, { otp, attempts: 0, createdAt: new Date() }, { upsert: true });
     await sendEmail(forgot_identity, 'Password Reset', `Code: ${otp}`);
     res.json({ message: 'Reset code sent.' });
 });
 
-router.post('/verify-otp', (req, res) => {
+router.post('/verify-otp', async (req, res) => {
     const { forgot_identity, otp } = req.body;
-    const record = passwordResetStore.get(forgot_identity);
-    if (!record || record.otp !== otp) return res.status(400).json({ message: 'Invalid code.' });
+    const identity = forgot_identity.toLowerCase();
+    const record = await Otp.findOne({ identity, type: 'password_reset' });
+    
+    if (!record) return res.status(400).json({ message: 'Verification code expired.' });
+
+    if (record.attempts >= 5) {
+        return res.status(429).json({ message: 'Too many failed attempts. Please request a new code.' });
+    }
+
+    if (record.otp !== otp) {
+        await Otp.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
+        return res.status(400).json({ message: 'Invalid code.' });
+    }
+
     res.json({ message: 'Code verified.' });
 });
 
 router.post('/reset-password', async (req, res) => {
     const { forgot_identity, otp, new_password } = req.body;
-    const record = passwordResetStore.get(forgot_identity);
-    if (!record || record.otp !== otp) return res.status(400).json({ message: 'Invalid session.' });
+    const identity = forgot_identity.toLowerCase();
+    const record = await Otp.findOne({ identity, type: 'password_reset' });
+    
+    if (!record) return res.status(400).json({ message: 'Invalid session.' });
 
-    const hashedPassword = await bcrypt.hash(new_password, 10);
-    await User.findOneAndUpdate({ $or: [{ email: forgot_identity.toLowerCase() }, { phone: forgot_identity }] }, { password: hashedPassword });
-    passwordResetStore.delete(forgot_identity);
+    if (record.attempts >= 5) {
+        return res.status(429).json({ message: 'Too many failed attempts.' });
+    }
+
+    if (record.otp !== otp) {
+        await Otp.updateOne({ _id: record._id }, { $inc: { attempts: 1 } });
+        return res.status(400).json({ message: 'Invalid code.' });
+    }
+
+    const user = await User.findOne({ $or: [{ email: forgot_identity.toLowerCase() }, { phone: forgot_identity }] });
+    if (user) {
+        user.password = new_password;
+        await user.save(); // Triggers the pre-save hashing hook
+    }
+    
+    await Otp.deleteOne({ _id: record._id });
     res.json({ message: 'Password reset successfully.' });
 });
 

@@ -523,9 +523,24 @@
 
             <!-- Sticker Picker -->
             <div x-show="showStickerPicker" x-cloak @click.away="showStickerPicker = false" x-transition:enter="transition transform ease-out duration-200" x-transition:enter-start="translate-y-10 opacity-0" x-transition:leave="transition transform ease-in duration-150" x-transition:leave-end="translate-y-10 opacity-0" class="absolute bottom-20 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border dark:border-gray-700 p-4 z-[450]">
-                <div class="grid grid-cols-4 gap-4 h-48 overflow-y-auto no-scrollbar">
-                    <template x-for="sticker in stickers">
-                        <button @click="sendSticker(sticker)" class="text-4xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                <!-- Category Tabs -->
+                <div class="flex border-b dark:border-gray-700 pb-2 mb-2 space-x-4 overflow-x-auto no-scrollbar">
+                    <button @click="activeStickerCategory = 'recent'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'recent' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-clock"></i></button>
+                    <button @click="activeStickerCategory = 'smileys'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'smileys' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-face-smile"></i></button>
+                    <button @click="activeStickerCategory = 'gestures'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'gestures' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-thumbs-up"></i></button>
+                    <button @click="activeStickerCategory = 'hearts'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'hearts' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-heart"></i></button>
+                    <button @click="activeStickerCategory = 'symbols'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'symbols' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-icons"></i></button>
+                </div>
+                <div class="grid grid-cols-4 gap-4 h-48 overflow-y-auto no-scrollbar animate-fadeIn">
+                    <template x-if="activeStickerCategory === 'recent'">
+                        <template x-for="sticker in recentlyUsedStickers">
+                            <button @click="sendSticker(sticker)" class="text-4xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                        </template>
+                    </template>
+                    <template x-if="activeStickerCategory !== 'recent'">
+                        <template x-for="sticker in stickerGroups[activeStickerCategory]">
+                            <button @click="sendSticker(sticker)" class="text-4xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                        </template>
                     </template>
                 </div>
             </div>
@@ -819,6 +834,9 @@
                         <button x-show="selectedMessageForOptions.type === 'text'" @click="editMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-pen text-gray-600 w-5"></i><span>Edit</span></button>
                         <button @click="deleteMessage('everyone')" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-trash-can w-5"></i><span>Delete for Everyone</span></button>
                     </div>
+                </template>
+                <template x-if="selectedMessageForOptions?.sender !== 'me'">
+                    <button @click="reportMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-flag w-5"></i><span>Report Message</span></button>
                 </template>
                 <button @click="deleteMessage('me')" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-trash w-5"></i><span>Delete for Me</span></button>
             </div>
@@ -1394,7 +1412,23 @@
 
         <!-- Text Editor Overlay, Sticker Picker etc (Same as previously requested) -->
         <!-- (Included in previous context, ensuring full implementation below via JS) -->
-        <div x-show="showEditorStickers" @click.away="showEditorStickers = false" class="absolute bottom-0 left-0 w-full bg-gray-800 rounded-t-2xl p-4 transition-transform transform translate-y-0 z-30 max-h-60 overflow-y-auto"><div class="grid grid-cols-4 gap-4 text-4xl"><template x-for="sticker in editorStickers"><button @click="addEditorSticker(sticker); showEditorStickers = false" x-text="sticker"></button></template></div></div>
+        <div x-show="showEditorStickers" @click.away="showEditorStickers = false" class="absolute bottom-0 left-0 w-full bg-gray-800 rounded-t-2xl p-4 transition-transform transform translate-y-0 z-30 max-h-60 overflow-y-auto">
+            <div class="flex border-b border-gray-700 pb-2 mb-2 space-x-4 overflow-x-auto no-scrollbar">
+                <button @click="activeStickerCategory = 'recent'" class="p-1" :class="activeStickerCategory === 'recent' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-clock"></i></button>
+                <button @click="activeStickerCategory = 'smileys'" class="p-1" :class="activeStickerCategory === 'smileys' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-face-smile"></i></button>
+                <button @click="activeStickerCategory = 'gestures'" class="p-1" :class="activeStickerCategory === 'gestures' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-thumbs-up"></i></button>
+                <button @click="activeStickerCategory = 'hearts'" class="p-1" :class="activeStickerCategory === 'hearts' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-heart"></i></button>
+                <button @click="activeStickerCategory = 'symbols'" class="p-1" :class="activeStickerCategory === 'symbols' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-icons"></i></button>
+            </div>
+            <div class="grid grid-cols-4 gap-4 text-4xl">
+                <template x-if="activeStickerCategory === 'recent'">
+                    <template x-for="sticker in recentlyUsedStickers"><button @click="addEditorSticker(sticker); showEditorStickers = false" x-text="sticker"></button></template>
+                </template>
+                <template x-if="activeStickerCategory !== 'recent'">
+                    <template x-for="sticker in stickerGroups[activeStickerCategory]"><button @click="addEditorSticker(sticker); showEditorStickers = false" x-text="sticker"></button></template>
+                </template>
+            </div>
+        </div>
         <div x-show="isAddingEditorText" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-4 z-30" x-transition>
             <input type="text" x-model="editorText" class="bg-transparent text-white text-3xl font-black text-center border-none focus:ring-0 placeholder-gray-500 w-full mb-4" :style="`color: ${editorTextColor}; opacity: ${editorTextOpacity}; transform: rotate(${editorTextRotation}deg); font-family: ${editorTextFont}`" placeholder="Enter text..." @keyup.enter="addEditorText()">
             <div class="w-full max-w-xs space-y-4 mb-6">
@@ -2143,8 +2177,8 @@
                     <div class="relative">
                         <img @click.stop="if(notif.trigger_user_id) openUserProfile(notif.trigger_user_id)" :src="notif.avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=System'" class="w-12 h-12 parallelogram-sm shadow-sm cursor-pointer">
                         <div class="absolute -bottom-1 -right-1 w-6 h-6 parallelogram-sm flex items-center justify-center border-2 border-white dark:border-gray-900" 
-                             :class="{ 'bg-rose-500': notif.type === 'like', 'bg-blue-500': notif.type === 'follow', 'bg-green-500': notif.type === 'mention', 'bg-purple-500': notif.type === 'broadcast' }">
-                            <i class="fa-solid text-[10px] text-white" :class="{ 'fa-heart': notif.type === 'like', 'fa-user-plus': notif.type === 'follow', 'fa-at': notif.type === 'mention', 'fa-bullhorn': notif.type === 'broadcast' }"></i>
+                             :class="{ 'bg-rose-500': notif.type === 'like', 'bg-blue-500': notif.type === 'follow', 'bg-green-500': notif.type === 'mention', 'bg-purple-500': notif.type === 'broadcast', 'bg-orange-500': notif.type === 'system' }">
+                            <i class="fa-solid text-[10px] text-white" :class="{ 'fa-heart': notif.type === 'like', 'fa-user-plus': notif.type === 'follow', 'fa-at': notif.type === 'mention', 'fa-bullhorn': notif.type === 'broadcast', 'fa-triangle-exclamation': notif.type === 'system' }"></i>
                         </div>
                     </div>
                     <div class="flex-1">
@@ -2549,9 +2583,29 @@
             </div>
             <!-- Sticker Picker -->
             <div x-show="showStoryStickerPicker" x-cloak @click.away="showStoryStickerPicker = false" x-transition class="absolute bottom-16 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border dark:border-gray-700 p-4 z-10">
+                <div class="mb-3">
+                    <input type="text" x-model="stickerSearchQuery" placeholder="Search stickers..." class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl py-2 px-4 text-xs focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div class="flex border-b dark:border-gray-700 pb-2 mb-2 space-x-4 overflow-x-auto no-scrollbar">
+                    <button @click="activeStickerCategory = 'recent'" class="p-1" :class="activeStickerCategory === 'recent' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-clock"></i></button>
+                    <button @click="activeStickerCategory = 'animated'" class="p-1" :class="activeStickerCategory === 'animated' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+                    <button @click="activeStickerCategory = 'smileys'" class="p-1" :class="activeStickerCategory === 'smileys' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-face-smile"></i></button>
+                    <button @click="activeStickerCategory = 'gestures'" class="p-1" :class="activeStickerCategory === 'gestures' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-thumbs-up"></i></button>
+                    <button @click="activeStickerCategory = 'hearts'" class="p-1" :class="activeStickerCategory === 'hearts' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-heart"></i></button>
+                    <button @click="activeStickerCategory = 'symbols'" class="p-1" :class="activeStickerCategory === 'symbols' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-icons"></i></button>
+                </div>
                 <div class="grid grid-cols-6 gap-4 h-32 overflow-y-auto no-scrollbar">
-                    <template x-for="sticker in storyStickers">
-                        <button @click="addStickerToStory(sticker)" class="text-3xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                    <template x-if="activeStickerCategory === 'animated'">
+                        <template x-for="s in animatedStickers">
+                            <button @click="addAnimatedStickerToStory(s)" class="hover:scale-110 transition-transform p-1">
+                                <img :src="s.url" class="w-10 h-10 object-contain">
+                            </button>
+                        </template>
+                    </template>
+                    <template x-if="activeStickerCategory !== 'animated'">
+                        <template x-for="sticker in (stickerSearchQuery ? filteredStickers : (activeStickerCategory === 'recent' ? recentlyUsedStickers : stickerGroups[activeStickerCategory]))">
+                            <button @click="addStickerToStory(sticker)" class="text-3xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                        </template>
                     </template>
                      </div>
              </div>
@@ -2567,6 +2621,7 @@
                     </template>
                 </div>       
                 <button @click="$refs.storyMediaInput.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
+                <button @click="openCamera('story')" class="flex items-center space-x-2 text-rose-500"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
                 <button @click="showStoryStickerPicker = !showStoryStickerPicker" class="flex items-center space-x-2 text-yellow-500"><i class="fa-solid fa-face-smile text-xl"></i><span class="text-xs font-black">Stickers</span></button>
                 <input type="file" x-ref="storyMediaInput" class="hidden" accept="image/*,video/*" @change="handleStoryFileSelect">
             </div>
@@ -2597,8 +2652,10 @@
         <template x-if="selectedMedia">
             <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner">
                 <button @click="selectedMedia = null" class="absolute top-3 right-3 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center z-10 backdrop-blur-md"><i class="fa-solid fa-xmark"></i></button>
-                <button @click="openMediaEditor('post')" x-show="selectedMedia" class="absolute top-3 left-3 bg-black/50 text-white px-3 py-1.5 rounded-full backdrop-blur-sm z-10 text-xs font-bold flex items-center gap-2"> <i class="fa-solid fa-wand-magic-sparkles"></i> Edit </button>
-                <button @click="openMediaEditor('post')" class="absolute top-3 left-3 bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 z-10 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Edit</span></button>
+                <div class="absolute top-3 left-3 flex gap-2 z-10">
+                    <button @click="openMediaEditor('post')" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Edit</span></button>
+                    <button @click="shareFile()" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-download"></i> <span>Save</span></button>
+                </div>
                 <template x-if="mediaType === 'image'"><img :src="selectedMedia" class="w-full max-h-60 object-cover"></template>
                 <template x-if="mediaType === 'video'"><video :src="selectedMedia" class="w-full max-h-60" autoplay muted loop></video></template>
             </div>
@@ -2607,9 +2664,113 @@
         <div class="border-t dark:border-gray-800 py-4 flex items-center space-x-8">
             <button @click="$refs.postMedia.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
             <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia">
-            <button class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
+            <button @click="openCamera('post')" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
             <button class="text-orange-500 flex items-center space-x-2"><i class="fa-solid fa-face-smile text-xl"></i><span class="text-xs font-black">Feeling</span></button>
         </div>
+        </div>
+    </div>
+
+    <!-- Web-based Camera Interface UI -->
+    <div x-show="isCameraOpen" x-cloak class="fixed inset-0 z-[1200] bg-black flex flex-col animate-fadeIn" style="display: none;">
+        <!-- Recording Progress Bar -->
+        <div x-show="isCameraRecording" class="absolute top-0 left-0 right-0 h-1.5 bg-white/20 z-50">
+            <div class="h-full bg-red-600 transition-all duration-100 ease-linear" :style="`width: ${recordingProgress}%`"></div>
+        </div>
+
+        <!-- Visual Countdown Overlay -->
+        <div x-show="isCountdownActive" x-transition class="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none">
+            <span class="text-white text-9xl font-black drop-shadow-2xl animate-pulse" x-text="countdownValue"></span>
+        </div>
+
+        <!-- Viewport: Hidden video source and visible filtered canvas -->
+        <video x-ref="cameraFeed" class="hidden" autoplay playsinline></video>
+        <canvas x-ref="cameraCanvas" class="absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-out"
+                :style="`transform: perspective(1000px) scale(${dollyZoomScale}) translateZ(${(dollyZoomScale - 1) * 200}px)`"></canvas>
+        <audio x-ref="cameraMusicPlayer" class="hidden"></audio>
+        <video x-ref="secondaryVideo" :src="secondaryVideoUrl" class="hidden" autoplay loop muted playsinline></video>
+        <input type="file" x-ref="overlayUpload" class="hidden" accept="video/*" @change="handleOverlayUpload">
+        
+        <!-- Top Navigation -->
+        <div class="relative z-10 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
+            <button @click="closeCamera()" class="p-2 text-white bg-black/20 rounded-full backdrop-blur-md">
+                <i class="fa-solid fa-xmark text-xl"></i>
+            </button>
+            <button @click="musicPickerSource = 'camera'; showMusicPicker = true" class="flex items-center space-x-2 px-4 py-1.5 bg-black/40 text-white rounded-full backdrop-blur-md border border-white/10 text-sm font-bold transition-all" :class="cameraMusic ? 'border-blue-500' : ''" :style="`transform: scale(${1 + (micVolume/500)})`">
+                <i class="fa-solid fa-music"></i>
+                <span x-text="cameraMusic ? cameraMusic.title : 'Add Sound'"></span>
+                <div x-show="micVolume > 10" class="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping ml-1"></div>
+                <i x-show="cameraMusic" @click.stop="cameraMusic = null" class="fa-solid fa-circle-xmark ml-2 text-red-400"></i>
+            </button>
+            <!-- Right Cluster -->
+            <div class="flex flex-col space-y-4 bg-black/20 p-2 rounded-2xl backdrop-blur-md border border-white/5">
+                <!-- Double Exposure Toggle & Long-press for Upload -->
+                <div class="flex flex-col items-center space-y-1">
+                    <button @click="isDoubleExposureActive = !isDoubleExposureActive" @contextmenu.prevent="$refs.overlayUpload.click()" class="p-2 hover:scale-110 transition-transform" :class="isDoubleExposureActive ? 'text-cyan-400' : 'text-white'"><i class="fa-solid fa-clone text-xl"></i></button>
+                    <span x-show="isDoubleExposureActive" @click="$refs.overlayUpload.click()" class="text-[8px] text-cyan-400 font-bold uppercase cursor-pointer">Change</span>
+                </div>
+
+                <button @click="isGlitchActive = !isGlitchActive" class="p-2 hover:scale-110 transition-transform" :class="isGlitchActive ? 'text-red-500 animate-pulse' : 'text-white'"><i class="fa-solid fa-bolt-lightning text-xl"></i></button>
+                <button @click="voiceEffect = (voiceEffect === 'none' ? 'deep' : (voiceEffect === 'deep' ? 'chipmunk' : 'none'))" class="p-2 hover:scale-110 transition-transform" :class="voiceEffect !== 'none' ? 'text-purple-400' : 'text-white'"><i class="fa-solid fa-microphone-lines text-xl"></i></button>
+                <button @click="arFilterMode = (arFilterMode === 'mask' ? 'hat' : 'mask')" class="p-2 hover:scale-110 transition-transform" :class="arFilterMode === 'hat' ? 'text-orange-400' : 'text-blue-400'"><i class="fa-solid fa-hat-wizard text-xl"></i></button>
+                <button @click="isBackgroundRemovalActive = !isBackgroundRemovalActive; if(isBackgroundRemovalActive) initSelfieSegmentation()" class="p-2 hover:scale-110 transition-transform" :class="isBackgroundRemovalActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-user-gear text-xl"></i></button>
+                <button @click="isFaceMeshActive = !isFaceMeshActive; if(isFaceMeshActive) initFaceMesh()" class="p-2 hover:scale-110 transition-transform" :class="isFaceMeshActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-face-viewfinder text-xl"></i></button>
+                <button @click="flipCamera()" class="text-white p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-camera-rotate text-xl"></i></button>
+                <button @click="isGreenScreenActive = !isGreenScreenActive" class="p-2 hover:scale-110 transition-transform" :class="isGreenScreenActive ? 'text-green-400' : 'text-white'"><i class="fa-solid fa-person-rays text-xl"></i></button>
+                <button @click="isAutoCaptureActive = !isAutoCaptureActive" class="p-2 hover:scale-110 transition-transform" :class="isAutoCaptureActive ? 'text-yellow-400' : 'text-white'"><i class="fa-solid fa-face-laugh text-xl"></i></button>
+                <button @click="isGhostModeActive = !isGhostModeActive" class="p-2 hover:scale-110 transition-transform" :class="isGhostModeActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-ghost text-xl"></i></button>
+                <button class="text-white p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-bolt text-xl"></i></button>
+                <button @click="toggleBeautyFilter()" class="p-2 hover:scale-110 transition-transform" :class="beautyFilter !== 'none' ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-wand-magic-sparkles text-xl"></i></button>
+            </div>
+        </div>
+
+        <!-- Dolly Zoom (Vertigo) Slider -->
+        <div class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-2 z-20">
+            <span class="text-[8px] font-bold text-white uppercase vertical-text tracking-widest opacity-60">Vertigo</span>
+            <div class="h-48 w-1.5 bg-white/20 rounded-full relative overflow-hidden">
+                <input type="range" min="1" max="2" step="0.01" x-model="dollyZoomScale" class="absolute inset-0 w-48 h-1.5 origin-center -rotate-90 translate-y-24 -translate-x-[90px] bg-transparent appearance-none cursor-pointer accent-white">
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="mt-auto relative z-10 p-6 pb-10 bg-gradient-to-t from-black/80 to-transparent flex flex-col items-center">
+            <!-- Horizontal Mode Selector -->
+            <div class="flex space-x-6 mb-6 overflow-x-auto no-scrollbar snap-x px-20">
+                <template x-for="mode in ['15s', '30s', '60s', 'Photo']">
+                    <button @click="cameraMode = mode.toLowerCase()" 
+                            class="snap-center text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
+                            :class="cameraMode === mode.toLowerCase() ? 'text-white scale-110' : 'text-white/40'"
+                            x-text="mode"></button>
+                </template>
+            </div>
+
+            <div class="w-full flex justify-between items-center max-w-sm">
+                <!-- Effects Button -->
+                <button class="flex flex-col items-center space-y-1 group">
+                    <div class="w-12 h-12 rounded-xl border-2 border-white/20 bg-black/40 flex items-center justify-center backdrop-blur-md group-hover:border-white transition-colors">
+                        <i class="fa-solid fa-face-grin-stars text-white text-xl"></i>
+                    </div>
+                    <span class="text-[10px] text-white font-bold uppercase tracking-tighter">Effects</span>
+                </button>
+
+                <!-- Shutter Button -->
+                <button @click="triggerShutter()" class="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center p-1 active:scale-95 transition-all" :style="`transform: scale(${1 + (micVolume/800)})`">
+                    <div class="w-full h-full rounded-full transition-all duration-300" 
+                         :class="[cameraMode === 'photo' ? 'bg-white' : 'bg-red-600', 
+                                  isCameraRecording ? 'scale-75 rounded-lg' : 'scale-100']"
+                         :style="`opacity: ${0.8 + (micVolume/255)}`"
+                    >
+                    </div>
+                </button>
+
+                <!-- Upload Button -->
+                <button @click="$refs.postMedia.click(); closeCamera()" class="flex flex-col items-center space-y-1 group">
+                    <div class="w-12 h-12 rounded-xl border-2 border-white/20 bg-black/40 flex items-center justify-center backdrop-blur-md overflow-hidden group-hover:border-white transition-colors">
+                        <img :src="user.avatar" class="w-full h-full object-cover opacity-50 grayscale">
+                        <i class="fa-solid fa-arrow-up-from-bracket absolute text-white text-sm"></i>
+                    </div>
+                    <span class="text-[10px] text-white font-bold uppercase tracking-tighter">Upload</span>
+                </button>
+            </div>
         </div>
     </div>
     </div>

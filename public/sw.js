@@ -1,3 +1,20 @@
+const ASSETS_TO_CACHE = [
+  '/offline.html',
+  '/', // Main entry point for Maiga
+  '/index.html', 
+  '/ysu.html',
+  '/maiga.js',
+  '/alpine.js',
+  '/sw.js',
+  '/manifest-maiga.json',
+  '/manifest-ysu.json',
+  '/img/logo.png',
+  '/img/ysu-logo.jpg',
+  'https://cdn.tailwindcss.com',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+];
+
 // Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
@@ -48,7 +65,6 @@ async function sendPendingMessages() {
         delTx.objectStore(STORE_NAME).delete(msg.id);
       }
     } catch (err) {
-      console.error('[SW] Sync failed for message', msg.id, err);
     }
   }
 }
@@ -59,33 +75,15 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
-const ASSETS_TO_CACHE = [
-  OFFLINE_URL,
-  '/', // Main entry point for Maiga
-  '/index.html', // Assuming this is the main entry point for Maiga
-  '/ysu.html', // YSU login page
-  '/maiga.js',
-  '/alpine.js', // Alpine.js library
-  '/sw.js', // Cache the service worker itself for updates
-  '/manifest-maiga.json',
-  '/manifest-ysu.json',
-  '/img/logo.png',
-  '/img/ysu-logo.jpg',
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-];
 
 // 1. Install Event: Cache the offline page
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-caching offline page and essential assets');
       // Use Promise.all to ensure all assets are attempted to be cached
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
           return cache.add(new Request(url, { cache: 'reload' })).catch(err => {
-            console.warn(`[Service Worker] Failed to cache ${url}: ${err}`);
             return Promise.resolve(); // Don't fail the whole install if one asset fails
           });
         })
@@ -106,7 +104,6 @@ self.addEventListener('activate', (event) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
-              console.log('[Service Worker] Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
@@ -119,7 +116,6 @@ self.addEventListener('activate', (event) => {
 // 3. Fetch Event: Serve offline page on network failure
 // This now includes a cache-first strategy for other static assets
 self.addEventListener('fetch', (event) => {
-  console.log(`[Service Worker] Fetching: ${event.request.url}`);
   const isNavigate = event.request.mode === 'navigate';
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
                        event.request.url.startsWith('https://cdn.tailwindcss.com') ||
@@ -129,7 +125,6 @@ self.addEventListener('fetch', (event) => {
   if (isNavigate) {
     event.respondWith(
       fetch(event.request).catch(() => {
-        console.log('[Service Worker] Network failed for navigation, serving offline page.');
         return caches.open(CACHE_NAME).then((cache) => {
           return cache.match(OFFLINE_URL);
         });
@@ -139,17 +134,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(event.request).then((response) => {
         if (response) {
-          console.log(`[Service Worker] Serving from cache: ${event.request.url}`);
           return response;
         }
-        console.log(`[Service Worker] Fetching from network and caching: ${event.request.url}`);
         return fetch(event.request).then((fetchResponse) => {
           return caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, fetchResponse.clone());
             return fetchResponse;
           });
         }).catch((error) => {
-          console.error(`[Service Worker] Fetch failed for ${event.request.url}: ${error}`);
           // For non-navigate requests, if network fails and not in cache, return a generic error response
           return new Response(null, { status: 503, statusText: 'Service Unavailable' });
         });
@@ -197,9 +189,8 @@ self.addEventListener('periodicsync', (event) => {
         const response = await fetch('/api/get_posts?page=1');
         if (response.ok) {
           await cache.put('/api/get_posts?page=1', response.clone());
-          console.log('[SW] Periodic Sync: Feed refreshed');
         }
-      } catch (err) { console.error('[SW] Periodic Sync failed', err); }
+      } catch (err) { }
     }());
   }
 });
