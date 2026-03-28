@@ -44,12 +44,14 @@ mongoose.set('strictQuery', false);
 
 // --- Configuration ---
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URL; 
+const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL; 
 const SESSION_SECRET = process.env.SESSION_SECRET; 
 
 // MongoDB Connection Validation
+if (!MONGO_URI) console.error("CRITICAL ERROR: MONGO_URL (or MONGODB_URL) is not defined in environment variables.");
+if (!SESSION_SECRET) console.error("CRITICAL ERROR: SESSION_SECRET is not defined in environment variables.");
+
 if (!MONGO_URI || !SESSION_SECRET) {
-    console.error("CRITICAL ERROR: MONGO_URL or SESSION_SECRET is not defined in environment variables.");
     console.error("Please check your Railway Dashboard -> Variables tab.");
     process.exit(1);
 }
