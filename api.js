@@ -47,6 +47,12 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL; 
 const SESSION_SECRET = process.env.SESSION_SECRET; 
 
+// Robust URL handling: ensure no trailing slash on the public URL
+let R2_PUBLIC_URL = process.env.R2_PUBLIC_URL;
+if (R2_PUBLIC_URL && R2_PUBLIC_URL.endsWith('/')) {
+    R2_PUBLIC_URL = R2_PUBLIC_URL.slice(0, -1);
+}
+
 // --- Startup Environment Validation ---
 const requiredEnvVars = [
     { name: 'MONGO_URL', value: MONGO_URI },
@@ -55,7 +61,7 @@ const requiredEnvVars = [
     { name: 'R2_SECRET_ACCESS_KEY', value: process.env.R2_SECRET_ACCESS_KEY },
     { name: 'R2_BUCKET_NAME', value: process.env.R2_BUCKET_NAME },
     { name: 'R2_S3_API_URL', value: process.env.R2_S3_API_URL },
-    { name: 'R2_PUBLIC_URL', value: process.env.R2_PUBLIC_URL }
+    { name: 'R2_PUBLIC_URL', value: R2_PUBLIC_URL }
 ];
 
 const missingVars = requiredEnvVars.filter(v => !v.value);
@@ -78,7 +84,12 @@ app.use((req, res, next) => {
 });
 
 // Session Setup
-const mongoConnection = mongoose.connect(MONGO_URI);
+const mongoConnection = mongoose.connect(MONGO_URI, {
+    // Prevent the app from hanging forever if DB is down
+    serverSelectionTimeoutMS: 5000, 
+    connectTimeoutMS: 10000,
+});
+
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
@@ -95,6 +106,11 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
+
+// --- Global Error Handling for Crash Loops ---
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 // MongoDB Connection
 mongoConnection
@@ -121,15 +137,15 @@ mongoConnection
         } catch (streamErr) {
             console.warn("Change Streams not supported on this DB deployment. Read receipts will not be real-time.");
         }
-
-        server.listen(PORT, () => {
-            console.log(`Server is running on port ${PORT}`);
-        });
     })
     .catch(err => {
         console.error("MongoDB connection error:", err);
-        process.exit(1); 
     });
+
+// Start listening immediately so Railway's health check passes
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});
 
 // --- Routes ---
 app.use('/api', authRoutes);

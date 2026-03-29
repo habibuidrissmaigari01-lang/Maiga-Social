@@ -26,6 +26,9 @@ if (publicVapidKey && privateVapidKey) {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Robust URL handling: ensure the base URL has no trailing slash
+const BASE_PUBLIC_URL = process.env.R2_PUBLIC_URL?.replace(/\/+$/, '');
+
 const uploadToR2 = async (file, folder) => {
     const key = `${folder}/${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
     await s3Client.send(new PutObjectCommand({
@@ -34,7 +37,7 @@ const uploadToR2 = async (file, folder) => {
         Body: file.buffer,
         ContentType: file.mimetype,
     }));
-    return `${process.env.R2_PUBLIC_URL}/${key}`;
+    return `${BASE_PUBLIC_URL}/${key}`;
 };
 
 // Helper
