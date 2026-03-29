@@ -47,16 +47,27 @@ const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL; 
 const SESSION_SECRET = process.env.SESSION_SECRET; 
 
-// MongoDB Connection Validation
-if (!MONGO_URI) console.error("CRITICAL ERROR: MONGO_URL (or MONGODB_URL) is not defined in environment variables.");
-if (!SESSION_SECRET) console.error("CRITICAL ERROR: SESSION_SECRET is not defined in environment variables.");
+// --- Startup Environment Validation ---
+const requiredEnvVars = [
+    { name: 'MONGO_URL', value: MONGO_URI },
+    { name: 'SESSION_SECRET', value: SESSION_SECRET },
+    { name: 'R2_ACCESS_KEY_ID', value: process.env.R2_ACCESS_KEY_ID },
+    { name: 'R2_SECRET_ACCESS_KEY', value: process.env.R2_SECRET_ACCESS_KEY },
+    { name: 'R2_BUCKET_NAME', value: process.env.R2_BUCKET_NAME },
+    { name: 'R2_S3_API_URL', value: process.env.R2_S3_API_URL },
+    { name: 'R2_PUBLIC_URL', value: process.env.R2_PUBLIC_URL }
+];
 
-if (!MONGO_URI || !SESSION_SECRET) {
-    console.error("Please check your Railway Dashboard -> Variables tab.");
+const missingVars = requiredEnvVars.filter(v => !v.value);
+
+if (missingVars.length > 0) {
+    missingVars.forEach(v => console.error(`CRITICAL ERROR: ${v.name} is not defined in environment variables.`));
+    console.error("Please check your Railway Dashboard -> Variables tab and ensure all Database and R2 keys are present.");
     process.exit(1);
 }
 
 // --- Middleware ---
+app.set('trust proxy', 1); // Required for secure cookies on Railway
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -110,6 +121,10 @@ mongoConnection
         } catch (streamErr) {
             console.warn("Change Streams not supported on this DB deployment. Read receipts will not be real-time.");
         }
+
+        server.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
     })
     .catch(err => {
         console.error("MongoDB connection error:", err);
@@ -213,9 +228,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Fallback for root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-server.listen(PORT, () => {
 });
 
 // --- Generic Error Handling ---
