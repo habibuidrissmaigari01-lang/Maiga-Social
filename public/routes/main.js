@@ -57,8 +57,26 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
         const { name, username, bio, dept } = req.body;
         const updates = { name, username, bio, dept };
         
-        if (req.file) updates.avatar = await uploadToR2(req.file, 'avatars');
-        
+        if (req.file) {
+            const user = await User.findById(req.session.userId);
+            
+            // If current avatar is an R2 URL (starts with http), delete the old file
+            if (user && user.avatar && user.avatar.startsWith('http')) {
+                try {
+                    const oldUrl = new URL(user.avatar);
+                    const oldKey = oldUrl.pathname.startsWith('/') ? oldUrl.pathname.substring(1) : oldUrl.pathname;
+                    
+                    await s3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_BUCKET_NAME,
+                        Key: oldKey
+                    }));
+                } catch (cleanupErr) {
+                    console.error("Old avatar cleanup failed:", cleanupErr.message);
+                }
+            }
+            updates.avatar = await uploadToR2(req.file, 'avatars');
+        }
+
         await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
         res.json({ success: true });
     } catch (error) {
@@ -538,15 +556,6 @@ router.post('/delete_story', isAuthenticated, async (req, res) => {
         const { story_id } = req.body;
         const story = await Story.findOne({ _id: story_id, user: req.session.userId });
         if (!story) return res.status(404).json({ error: 'Story not found' });
-
-        // Extract R2 Key from the media URL (e.g., "stories/timestamp-file.jpg")
-        const url = new URL(story.media);
-        const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-
-        await s3Client.send(new DeleteObjectCommand({
-            Bucket: process.env.R2_BUCKET_NAME,
-            Key: key
-        }));
 
         await Story.deleteOne({ _id: story_id });
         res.json({ success: true });

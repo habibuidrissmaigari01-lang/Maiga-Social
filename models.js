@@ -194,6 +194,25 @@ messageSchema.virtual('read_count').get(function() {
     return this.read_by ? this.read_by.length : 0;
 });
 
+// --- Mongoose 8 Hook: Automated Message R2 Cleanup ---
+messageSchema.pre('deleteOne', { document: false, query: true }, async function() {
+    const doc = await this.model.findOne(this.getQuery());
+    if (doc && doc.media && doc.media.startsWith('http')) {
+        try {
+            // Extract key from URL
+            const url = new URL(doc.media);
+            const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+            
+            await s3Client.send(new DeleteObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: key
+            }));
+        } catch (error) {
+            // Cleanup failed
+        }
+    }
+});
+
 // --- Real-time Group Message Broadcast Hook ---
 messageSchema.post('save', async function(doc) {
     if (!ioInstance) return;
@@ -241,6 +260,25 @@ const storySchema = new mongoose.Schema({
     has_music: { type: Boolean, default: false },
     music_track: String
 }, schemaOptions);
+
+// --- Mongoose 8 Hook: Automated Story R2 Cleanup ---
+storySchema.pre('deleteOne', { document: false, query: true }, async function() {
+    const doc = await this.model.findOne(this.getQuery());
+    if (doc && doc.media && doc.media.startsWith('http')) {
+        try {
+            // Extract key from URL
+            const url = new URL(doc.media);
+            const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+            
+            await s3Client.send(new DeleteObjectCommand({
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: key
+            }));
+        } catch (error) {
+            console.error("Story media cleanup failed:", error.message);
+        }
+    }
+});
 
 const baseNotificationSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

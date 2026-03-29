@@ -18,7 +18,7 @@ const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Comment, Group, setIo, s3Client } = require('./models'); 
+const { User, Message, Post, Comment, Group, Story, setIo, s3Client } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -119,10 +119,65 @@ mongoose.connection.on('error', (err) => console.error('DATABASE: Mongoose conne
 mongoose.connection.on('disconnected', () => console.warn('DATABASE: Mongoose disconnected! ❌'));
 mongoose.connection.on('reconnected', () => console.log('DATABASE: Mongoose reconnected! 🔄'));
 
+// --- Background Tasks ---
+const cleanupExpiredStories = async () => {
+    try {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        // Find stories created more than 24 hours ago
+        const expiredStories = await Story.find({ createdAt: { $lt: yesterday } });
+        
+        if (expiredStories.length > 0) {
+            for (const story of expiredStories) {
+                // Calling deleteOne on the query triggers the hook in models.js for R2 cleanup
+                await Story.deleteOne({ _id: story._id });
+            }
+            console.log(`CLEANUP: Automatically removed ${expiredStories.length} expired stories and their R2 assets. 🧹`);
+        }
+    } catch (err) {
+        console.error("Story cleanup task failed:", err);
+    }
+};
+
+const cleanupExpiredMessages = async () => {
+    try {
+        // Calculate 30 days ago
+        const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const expiredMessages = await Message.find({ createdAt: { $lt: oneMonthAgo } });
+        
+        if (expiredMessages.length > 0) {
+            for (const msg of expiredMessages) {
+                // Triggers the 'deleteOne' hook in models.js for R2 media removal
+                await Message.deleteOne({ _id: msg._id });
+            }
+            console.log(`CLEANUP: Automatically removed ${expiredMessages.length} expired messages (>30 days). 🧹`);
+        }
+    } catch (err) {
+        console.error("Message cleanup task failed:", err);
+    }
+};
+
+const cleanupExpiredPosts = async () => {
+    try {
+        const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // 1 year ago
+        const expiredPosts = await Post.find({ createdAt: { $lt: oneYearAgo } });
+
+        if (expiredPosts.length > 0) {
+            for (const post of expiredPosts) {
+                // Calling deleteOne on the query triggers the hook in models.js for R2 cleanup
+                await Post.deleteOne({ _id: post._id });
+            }
+            console.log(`CLEANUP: Automatically removed ${expiredPosts.length} expired posts (>1 year). 🧹`);
+        }
+    } catch (err) {
+        console.error("Post cleanup task failed:", err);
+    }
+};
+
 // MongoDB Connection
 mongoConnection
     .then(() => {
         console.log("DATABASE: Successfully connected to MongoDB ✅");
+        
         // --- Mongoose 8 Change Stream: Read Receipts ---
         try {
         const messageChangeStream = Message.watch([], { fullDocument: 'updateLookup' });
@@ -144,6 +199,16 @@ mongoConnection
         } catch (streamErr) {
             console.warn("Change Streams not supported on this DB deployment. Read receipts will not be real-time.");
         }
+
+        // Run cleanups immediately on start, then every 60 minutes
+        const runAllCleanups = () => {
+            cleanupExpiredStories();
+            cleanupExpiredMessages();
+            cleanupExpiredPosts(); // Add this line
+        };
+        
+        runAllCleanups();
+        setInterval(runAllCleanups, 60 * 60 * 1000);
     })
     .catch(err => {
         console.error("MongoDB connection error:", err);
