@@ -104,6 +104,10 @@ const initMaiga = () => {
         editorType: null,
         editorOverlays: [],
         editorFilter: 'none',
+        mostActiveUsers: [], // New state for most active users
+        storyOverlays: [],
+        editorStickers: [],
+        storyStickers: [],
         editorMusic: null,
         stickerGroups: {
             smileys: ['😀','😃','😄','😁','😆','🥹','😅','😂','🤣','🥲','☺️','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥸','🤩','🥳','🙂‍↕️','😏','😒','🙂‍↔️','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤','😠','😡','🤬','🤯','😳','🥵','🥶','😶‍🌫️','😱','😨','😰','😥','😓','🤗','🤔','🫣','🤭','🫢','🫡','🤫','🫠','🤥','😶','🫥','😐','🫤','😑','🫨','😬','🙄','😯','😦','😧','😮','😲','🥱','🫩','😴','🤤','😪','😮‍💨','😵','😵‍💫','🤐','🥴','🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👻','💀','☠️'],
@@ -145,6 +149,7 @@ const initMaiga = () => {
         editorHistory: [],
         editorHistoryIndex: -1,
         showEditorStickers: false,
+        isAddingStoryText: false,
         isAddingEditorText: false,
         editorText: '',
         editorTextColor: '#ffffff',
@@ -943,6 +948,11 @@ const initMaiga = () => {
         editingMessageId: null,
         isSearchingChat: false,
         chatSearchQuery: '',
+        clearChatSearch() {
+            this.chatSearchQuery = '';
+            this.isSearchingChat = false;
+            // Watcher will automatically trigger fetchMessages
+        },
         createPostOffset: { x: 0, y: 0 },
         createPostStart: { x: 0, y: 0 },
         isCreatePostDragging: false,
@@ -1472,6 +1482,11 @@ const initMaiga = () => {
                 localStorage.setItem('darkMode', value);
             });
 
+            // Watch for chat search queries to filter messages
+            this.$watch('chatSearchQuery', (val) => {
+                if (this.activeChat) this.fetchMessages(this.activeChat, false);
+            });
+
             // Re-join room if user data loads after socket connects
             this.$watch('user.id', (newId) => {
                 if (newId && this.socket && this.socket.connected) this.socket.emit('join_room', newId);
@@ -1537,9 +1552,11 @@ const initMaiga = () => {
             });
 
             // Fetch Reports (for in-app admin view)
-            this.apiFetch('/api/admin/get_reports').then(data => {
-                if (Array.isArray(data)) this.reports = data;
-            });
+            if (this.user.is_admin) { // Only fetch if user is admin
+                this.apiFetch('/api/admin/get_reports').then(data => {
+                    if (Array.isArray(data)) this.reports = data;
+                });
+            }
 
             // Fetch Blocked Users
             this.apiFetch('/api/get_blocked_users')
@@ -1586,6 +1603,9 @@ const initMaiga = () => {
                 // Fetch suggestions after main load
                 this.apiFetch('/api/friends/suggestions').then(data => {
                     this.friends = Array.isArray(data) ? data : [];
+                });
+                this.apiFetch('/api/get_most_active_users').then(data => {
+                    this.mostActiveUsers = Array.isArray(data) ? data : [];
                 });
             });
 
@@ -1758,13 +1778,20 @@ const initMaiga = () => {
             this.apiFetch(`/api/get_profile?user_id=${userId}`)
                 .then(data => {
                     if (data && !data.error && data.id) {
-                        this.viewingUser = data;
-                        this.viewingUser.posts = []; // initialize posts array
-                        // Now fetch their posts
-                        this.apiFetch(`/api/get_posts?user_id=${userId}`)
-                            .then(postsData => {
-                                if (postsData) this.viewingUser.posts = postsData;
-                            });
+                        this.viewingUser = { ...data,
+                            profilePostsPage: 1,
+                            profilePostsLimit: 10,
+                            isLoadingMoreProfilePosts: false }; // Initialize pagination state
+                        // Use posts from profile data if provided, else fallback to fetch
+                        if (data.posts) {
+                            this.viewingUser.posts = data.posts;
+                        } else {
+                            this.viewingUser.posts = [];
+                            this.apiFetch(`/api/get_posts?user_id=${userId}`)
+                                .then(postsData => {
+                                    if (postsData) this.viewingUser.posts = postsData;
+                                }); // This fallback is now less critical as get_profile returns posts
+                        }
                         // Fetch their reels
                         this.apiFetch(`/api/get_reels?user_id=${userId}`)
                             .then(reelsData => {
@@ -1779,6 +1806,29 @@ const initMaiga = () => {
                     this.showUserProfile = false;
                     this.showToast('Error', 'Network error loading profile.', 'error');
                 });
+        },
+        async loadMoreProfilePosts() {
+            if (!this.viewingUser || this.viewingUser.isLoadingMoreProfilePosts || !this.viewingUser.hasMorePosts) {
+                return;
+            }
+
+            this.viewingUser.isLoadingMoreProfilePosts = true;
+            this.viewingUser.profilePostsPage++;
+
+            const data = await this.apiFetch(`/api/get_profile?user_id=${this.viewingUser.id}&page=${this.viewingUser.profilePostsPage}&limit=${this.viewingUser.profilePostsLimit}`);
+            
+            if (data && !data.error && data.id) {
+                if (Array.isArray(data.posts) && data.posts.length > 0) {
+                    this.viewingUser.posts = [...this.viewingUser.posts, ...data.posts];
+                }
+                this.viewingUser.hasMorePosts = data.hasMorePosts;
+            } else {
+                // Revert page number if fetch fails
+                this.viewingUser.profilePostsPage--;
+                this.showToast('Error', 'Failed to load more posts.', 'error');
+            }
+
+            this.viewingUser.isLoadingMoreProfilePosts = false;
         },
         updateLastSeen() {
             if (this.socket && this.socket.connected) {
@@ -5270,7 +5320,6 @@ const initMaiga = () => {
 
             // Register Service Worker if not already done
             try {
-                await navigator.serviceWorker.register('/sw.js');
                 const appType = this.user.account_type || 'maiga';
                 await navigator.serviceWorker.register(`/sw.js?app=${appType}`);
                 const registration = await navigator.serviceWorker.ready;

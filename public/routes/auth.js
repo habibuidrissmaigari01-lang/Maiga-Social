@@ -159,8 +159,12 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/check_username', async (req, res) => {
-    const user = await User.findOne({ username: req.query.username });
-    res.json({ available: !user });
+    try {
+        const user = await User.findOne({ username: req.query.username });
+        res.json({ available: !user });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Database check failed' });
+    }
 });
 
 router.get('/logout', (req, res) => {

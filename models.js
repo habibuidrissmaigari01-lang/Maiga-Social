@@ -1,11 +1,19 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Variable to hold the Socket.io instance for real-time broadcasts
 let ioInstance;
-// Variable to hold the S3 client for automated cleanup
-let s3ClientInstance;
+
+// Cloudflare R2 Configuration (Centralized)
+const s3Client = new S3Client({
+    region: 'auto',
+    endpoint: process.env.R2_S3_API_URL,
+    credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+});
 
 // --- Mongoose 8 Global Plugin ---
 // This ensures that validation runs on all update operations by default.
@@ -48,6 +56,14 @@ const userSchema = new mongoose.Schema({
     }],
     blocked_users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     is_admin: { type: Boolean, default: false },
+    muted_chats: [{
+        chat_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+        chat_type: { type: String, enum: ['user', 'group'], required: true }
+    }],
+    pinned_chats: [{
+        chat_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+        chat_type: { type: String, enum: ['user', 'group'], required: true }
+    }],
     is_verified: { type: Boolean, default: false },
     blocked: { type: Boolean, default: false },
     banned_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -97,13 +113,13 @@ const postSchema = new mongoose.Schema({
 // Intercepts deleteOne operations to remove media from Cloudflare R2
 postSchema.pre('deleteOne', { document: false, query: true }, async function() {
     const doc = await this.model.findOne(this.getQuery());
-    if (doc && doc.media && doc.media.startsWith('http') && s3ClientInstance) {
+    if (doc && doc.media && doc.media.startsWith('http')) {
         try {
             // Extract key from URL (e.g., "posts/12345-image.jpg")
             const url = new URL(doc.media);
             const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
             
-            await s3ClientInstance.send(new DeleteObjectCommand({
+            await s3Client.send(new DeleteObjectCommand({
                 Bucket: process.env.R2_BUCKET_NAME,
                 Key: key
             }));
@@ -306,11 +322,10 @@ const models = {
     Report: mongoose.model('Report', reportSchema),
     Bookmark: mongoose.model('Bookmark', bookmarkSchema),
     Otp: mongoose.model('Otp', otpSchema),
+    s3Client // Export the client to remove duplication in other files
 };
 
 // Inject the Socket.io instance from api.js
 models.setIo = (io) => { ioInstance = io; };
-// Inject the S3 client instance from api.js
-models.setS3 = (s3) => { s3ClientInstance = s3; };
 
 module.exports = models;

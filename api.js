@@ -18,23 +18,12 @@ const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Comment, Group, setIo, setS3 } = require('./models'); 
+const { User, Message, Post, Comment, Group, setIo, s3Client } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 setIo(io); // Connect Socket.io to Mongoose middleware
-
-// Cloudflare R2 Configuration
-const s3Client = new S3Client({
-    region: 'auto',
-    endpoint: process.env.R2_S3_API_URL,
-    credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    },
-});
-setS3(s3Client); // Inject S3 client into models for hooks
 
 const upload = multer({ storage: multer.memoryStorage() });
 

@@ -261,7 +261,7 @@
                 <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Group</button>
                 <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Forum</button>
                 <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
-                <button x-show="user.isAdmin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Reports</button>
+                <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Reports</button>
             </div>
             <div class="flex-1 overflow-y-auto">
                 <!-- All Chats -->
@@ -435,7 +435,12 @@
             <div x-show="isSearchingChat" x-transition class="px-4 py-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b dark:border-gray-800">
                 <div class="relative"> 
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-                    <input type="text" x-model="chatSearchQuery" @input.debounce.500ms="fetchMessages(activeChat)" placeholder="Search in conversation..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-2 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500">
+                    <input type="text" x-model="chatSearchQuery" @input.debounce.500ms="fetchMessages(activeChat)" placeholder="Search in conversation..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-2 pl-9 pr-10 text-sm focus:ring-1 focus:ring-blue-500">
+                    
+                    <!-- Clear Search Button -->
+                    <button x-show="chatSearchQuery" @click="clearChatSearch()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors">
+                        <i class="fa-solid fa-times-circle"></i>
+                    </button>
                 </div>
             </div>
 
@@ -922,7 +927,7 @@
                     <template x-if="viewingPost?.mediaType === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto"></video></template>
                 </div>
             </template>
-            <template x-if="user.isAdmin && viewingPost?.author !== user.name">
+            <template x-if="user.is_admin && viewingPost?.author !== user.name">
                 <button @click.stop="deletePost(viewingPost.id); viewingPost = null" class="w-full text-center py-3 bg-red-500/20 text-red-500 rounded-xl font-bold mb-4">Delete Post</button>
             </template>
             <div class="flex justify-between items-center text-gray-400 px-2">
@@ -2089,10 +2094,31 @@
                     <div class="flex-shrink-0 bg-gradient-to-br from-blue-600 to-purple-700 text-white p-3 parallelogram min-w-[130px] relative overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-md">
                         <div class="absolute top-0 right-0 p-2 opacity-20"><i class="fa-solid fa-arrow-trend-up text-3xl"></i></div>
                         <div x-show="trend.isLive" class="absolute top-2 right-2 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded animate-pulse shadow-sm">LIVE</div>
-                        <p class="text-xs font-bold opacity-80" x-text="trend.category"></p>
+                        <p class="text-xs font-bold opacity-80" x-text="trend.category || 'Trending'"></p>
                         <p class="font-black text-sm mt-1" x-text="'#' + trend.tag"></p>
-                        <p class="text-[10px] mt-2 font-medium" x-text="trend.posts + ' posts'"></p>
+                        <p class="text-[10px] mt-2 font-medium" x-text="trend.count + ' posts'"></p>
                     </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Most Active Users Section -->
+        <div>
+            <h3 class="font-black text-lg mb-3">Most Active Users</h3>
+            <div class="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
+                <template x-for="activeUser in mostActiveUsers" :key="activeUser.id">
+                    <div @click="openUserProfile(activeUser.id)" class="flex-shrink-0 bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border dark:border-gray-700 flex flex-col items-center justify-center min-w-[120px] cursor-pointer hover:border-blue-500 transition-all">
+                        <img :src="activeUser.avatar" class="w-16 h-16 rounded-full object-cover mb-2">
+                        <p class="font-bold text-sm truncate w-full text-center" x-text="activeUser.name"></p>
+                        <p class="text-xs text-gray-500" x-text="'@' + activeUser.username"></p>
+                        <div class="mt-2 flex items-center space-x-1 text-xs text-gray-600 dark:text-gray-400">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            <span x-text="activeUser.post_count + ' posts'"></span>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="mostActiveUsers.length === 0">
+                    <div class="text-center text-gray-500 text-xs p-4">No active users found recently.</div>
                 </template>
             </div>
         </div>
@@ -2840,11 +2866,24 @@
                                 <span class="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-black uppercase shadow-lg shadow-blue-500/30">Official Admin</span>
                             </div>
                         </div>
-                        
-                        <div class="w-full px-4 mt-4 border-t dark:border-gray-800 pt-4">
+
+                        <div class="w-full px-4 mt-4 border-t dark:border-gray-800 pt-4"
+                             @scroll.passive="if ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 100) loadMoreProfilePosts()"
+                             x-ref="profilePostsContainer"
+                        >
                             <h4 class="font-bold text-sm mb-3 text-gray-500">Posts</h4>
-                            <div class="grid grid-cols-3 gap-1"><template x-for="post in viewingUser?.posts" :key="post.id"><div @click="viewingPost = post; showUserProfile = false" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer"><template x-if="post.media"><img :src="post.media" class="w-full h-full object-cover"></template><template x-if="!post.media"><div class="w-full h-full flex items-center justify-center p-2 text-[8px] text-center" x-text="post.content"></div></template></div></template></div>
+                            <div class="grid grid-cols-3 gap-1">
+                                <template x-for="post in viewingUser?.posts" :key="post.id"><div @click="viewingPost = post; showUserProfile = false" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer"><template x-if="post.media"><img :src="post.media" class="w-full h-full object-cover"></template><template x-if="!post.media"><div class="w-full h-full flex items-center justify-center p-2 text-[8px] text-center" x-text="post.content"></div></template></div></template>
+                            </div>
                             <template x-if="!viewingUser?.posts || viewingUser?.posts.length === 0"><p class="col-span-3 text-center text-xs text-gray-500 py-8">This user has no posts.</p></template>
+                            <template x-if="viewingUser?.hasMorePosts">
+                                <div class="col-span-3 text-center py-4">
+                                    <button @click="loadMoreProfilePosts()" :disabled="viewingUser.isLoadingMoreProfilePosts" class="text-blue-600 font-bold text-sm">
+                                        <template x-if="viewingUser.isLoadingMoreProfilePosts"><i class="fa-solid fa-spinner fa-spin mr-2"></i></template>
+                                        Load More
+                                    </button>
+                                </div>
+                            </template>
                         </div>
                     </div>
                 </div>

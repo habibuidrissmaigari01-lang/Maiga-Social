@@ -39,9 +39,12 @@ export default {
             console.log(`Proxying request to: ${target}`);
 
             try {
+                const headers = new Headers(request.headers);
+                headers.delete('Host'); // Ensure Railway ingress doesn't reject the request
+
                 const backendRequest = new Request(target, {
                     method: request.method,
-                    headers: new Headers(request.headers),
+                    headers: headers,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
                     redirect: 'manual' // Let the browser handle redirects
                 });

@@ -3,19 +3,9 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const webpush = require('web-push');
-const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
-const { User, Post, Message, Group, Call, Story, Report, Notification } = require('../../models');
-
-// Cloudflare R2 Configuration
-const s3Client = new S3Client({
-    region: 'auto',
-    endpoint: process.env.R2_S3_API_URL,
-    credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-    },
-});
+const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, s3Client } = require('../../models');
 
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
@@ -76,14 +66,15 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
     const skip = (page - 1) * limit;
+    const query = req.query.user_id ? { user: req.query.user_id } : {};
     
     // Populate 'user' and include fields needed for the 'full_name' virtual
-    const posts = await Post.find({})
+    const posts = await Post.find(query)
         .populate('user', 'name first_name surname avatar is_verified')
         .sort({ createdAt: -1 }).skip(skip).limit(limit);
     
     res.json(posts.map(p => ({
-        id: p._id, user_id: p.user._id, author: p.user.full_name, avatar: p.user.avatar,
+        id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
         content: p.content, media: p.media, media_type: p.media_type,
         time: formatTime(p.createdAt), likes: p.likes.length,
         saved: p.saved_by.includes(req.session.userId),
@@ -178,7 +169,12 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
         const user = await User.findById(req.query.user_id)
             .select('-push_subscription -public_key');
         if (!user) return res.status(404).json({ error: 'User not found' });
-        
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const posts = await Post.find({ user: user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
+
         res.json({
             id: user._id,
             name: user.full_name,
@@ -189,11 +185,52 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
             online: user.online,
             is_admin: user.is_admin,
             followers_count: user.followers.length,
-            following_count: user.following.length
+            following_count: user.following.length,
+            posts: posts.slice(0, limit).map(p => ({
+                id: p._id,
+                content: p.content,
+                media: p.media,
+                media_type: p.media_type,
+                time: formatTime(p.createdAt),
+                likes: p.likes.length,
+                author: user.full_name, // Redundant but useful for frontend consistency
+                avatar: user.avatar // Redundant but useful for frontend consistency
+            })),
+            hasMorePosts: posts.length > limit
         });
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
+});
+
+router.get('/get_most_active_users', isAuthenticated, async (req, res) => {
+    try {
+        const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
+
+        const activeUsers = await Post.aggregate([
+            { $match: { createdAt: { $gte: lastMonth } } },
+            { $group: { _id: '$user', post_count: { $sum: 1 } } },
+            { $sort: { post_count: -1 } },
+            { $limit: 10 },
+            {
+                $lookup: {
+                    from: 'users', // The collection name for User model
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'user_details'
+                }
+            },
+            { $unwind: '$user_details' },
+            { $project: {
+                id: '$user_details._id',
+                name: '$user_details.name',
+                username: '$user_details.username',
+                avatar: '$user_details.avatar',
+                post_count: 1
+            }}
+        ]);
+        res.json(activeUsers);
+    } catch (error) { res.status(500).json({ error: 'Failed to fetch most active users' }); }
 });
 
 router.get('/get_messages', isAuthenticated, async (req, res) => {
@@ -205,11 +242,18 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
         deleted_for: { $ne: userId }
     };
     
+    // Add content search filter if query is provided
+    if (req.query.search) {
+        query.content = { $regex: req.query.search, $options: 'i' };
+    }
+
     const messages = await Message.find(query).sort({ created_at: 1 }).populate('sender', 'name first_name surname avatar');
     res.json(messages.map(m => ({
         id: m._id, sender_id: m.sender._id, content: m.content,
         media: m.media, media_type: m.media_type, created_at: m.created_at,
-        is_read: m.is_read, first_name: m.sender.name.split(' ')[0], avatar: m.sender.avatar
+        is_read: m.is_read, avatar: m.sender.avatar,
+        first_name: m.sender.first_name || m.sender.name?.split(' ')[0] || 'User',
+        surname: m.sender.surname || ''
     })));
 });
 
@@ -905,6 +949,131 @@ router.get('/admin/search_blocked_users', isAuthenticated, async (req, res) => {
         })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to search blocked users' });
+    }
+});
+
+router.get('/get_trending', isAuthenticated, async (req, res) => {
+    try {
+        // Aggregate hashtags from posts created in the last 7 days
+        const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const posts = await Post.find({ 
+            createdAt: { $gte: lastWeek },
+            content: { $regex: /#/ } 
+        }, 'content');
+
+        const counts = {};
+        posts.forEach(p => {
+            const tags = p.content.match(/#\w+/g);
+            if (tags) {
+                tags.forEach(t => {
+                    counts[t] = (counts[t] || 0) + 1;
+                });
+            }
+        });
+
+        const trending = Object.entries(counts)
+            .map(([tag, count]) => ({ tag: tag.replace('#', ''), count, category: 'Trending' }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+
+        res.json(trending);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch trending' });
+    }
+});
+
+router.get('/get_forum_topics', isAuthenticated, async (req, res) => {
+    // Placeholder topics for the community forum
+    res.json([
+        { id: 1, title: 'General Discussion', description: 'Talk about anything!', posts: 120 },
+        { id: 2, title: 'Campus News', description: 'Latest updates from YSU.', posts: 45 },
+        { id: 3, title: 'Marketplace', description: 'Buy and sell items.', posts: 89 }
+    ]);
+});
+
+router.get('/get_muted_chats', isAuthenticated, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        const mutedList = [];
+
+        for (const item of user.muted_chats) {
+            if (item.chat_type === 'group') {
+                const group = await Group.findById(item.chat_id);
+                if (group) mutedList.push({ id: group._id, name: group.name, avatar: group.avatar, type: 'group', lastMsg: 'Group chat muted' });
+            } else {
+                const otherUser = await User.findById(item.chat_id);
+                if (otherUser) mutedList.push({ id: otherUser._id, name: otherUser.name, avatar: otherUser.avatar, type: 'user', lastMsg: 'Chat muted' });
+            }
+        }
+        res.json(mutedList);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch muted chats' });
+    }
+});
+
+router.post('/toggle_mute', isAuthenticated, async (req, res) => {
+    try {
+        const { chat_id, type } = req.body;
+        const userId = req.session.userId;
+        const user = await User.findById(userId);
+        
+        const index = user.muted_chats.findIndex(c => c.chat_id.toString() === chat_id && c.chat_type === type);
+        let muted = false;
+
+        if (index === -1) {
+            user.muted_chats.push({ chat_id, chat_type: type });
+            muted = true;
+        } else {
+            user.muted_chats.splice(index, 1);
+        }
+
+        await user.save();
+        res.json({ success: true, muted });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle mute status' });
+    }
+});
+
+router.get('/get_pinned_chats', isAuthenticated, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        const pinnedList = [];
+
+        for (const item of user.pinned_chats) {
+            if (item.chat_type === 'group') {
+                const group = await Group.findById(item.chat_id);
+                if (group) pinnedList.push({ id: group._id, name: group.name, avatar: group.avatar, type: 'group', lastMsg: 'Group chat pinned' });
+            } else {
+                const otherUser = await User.findById(item.chat_id);
+                if (otherUser) pinnedList.push({ id: otherUser._id, name: otherUser.name, avatar: otherUser.avatar, type: 'user', lastMsg: 'Chat pinned' });
+            }
+        }
+        res.json(pinnedList);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch pinned chats' });
+    }
+});
+
+router.post('/toggle_pin_chat', isAuthenticated, async (req, res) => {
+    try {
+        const { chat_id, type } = req.body;
+        const userId = req.session.userId;
+        const user = await User.findById(userId);
+        
+        const index = user.pinned_chats.findIndex(c => c.chat_id.toString() === chat_id && c.chat_type === type);
+        let pinned = false;
+
+        if (index === -1) {
+            user.pinned_chats.push({ chat_id, chat_type: type });
+            pinned = true;
+        } else {
+            user.pinned_chats.splice(index, 1);
+        }
+
+        await user.save();
+        res.json({ success: true, pinned });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle pin status' });
     }
 });
 
