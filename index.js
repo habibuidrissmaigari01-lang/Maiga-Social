@@ -2,6 +2,13 @@
 
 export default {
     async fetch(request, env, ctx) {
+        const jsonError = (message, status = 502) => {
+            return new Response(JSON.stringify({ error: message, success: false }), {
+                status,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        };
+
         const url = new URL(request.url);
         let path = url.pathname;
 
@@ -12,27 +19,36 @@ export default {
         
         // Handle WebSocket Proxying and Socket.io long-polling
         if (path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket') {
-            if (env.BACKEND_URL) {
-                // Clean the URL to prevent double slashes
-                const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
-                const socketRequest = new Request(target, request);
-                return fetch(socketRequest);
+            if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
+
+            const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+            try {
+                return await fetch(new Request(target, request));
+            } catch (e) {
+                return jsonError('WebSocket Proxy Error', 502);
             }
         }
 
         if (path.startsWith('/api')) {
             // PROXY ALL API REQUESTS TO RAILWAY BACKEND
-            if (env.BACKEND_URL) {
-                const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+            if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
+
+            const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+            try {
                 const backendRequest = new Request(target, {
                     method: request.method,
                     headers: request.headers,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
                     redirect: 'follow'
                 });
-                return fetch(backendRequest);
+
+                const response = await fetch(backendRequest);
+                // Intercept HTML error pages from Railway and return JSON instead
+                if (response.status >= 500) return jsonError(`Backend Error (${response.status})`, response.status);
+                return response;
+            } catch (err) {
+                return jsonError('Backend unreachable. Check if Railway service is running.', 502);
             }
-            return new Response(JSON.stringify({ error: 'Backend not configured.' }), { status: 502 });
         } else {
             // Serve static assets
             // The ASSETS binding is automatically available in the Worker environment

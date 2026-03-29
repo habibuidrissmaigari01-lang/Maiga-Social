@@ -532,7 +532,10 @@
 
             usernameCheckTimeout = setTimeout(() => {
                 fetch(`${API_BASE_URL}/api/check_username?username=${encodeURIComponent(username)}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('API Error');
+                        return res.json();
+                    })
                     .then(data => {
                         if (data.available) {
                             feedbackEl.innerHTML = '<i class="fa-solid fa-check-circle text-green-500"></i>';
