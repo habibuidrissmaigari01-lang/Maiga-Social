@@ -1034,6 +1034,10 @@ router.post('/toggle_mute', isAuthenticated, async (req, res) => {
     }
 });
 
+router.get('/vapid_public_key', isAuthenticated, (req, res) => {
+    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
 router.get('/get_pinned_chats', isAuthenticated, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId);
