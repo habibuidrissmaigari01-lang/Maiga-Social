@@ -24,7 +24,7 @@ const initMaiga = () => {
     Alpine.data('appData', () => ({
         init() {
             this.mainInit();
-            this.arAssets.hat.src = 'img/ar/party-hat.png'; // Initialize AR assets
+            this.arAssets.hat.src = 'https://maigasocial.com/img/ar/party-hat.png'; // Updated to online URL
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
             const savedRecents = localStorage.getItem('recent_stickers');

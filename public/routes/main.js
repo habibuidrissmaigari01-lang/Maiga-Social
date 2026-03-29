@@ -661,6 +661,10 @@ router.post('/report_user', isAuthenticated, upload.single('screenshot'), async 
     }
 });
 
+router.get('/vapid_public_key', isAuthenticated, (req, res) => {
+    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
 router.get('/get_archived_chats', isAuthenticated, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId);
@@ -1078,6 +1082,38 @@ router.post('/toggle_pin_chat', isAuthenticated, async (req, res) => {
         res.json({ success: true, pinned });
     } catch (error) {
         res.status(500).json({ error: 'Failed to toggle pin status' });
+    }
+});
+
+router.post('/admin/migrate_avatars', isAuthenticated, async (req, res) => {
+    try {
+        const adminUser = await User.findById(req.session.userId);
+        if (!adminUser || !adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
+
+        // Identify the old default strings you want to replace
+        const oldDefaults = [
+            'img/default-avatar.png',
+            'https://api.dicebear.com/7.x/avataaars/svg?seed=default'
+        ];
+
+        // Update Males
+        const maleResult = await User.updateMany(
+            { gender: 'male', avatar: { $in: oldDefaults } },
+            { $set: { avatar: 'img/male.png' } }
+        );
+
+        // Update Females
+        const femaleResult = await User.updateMany(
+            { gender: 'female', avatar: { $in: oldDefaults } },
+            { $set: { avatar: 'img/female.png' } }
+        );
+
+        res.json({ 
+            success: true, 
+            stats: { malesUpdated: maleResult.modifiedCount, femalesUpdated: femaleResult.modifiedCount } 
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Migration failed', details: error.message });
     }
 });
 

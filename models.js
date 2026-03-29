@@ -41,9 +41,15 @@ const userSchema = new mongoose.Schema({
     first_name: String, // Added to support virtual logic
     surname: String,    // Added to support virtual logic
     username: { type: String, unique: true },
-    email: { type: String, unique: true },
+    email: { type: String, unique: true, lowercase: true },
     password: { type: String, select: false },
-    avatar: { type: String, default: 'img/default-avatar.png' },
+    avatar: { 
+        type: String, 
+        default: function() {
+            // Detect gender and return the corresponding local image path
+            return this.gender === 'female' ? 'img/female.png' : 'img/male.png';
+        }
+    },
     bio: String,
     dept: String,
     account_type: { type: String, default: 'maiga' }, // 'maiga' or 'ysu'
