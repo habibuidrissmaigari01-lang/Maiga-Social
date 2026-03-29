@@ -116,6 +116,9 @@ self.addEventListener('activate', (event) => {
 // 3. Fetch Event: Serve offline page on network failure
 // This now includes a cache-first strategy for other static assets
 self.addEventListener('fetch', (event) => {
+  // Only attempt to cache GET requests. POST/PUT/DELETE are not supported by Cache API.
+  if (event.request.method !== 'GET') return;
+
   const isNavigate = event.request.mode === 'navigate';
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
                        event.request.url.startsWith('https://cdn.tailwindcss.com') ||

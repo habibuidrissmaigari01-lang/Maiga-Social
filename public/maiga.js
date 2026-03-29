@@ -71,12 +71,12 @@ const initMaiga = () => {
                 const contentType = response.headers.get('content-type');
 
                 if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    if (!response.ok || data.error) {
-                        this.showToast('Error', data.error || `Request failed with status ${response.status}`, 'error');
-                        return null;
-                    }
-                    return data;
+                    return await response.json();
+                } else if (!response.ok) {
+                    // Handle 502, 404, or 500 HTML error pages
+                    const msg = `Server Error: ${response.status}. Please check backend logs.`;
+                    this.showToast('Server Error', msg, 'error');
+                    return null;
                 } else {
                     const errorText = await response.text();
                     // If server returns 404 (e.g. endpoint not found), try mock data

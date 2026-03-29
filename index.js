@@ -13,7 +13,9 @@ export default {
         // Handle WebSocket Proxying and Socket.io long-polling
         if (path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket') {
             if (env.BACKEND_URL) {
-                const socketRequest = new Request(env.BACKEND_URL + path + url.search, request);
+                // Clean the URL to prevent double slashes
+                const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+                const socketRequest = new Request(target, request);
                 return fetch(socketRequest);
             }
         }
@@ -21,7 +23,8 @@ export default {
         if (path.startsWith('/api')) {
             // PROXY ALL API REQUESTS TO RAILWAY BACKEND
             if (env.BACKEND_URL) {
-                const backendRequest = new Request(env.BACKEND_URL + path + url.search, {
+                const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+                const backendRequest = new Request(target, {
                     method: request.method,
                     headers: request.headers,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
