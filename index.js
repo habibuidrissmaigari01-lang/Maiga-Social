@@ -47,6 +47,7 @@ export default {
                 if (response.status >= 500) return jsonError(`Backend Error (${response.status})`, response.status);
                 return response;
             } catch (err) {
+                console.error("Proxy Error:", err.message, "Target:", target);
                 return jsonError('Backend unreachable. Check if Railway service is running.', 502);
             }
         } else {

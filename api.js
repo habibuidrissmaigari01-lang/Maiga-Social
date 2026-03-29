@@ -72,6 +72,15 @@ if (missingVars.length > 0) {
     process.exit(1);
 }
 
+// Temporary: Log environment variables for debugging
+console.log("DEBUG: MONGO_URI =", MONGO_URI ? "Set" : "Not Set");
+console.log("DEBUG: SESSION_SECRET =", SESSION_SECRET ? "Set" : "Not Set");
+console.log("DEBUG: R2_ACCESS_KEY_ID =", process.env.R2_ACCESS_KEY_ID ? "Set" : "Not Set");
+console.log("DEBUG: R2_SECRET_ACCESS_KEY =", process.env.R2_SECRET_ACCESS_KEY ? "Set" : "Not Set");
+console.log("DEBUG: R2_BUCKET_NAME =", process.env.R2_BUCKET_NAME ? "Set" : "Not Set");
+console.log("DEBUG: R2_S3_API_URL =", process.env.R2_S3_API_URL ? "Set" : "Not Set");
+console.log("DEBUG: R2_PUBLIC_URL =", R2_PUBLIC_URL ? "Set" : "Not Set");
+
 // --- Middleware ---
 app.set('trust proxy', 1); // Required for secure cookies on Railway
 app.use(cors());
