@@ -24,7 +24,7 @@ const initMaiga = () => {
     Alpine.data('appData', () => ({
         init() {
             this.mainInit();
-            this.arAssets.hat.src = 'https://maigasocial.com/img/ar/party-hat.png'; // Updated to online URL
+            this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
             const savedRecents = localStorage.getItem('recent_stickers');
@@ -3027,7 +3027,7 @@ const initMaiga = () => {
                         });
                     this.isEditingProfile = false;
                 } else {
-                    this.showToast('Error', data.error || 'Failed to update profile.', 'error');
+                    this.showToast('Error', data?.error || 'Failed to update profile.', 'error');
                 }
             })
             .catch(err => {
@@ -5323,10 +5323,14 @@ const initMaiga = () => {
                 const appType = this.user.account_type || 'maiga';
                 await navigator.serviceWorker.register(`/sw.js?app=${appType}`);
                 const registration = await navigator.serviceWorker.ready;
-                const vapidResp = await fetch('/api/vapid_public_key');
-                if (!vapidResp.ok) return;
+                
+                const vapidResp = await fetch(`${API_BASE_URL}/api/vapid_public_key`);
+                if (!vapidResp.ok) {
+                    console.warn("VAPID key endpoint not found. Push notifications disabled.");
+                    return;
+                }
+                
                 const { publicKey } = await vapidResp.json();
-
                 if (!publicKey || publicKey.includes('REPLACE')) return;
 
                 const convertedVapidKey = this.urlBase64ToUint8Array(publicKey);

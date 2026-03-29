@@ -53,13 +53,18 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
 router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (req, res) => {
     // SECURITY: Protect against mass assignment by only destructuring allowed fields.
     // This prevents users from self-promoting to admin via the request body.
-    const { name, username, bio, dept } = req.body;
-    const updates = { name, username, bio, dept };
-    
-    if (req.file) updates.avatar = await uploadToR2(req.file, 'avatars');
-    
-    await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
-    res.json({ success: true });
+    try {
+        const { name, username, bio, dept } = req.body;
+        const updates = { name, username, bio, dept };
+        
+        if (req.file) updates.avatar = await uploadToR2(req.file, 'avatars');
+        
+        await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Profile update failed:", error);
+        res.status(500).json({ success: false, error: 'Failed to update profile details.' });
+    }
 });
 
 router.get('/get_posts', isAuthenticated, async (req, res) => {
