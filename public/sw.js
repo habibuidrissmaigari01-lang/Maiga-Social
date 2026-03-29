@@ -121,7 +121,6 @@ self.addEventListener('fetch', (event) => {
 
   const isNavigate = event.request.mode === 'navigate';
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
-                       event.request.url.startsWith('https://cdn.tailwindcss.com') ||
                        event.request.url.startsWith('https://cdnjs.cloudflare.com') ||
                        event.request.url.startsWith('https://fonts.googleapis.com');
 
