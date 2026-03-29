@@ -756,15 +756,21 @@
                         const isJson = res.headers.get('content-type')?.includes('application/json');
                         const data = isJson ? await res.json() : null;
 
-                        if (!res.ok) {
+                        if (!res.ok && res.status !== 429) {
                             throw new Error((data && data.message) || `Server API Error: ${res.status} (Check Server Console)`);
                         }
-                        return data;
+                        return { ...data, status: res.status };
                     })
                     .then(data => {
-                        if (data.success) {
-                            showMessage('A verification code has been sent to ' + identity, 'success');
-                            // Only proceed if OTP is sent
+                        if (data.success || data.status === 429) {
+                            if (data.status === 429) {
+                                showMessage('A code was recently sent. Please check your inbox.', 'success');
+                            } else {
+                                showMessage('A verification code has been sent to ' + identity, 'success');
+                            }
+                            
+                            // Proceed to OTP step even on 429, 
+                            // because the user likely already has a valid code.
                             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
                             const nextEl = document.getElementById(`reg-${step}`);
                             nextEl.classList.add('active');

@@ -21,7 +21,8 @@ export default {
         if (path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket') {
             if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
 
-            const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+            // Defensive: Remove trailing slashes and accidentally included internal ports
+            const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
             try {
                 return await fetch(new Request(target, request));
             } catch (e) {
@@ -33,13 +34,16 @@ export default {
             // PROXY ALL API REQUESTS TO RAILWAY BACKEND
             if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
 
-            const target = env.BACKEND_URL.replace(/\/$/, '') + path + url.search;
+            // Defensive: Ensure we hit the public HTTPS edge, not the internal port
+            const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
+            console.log(`Proxying request to: ${target}`);
+
             try {
                 const backendRequest = new Request(target, {
                     method: request.method,
-                    headers: request.headers,
+                    headers: new Headers(request.headers),
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
-                    redirect: 'follow'
+                    redirect: 'manual' // Let the browser handle redirects
                 });
 
                 const response = await fetch(backendRequest);
@@ -47,7 +51,7 @@ export default {
                 if (response.status >= 500) return jsonError(`Backend Error (${response.status})`, response.status);
                 return response;
             } catch (err) {
-                console.error("Proxy Error:", err.message, "Target:", target);
+                console.error(`Proxy Error: ${err.message} | Target: ${target}`);
                 return jsonError('Backend unreachable. Check if Railway service is running.', 502);
             }
         } else {

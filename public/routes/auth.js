@@ -10,6 +10,7 @@ const { User, Otp } = require('../../models');
 // Helper Email Function
 async function sendEmail(to, subject, text) {
     if (!process.env.BREVO_API_KEY) {
+        console.error("Email skipped: BREVO_API_KEY is not defined.");
         return;
     }
 
@@ -18,7 +19,7 @@ async function sendEmail(to, subject, text) {
     const cleanText = text.replace(code, '').replace(':', '').trim();
 
     try {
-        await fetch('https://api.brevo.com/v3/smtp/email', {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
             method: 'POST',
             headers: {
                 'api-key': process.env.BREVO_API_KEY,
@@ -57,7 +58,16 @@ async function sendEmail(to, subject, text) {
                     </html>`
             })
         });
+
+        if (!response.ok) {
+            const errorBody = await response.json();
+            console.error("Brevo API delivery failure:", {
+                status: response.status,
+                details: errorBody
+            });
+        }
     } catch (err) {
+        console.error("Network error connecting to Brevo:", err.message);
     }
 }
 

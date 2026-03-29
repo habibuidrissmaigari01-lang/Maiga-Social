@@ -119,6 +119,9 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const isNavigate = event.request.mode === 'navigate';
+  // Fix: Explicitly ignore Tailwind CDN to avoid CORS fetch errors in SW
+  if (event.request.url.includes('cdn.tailwindcss.com')) return;
+
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
                        event.request.url.startsWith('https://cdnjs.cloudflare.com') ||
                        event.request.url.startsWith('https://fonts.googleapis.com');

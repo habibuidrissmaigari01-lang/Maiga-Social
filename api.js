@@ -43,7 +43,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 mongoose.set('strictQuery', false);
 
 // --- Configuration ---
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
 const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL; 
 const SESSION_SECRET = process.env.SESSION_SECRET; 
 
@@ -61,7 +61,9 @@ const requiredEnvVars = [
     { name: 'R2_SECRET_ACCESS_KEY', value: process.env.R2_SECRET_ACCESS_KEY },
     { name: 'R2_BUCKET_NAME', value: process.env.R2_BUCKET_NAME },
     { name: 'R2_S3_API_URL', value: process.env.R2_S3_API_URL },
-    { name: 'R2_PUBLIC_URL', value: R2_PUBLIC_URL }
+    { name: 'R2_PUBLIC_URL', value: R2_PUBLIC_URL },
+    { name: 'BREVO_API_KEY', value: process.env.BREVO_API_KEY },
+    { name: 'SENDER_EMAIL', value: process.env.SENDER_EMAIL }
 ];
 
 const missingVars = requiredEnvVars.filter(v => !v.value);
@@ -93,6 +95,7 @@ app.use((req, res, next) => {
 });
 
 // Session Setup
+console.log("DATABASE: Starting connection attempt...");
 const mongoConnection = mongoose.connect(MONGO_URI, {
     // Prevent the app from hanging forever if DB is down
     serverSelectionTimeoutMS: 5000, 
@@ -121,10 +124,16 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
+// --- MongoDB Connection Event Listeners ---
+mongoose.connection.on('connecting', () => console.log('DATABASE: Mongoose is connecting... ⏳'));
+mongoose.connection.on('error', (err) => console.error('DATABASE: Mongoose connection error:', err));
+mongoose.connection.on('disconnected', () => console.warn('DATABASE: Mongoose disconnected! ❌'));
+mongoose.connection.on('reconnected', () => console.log('DATABASE: Mongoose reconnected! 🔄'));
+
 // MongoDB Connection
 mongoConnection
     .then(() => {
-        console.log("Successfully connected to MongoDB");
+        console.log("DATABASE: Successfully connected to MongoDB ✅");
         // --- Mongoose 8 Change Stream: Read Receipts ---
         try {
         const messageChangeStream = Message.watch([], { fullDocument: 'updateLookup' });
@@ -153,7 +162,7 @@ mongoConnection
 
 // Start listening immediately so Railway's health check passes
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`ONLINE: Server listening on 0.0.0.0:${PORT} (Detected: ${process.env.PORT ? 'Railway' : 'Local'})`);
 });
 
 // --- Routes ---

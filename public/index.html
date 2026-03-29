@@ -532,11 +532,20 @@
 
             usernameCheckTimeout = setTimeout(() => {
                 fetch(`${API_BASE_URL}/api/check_username?username=${encodeURIComponent(username)}`)
-                    .then(res => {
-                        if (!res.ok) throw new Error('API Error');
-                        return res.json();
+                    .then(async res => {
+                        const isJson = res.headers.get('content-type')?.includes('application/json');
+                        let data = null;
+                        try {
+                            if (isJson) data = await res.json();
+                        } catch (jsonErr) {
+                            console.warn("Received invalid JSON from server:", jsonErr);
+                        }
+                        if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+                        return data;
                     })
                     .then(data => {
+                        if (!data) return;
+                        
                         if (data.available) {
                             feedbackEl.innerHTML = '<i class="fa-solid fa-check-circle text-green-500"></i>';
                         } else {
@@ -803,15 +812,21 @@
                         const isJson = res.headers.get('content-type')?.includes('application/json');
                         const data = isJson ? await res.json() : null;
 
-                        if (!res.ok) {
+                        if (!res.ok && res.status !== 429) {
                             throw new Error((data && data.message) || `Server API Error: ${res.status} (Check Server Console)`);
                         }
-                        return data;
+                        return { ...data, status: res.status };
                     })
                     .then(data => {
-                        if (data.success) {
-                            showMessage('A verification code has been sent to ' + identity, 'success');
-                            // Only proceed if OTP is sent
+                        if (data.success || data.status === 429) {
+                            if (data.status === 429) {
+                                showMessage('A code was recently sent. Please check your inbox.', 'success');
+                            } else {
+                                showMessage('A verification code has been sent to ' + identity, 'success');
+                            }
+                            
+                            // Proceed to OTP step even on 429, 
+                            // because the user likely already has a valid code.
                             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
                             const nextEl = document.getElementById(`reg-${step}`);
                             nextEl.classList.add('active');
