@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Maiga Social</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
     <link rel="manifest" href="manifest.json">
     <link rel="service-worker" href="sw.js">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -12,19 +17,29 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
+    <script>
+        // Initial theme sync to prevent flicker before Alpine loads
+        if (localStorage.getItem('darkMode') === 'true' || 
+           (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <script src="maiga.js" defer></script>
     <script src="alpine.js" defer></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        .dark { background-color: #18191a; color: #e4e6eb; }
-        body { background-color: #f0f2f5; transition: background-color 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
-        .dark body { background-color: #18191a; }
+        body { background-color: #ffffff; color: #000000; transition: background-color 0.3s, color 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        body.dark { background-color: #000000 !important; color: #ffffff !important; }
         .post-card { transition: all 0.2s; border-radius: 12px; }
         .post-card:active { transform: scale(0.99); }
-        .dark .bg-white { background-color: #242526 !important; color: #e4e6eb; }
-        .dark .text-gray-500 { color: #b0b3b8 !important; }
-        .dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-800 { border-color: #3e4042 !important; }
+        .dark .bg-white, .dark .bg-gray-50, .dark .bg-gray-100, .dark .bg-gray-900 { background-color: #000000 !important; color: #ffffff !important; }
+        .dark aside, .dark header, .dark nav, .dark main, .dark .glass-card { background-color: #000000 !important; color: #ffffff !important; border-color: #262626 !important; }
+        .dark .text-gray-900, .dark .text-gray-800, .dark .text-gray-700, .dark .text-gray-600 { color: #ffffff !important; }
+        .dark .text-gray-500 { color: #a1a1aa !important; }
+        .dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-800, .dark .border-gray-700 { border-color: #262626 !important; }
         .pulse-active::after { content: ''; position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background: #31a24c; border: 2px solid white; border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(49, 162, 76, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(49, 162, 76, 0); } 100% { box-shadow: 0 0 0 0 rgba(49, 162, 76, 0); } }
         .chat-bubble-me { background-color: #0084ff; color: white; border-radius: 18px 18px 4px 18px; }

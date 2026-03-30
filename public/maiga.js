@@ -908,7 +908,8 @@ const initMaiga = () => {
         isCalling: false,
         async logout() {
             await this.apiFetch('/api/logout');
-            window.location.href = 'index.html';
+            // Redirect to YSU login if account_type is 'ysu', otherwise to default Maiga login
+            window.location.href = this.user.account_type === 'ysu' ? 'ysu.html' : 'index.html';
         },
         async checkForUpdates() {
             if (!('serviceWorker' in navigator)) return;
@@ -1145,6 +1146,7 @@ const initMaiga = () => {
         chatMessages: {}, // Will populate via API
         reels: [],
         myReels: [],
+        starredMessages: [],
         observer: null,
         viewedReels: new Set(),
         reelPage: 1,
@@ -1517,6 +1519,11 @@ const initMaiga = () => {
             // Watch for dark mode changes
             this.$watch('darkMode', (value) => {
                 localStorage.setItem('darkMode', value);
+                if (value) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
             });
 
             // Watch for chat search queries to filter messages
@@ -1627,130 +1634,9 @@ const initMaiga = () => {
                 .then(data => {
                     this.reels = Array.isArray(data) ? data : [];
                 }).catch(() => { this.reels = []; });
-                
-            // Fetch Stories
-            this.apiFetch('/api/get_stories')
-                .then(data => this.processStories(Array.isArray(data) ? data : []))
-                .catch(() => this.processStories([]));
 
-            // Wait for critical data, then hide loading screen
-            Promise.all(initialDataPromises).finally(() => {
-                this.isLoading = false;
-                this.showSkeletons = false;
-                // Fetch suggestions after main load
-                this.apiFetch('/api/friends/suggestions').then(data => {
-                    this.friends = Array.isArray(data) ? data : [];
-                });
-                this.apiFetch('/api/get_most_active_users').then(data => {
-                    this.mostActiveUsers = Array.isArray(data) ? data : [];
-                });
-            });
-
-           this.$watch('activeChat', val => {
-               if (val) {
-                    this.fetchMessages(val);
-                    this.markAsRead(val);
-                    this.typingUsers = [];
-                }
-            });
-            
-
-            // Watch for typing
-            this.$watch('newMessage', (val) => {
-               if (val && this.activeChat) {
-                    this.sendTypingSignal();
-                }
-            });
-
-            // Watch reels to setup observer when data loads
-            this.$watch('reels', () => {
-                this.$nextTick(() => {
-                      this.setupReelsObserver();
-                });
-            });
-
-            // Watch activeTab to manage video playback
-           this.$watch('activeTab', (val) => {
-            localStorage.setItem('maiga_active_tab', val);
-                if (val === 'reels') {
-                    this.$nextTick(() => this.setupReelsObserver()); 
-                    // Fetch latest reels when entering tab
-                    this.apiFetch('/api/get_reels').then(d => { if(Array.isArray(d)) this.reels = d; });
-                } else {
-                    this.stopAllReels();
-                }
-
-                if (val === 'friends') {
-                    // Fetch suggestions/following when entering tab
-                    this.apiFetch('/api/friends/suggestions').then(data => { if (Array.isArray(data)) this.friends = data; });
-                }
-
-                // Watch for Saved tab
-                if (val === 'saved') {
-                    this.fetchSavedPosts();
-                }
-            });
-
-            // Heartbeat for Last Seen (every 2 minutes)
-            this.updateLastSeen();
-            setInterval(() => {
-                this.updateLastSeen();
-            }, 120000);
-
-            // Check for URL params to open user profile
-            const urlParams = new URLSearchParams(window.location.search);
-            const viewUserId = urlParams.get('userId');
-            if (viewUserId) {
-                const userToView = this.friends.find(f => f.id == viewUserId);
-                if (userToView) {
-                    this.openUserProfile(userToView);
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }
-
-            // Check for URL params to open chat
-            const chatUserId = urlParams.get('chatUserId');
-            if (chatUserId) {
-                const userToChat = this.friends.find(f => f.id == chatUserId);
-                if (userToChat) {
-                    let chat = this.chats.find(c => c.id == userToChat.id);
-                    if (!chat) {
-                        chat = {
-                            id: userToChat.id,
-                            name: userToChat.name,
-                            avatar: userToChat.avatar,
-                            lastMsg: 'Start a conversation',
-                            time: 'Now',
-                            unread: false,
-                            status: userToChat.online ? 'online' : 'offline'
-                        };
-                        this.chats.unshift(chat);
-                    }
-                    this.activeChat = chat;
-                    this.isMessaging = true;
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                }
-            }
-
-            // Check for invite link code in URL
-            const inviteCode = urlParams.get('invite_code');
-            if (inviteCode) {
-                // Small delay to ensure user is logged in/data loaded
-                setTimeout(() => this.joinGroupViaLink(inviteCode), 1000);
-            }
-
-            window.addEventListener('mousemove', this.dragMove.bind(this));
-            window.addEventListener('mouseup', this.dragEnd.bind(this));
-            window.addEventListener('touchmove', this.dragMove.bind(this));
-            window.addEventListener('touchend', this.dragEnd.bind(this));
-
-            if ('getBattery' in navigator) {
-                navigator.getBattery().then(battery => {
-                    this.updateBatteryStatus(battery);
-                    battery.addEventListener('levelchange', () => this.updateBatteryStatus(battery));
-                    battery.addEventListener('chargingchange', () => this.updateBatteryStatus(battery));
-                });
-            }
+            // Fetch Starred Messages
+            this.apiFetch('/api/get_starred_messages').then(data => { if (Array.isArray(data)) this.starredMessages = data; });
 
             this.$watch('isPaused', val => {
                 const video = document.querySelector('.story-video');

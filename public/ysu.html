@@ -5,9 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YSU Social - Login & Register</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        // Initial theme sync to prevent flicker
+        if (localStorage.getItem('darkMode') === 'true' || 
+           (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -18,6 +32,7 @@
             overflow-x: hidden;
             margin: 0;
             padding: 20px;
+            transition: background-color 0.3s, color 0.3s;
         }
         .background-container {
             position: fixed;
@@ -47,12 +62,14 @@
             position: relative;
         }
 
-        .dark .glass-card {
-            background: rgba(30, 41, 59, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
+        .dark body { background-color: #000000 !important; color: #ffffff !important; }
+        .dark .glass-card { background: rgba(0, 0, 0, 0.95) !important; border: 1px solid #262626 !important; }
+        .dark input, .dark select { background-color: #000000 !important; color: #ffffff !important; border-color: #262626 !important; }
         .dark .glass-card h1, .dark .glass-card h2 { color: #fff !important; }
         .dark .glass-card p { color: #cbd5e1 !important; }
+        .dark .bg-white { background-color: #000000 !important; }
+        .dark .text-gray-500, .dark .text-gray-600 { color: #a1a1aa !important; }
+        .dark .border-gray-100, .dark .border-gray-200 { border-color: #262626 !important; }
 
         .step-content {
             display: none;
@@ -1103,12 +1120,6 @@
         window.addEventListener('load', () => {
             const lastPopup = localStorage.getItem('installPopupShown');
             const now = Date.now();
-
-            // Dark Mode Check
-            if (localStorage.getItem('darkMode') === 'true' || 
-               (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
 
             // OS Check for Download Button
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
