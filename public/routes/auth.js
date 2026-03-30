@@ -3,9 +3,36 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const { exec } = require('child_process');
 const { User, Otp } = require('../../models');
 
+// Brute-force protection for the login route
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 login requests per window
+    message: { message: 'Too many login attempts from this IP, please try again after 15 minutes.' },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+// Brute-force protection for OTP request routes
+const otpRequestLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 3, // Limit each IP to 3 OTP requests per window
+    message: { message: 'Too many OTP requests from this IP, please try again after 5 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Brute-force protection for OTP verification routes
+const otpVerificationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // Limit each IP to 5 OTP verification attempts per window
+    message: { message: 'Too many OTP verification attempts from this IP, please try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 // Helper Email Function
 async function sendEmail(to, subject, text) {
@@ -71,8 +98,7 @@ async function sendEmail(to, subject, text) {
     }
 }
 
-// Routes
-router.post('/send-reg-otp', async (req, res) => {
+router.post('/send-reg-otp', otpRequestLimiter, async (req, res) => {
     const { identity } = req.body;
     if (!identity) return res.status(400).json({ success: false, message: 'Email or phone is required' });
 
@@ -96,15 +122,21 @@ router.post('/register', [
     body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
     body('password').isLength({ min: 6 }).withMessage('Password too short'),
     body('first_name').trim().notEmpty().withMessage('First name required'),
-    body('surname').trim().notEmpty().withMessage('Surname required'),
+    body('surname').trim().notEmpty().withMessage('Surname required'), // Added account_type validation
     body('otp').notEmpty().withMessage('OTP required')
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
 
     try {
-        const { username, email, password, first_name, surname, birthday, gender, phone, otp } = req.body;
+        const { username, email, password, first_name, surname, birthday, gender, phone, otp, account_type } = req.body;
         
+        // SECURITY: Verify that the email/phone provided matches the one verified via OTP
+        const providedIdentity = (email || phone).toLowerCase();
+        if (!providedIdentity) {
+            return res.status(400).json({ message: 'Identity (Email or Phone) is required.' });
+        }
+
         const identity = (email || phone).toLowerCase();
         const record = await Otp.findOne({ identity, type: 'registration' });
         if (!record) {
@@ -124,7 +156,7 @@ router.post('/register', [
         if (existingUser) return res.status(400).json({ message: 'Username or email already exists' });
 
         const user = new User({
-            name: (first_name + ' ' + surname).trim(),
+            name: (first_name + ' ' + surname).trim(), account_type: account_type || 'maiga', // Set account_type
             username, email, password, birthday, gender, phone
         });
         await user.save();
@@ -135,7 +167,7 @@ router.post('/register', [
     }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { login_identity, login_password, remember_me } = req.body;
         const identity = login_identity.trim().toLowerCase();
@@ -187,7 +219,7 @@ router.get('/logout', (req, res) => {
     });
 });
 
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', otpRequestLimiter, async (req, res) => {
     const { forgot_identity } = req.body;
     const user = await User.findOne({ $or: [{ email: forgot_identity.toLowerCase() }, { phone: forgot_identity }] });
     if (!user) return res.status(404).json({ message: 'No account found.' });
@@ -204,7 +236,7 @@ router.post('/forgot-password', async (req, res) => {
     res.json({ message: 'Reset code sent.' });
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpVerificationLimiter, async (req, res) => {
     const { forgot_identity, otp } = req.body;
     const identity = forgot_identity.toLowerCase();
     const record = await Otp.findOne({ identity, type: 'password_reset' });
@@ -223,9 +255,14 @@ router.post('/verify-otp', async (req, res) => {
     res.json({ message: 'Code verified.' });
 });
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', otpVerificationLimiter, async (req, res) => {
     const { forgot_identity, otp, new_password } = req.body;
     const identity = forgot_identity.toLowerCase();
+    
+    if (!new_password || new_password.length < 6) {
+        return res.status(400).json({ message: 'New password must be at least 6 characters.' });
+    }
+
     const record = await Otp.findOne({ identity, type: 'password_reset' });
     
     if (!record) return res.status(400).json({ message: 'Invalid session.' });
@@ -249,4 +286,27 @@ router.post('/reset-password', async (req, res) => {
     res.json({ message: 'Password reset successfully.' });
 });
 
+router.post('/change_password', async (req, res) => {
+    try {
+        const { current_password, new_password } = req.body;
+        const userId = req.session.userId;
+
+        const user = await User.findById(userId).select('+password');
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        if (!(await bcrypt.compare(current_password, user.password))) {
+            return res.status(401).json({ message: 'Incorrect current password' });
+        }
+
+        if (new_password.length < 6) {
+            return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+        }
+
+        user.password = new_password; // The pre-save hook will hash this
+        await user.save();
+        res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
 module.exports = router;

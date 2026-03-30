@@ -82,6 +82,13 @@
             transform: skewX(0deg) scale(1);
         }
         .vertical-range { writing-mode: vertical-lr; direction: rtl; appearance: auto; }
+
+        @keyframes wave-pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            60% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-wave { animation: wave-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
     </style>
 </head>
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
@@ -263,6 +270,7 @@
                 <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Group</button>
                 <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Forum</button>
                 <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
+                <button @click="activeMessageTab = 'starred'; fetchStarredMessages()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'starred' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Starred</button>
                 <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Reports</button>
             </div>
             <div class="flex-1 overflow-y-auto">
@@ -328,6 +336,22 @@
                         </div>
                     </template>
                 </div>
+                <!-- Starred Messages -->
+                <div x-show="activeMessageTab === 'starred'">
+                    <template x-for="msg in starredMessages" :key="msg.id">
+                        <div class="p-4 border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <img :src="msg.avatar" class="w-8 h-8 rounded-full">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex justify-between items-center"><span class="font-bold text-sm" x-text="msg.author"></span><span class="text-[9px] text-gray-400" x-text="msg.time"></span></div>
+                                    <p class="text-xs text-gray-500 truncate" x-text="msg.type === 'text' ? msg.content : 'Media'"></p>
+                                </div>
+                                <i class="fa-solid fa-star text-yellow-500 text-xs"></i>
+                            </div>
+                        </div>
+                    </template>
+                    <div x-show="starredMessages.length === 0" class="p-8 text-center text-gray-500 text-xs">No starred messages.</div>
+                </div>
                 <!-- Archived Chats -->
                 <div x-show="activeMessageTab === 'archived'">
                     <template x-for="chat in archivedChats" :key="chat.id">
@@ -373,7 +397,11 @@
                 <button @click="createGroup()" :disabled="!newGroup.name.trim() || newGroup.members.length < 1" class="text-sm font-bold text-blue-600 disabled:text-gray-400 pr-2">Create</button>
             </div>
             <div class="p-4 border-b dark:border-gray-800">
-                <input type="text" x-model="newGroup.name" placeholder="Group Name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-500">
+                <div class="flex justify-between items-center mb-1 px-1">
+                    <label class="text-[10px] font-black text-gray-400 uppercase">Name Your Group</label>
+                    <span class="text-[10px] font-bold" :class="newGroup.name.length >= 25 ? 'text-red-500' : 'text-gray-400'" x-text="newGroup.name.length + ' / 25'"></span>
+                </div>
+                <input type="text" x-model="newGroup.name" maxlength="25" placeholder="Group Name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-500">
             </div>
             <div class="p-4 border-b dark:border-gray-800">
                 <div class="relative">
@@ -384,7 +412,7 @@
             <div class="p-4 flex items-center justify-between">
                 <h4 class="text-xs font-bold text-gray-400 uppercase">Select Members</h4>
                 <button @click="toggleSelectAll()" class="text-xs font-bold text-blue-600 hover:underline">
-                    <span x-text="newGroup.members.length === followingList.length && followingList.length > 0 ? 'Deselect All' : 'Select All'"></span>
+                    <span x-text="newGroup.members.length === filteredFollowingForGroup.length && filteredFollowingForGroup.length > 0 ? 'Deselect All' : 'Select All'"></span>
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto">
@@ -492,11 +520,12 @@
                                 <template x-if="msg.type === 'audio'"><div class="flex items-center space-x-3 p-3 min-w-[200px]"><button class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors" @click="toggleAudio('msg-audio-' + msg.id)"><i class="fa-solid" :class="activeAudioId === 'msg-audio-' + msg.id ? 'fa-pause' : 'fa-play'"></i></button><div class="flex items-center space-x-1 h-8 flex-1 opacity-80"><template x-for="i in 12"><div class="w-1 bg-current rounded-full" :class="activeAudioId === 'msg-audio-' + msg.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%; animation-duration: ${0.4 + Math.random() * 0.5}s`"></div></template></div><audio :id="'msg-audio-' + msg.id" :src="msg.content" class="hidden" @play="handleAudioPlay('msg-audio-' + msg.id)" @pause="handleAudioPause('msg-audio-' + msg.id)" @ended="handleAudioPause('msg-audio-' + msg.id)"></audio></div></template>
                                 <template x-if="msg.type === 'call_log'"><div class="flex items-center space-x-2 p-2 text-gray-500 dark:text-gray-300 italic"><i class="fa-solid" :class="msg.content.includes('Missed') || msg.content.includes('rejected') ? 'fa-phone-slash text-red-500' : 'fa-phone text-green-500'"></i><span x-text="msg.content"></span></div></template>
                                 <template x-if="msg.type === 'poll'"><div class="p-2 min-w-[200px]"><p class="font-bold text-sm mb-2" x-text="msg.question"></p><div class="space-y-2"><template x-for="opt in msg.options" :key="opt.id"><div @click="votePoll(msg.id, opt.id)" class="relative rounded-lg overflow-hidden cursor-pointer border border-gray-200 dark:border-gray-600 h-8"><div class="absolute inset-0 bg-gray-100 dark:bg-gray-700"></div><div class="absolute inset-0 bg-blue-200 dark:bg-blue-900/50 transition-all duration-500" :style="`width: ${getPollPercentage(msg, opt.id)}%`"></div><div class="absolute inset-0 flex items-center justify-between px-3 z-10"><span class="text-xs font-bold truncate" x-text="opt.text"></span><span class="text-[10px] font-bold" x-text="opt.votes.length"></span></div></div></template></div><p class="text-[10px] opacity-60 mt-2 text-right" x-text="getTotalVotes(msg) + ' votes'"></p></div></template>
-                                <template x-if="msg.type === 'sticker'"><div class="text-6xl hover:scale-110 transition-transform" x-text="msg.content"></div></template>
+                                <template x-if="msg.type === 'sticker'"><div class="text-6xl hover:scale-110 transition-transform" :class="msg.content === '👋' ? 'animate-wave' : ''" x-text="msg.content"></div></template>
                                 <template x-if="msg.type === 'file'"><div class="flex items-center space-x-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg min-w-[200px]"><div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center text-blue-600"><i class="fa-solid fa-file-lines text-xl"></i></div><div class="flex-1 min-w-0"><p class="text-xs font-bold truncate">Document</p><a :href="msg.content" download class="text-[10px] text-blue-500 hover:underline">Download</a></div></div></template>
                             </div>
                             <div class="flex items-center space-x-1 mt-1 px-1 opacity-60">
                                 <span class="text-[9px]" x-text="msg.time"></span>
+                                <i x-show="msg.starred" class="fa-solid fa-star text-yellow-500 text-[8px] ml-1"></i>
                                 <template x-if="msg.sender === 'me'">
                                     <span x-show="msg.is_edited" class="text-[9px] italic ml-1">edited</span>
                                 </template>
@@ -521,6 +550,7 @@
                 </template>
                 <button class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
                 <button @click="clearChat()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-trash text-red-500 text-xl"></i></div><span class="text-[10px] font-bold">Clear Chat</span></button>
+                <button @click="deleteChatHistory()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-user-xmark text-red-600 text-xl"></i></div><span class="text-[10px] font-bold">Delete History</span></button>
                 <template x-if="activeChat?.type !== 'group'">
                     <button @click="markAsUnread(activeChat)" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-envelope text-teal-600 dark:text-teal-400 text-xl"></i></div><span class="text-[10px] font-bold">Mark Unread</span></button>
                     <button @click="toggleArchiveChat(activeChat)" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-box-archive text-gray-600 dark:text-gray-300 text-xl"></i></div><span class="text-[10px] font-bold">Archive</span></button>
@@ -833,6 +863,7 @@
             <h3 class="font-bold text-lg mb-4">Message Options</h3>
             <div class="space-y-2">
                 <button @click="replyToMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-reply text-blue-500 w-5"></i><span>Reply</span></button>
+                <button @click="toggleStarMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-star text-yellow-500 w-5"></i><span x-text="selectedMessageForOptions?.starred ? 'Unstar' : 'Star'"></span></button>
                 <button @click="openForwardModal()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-share text-green-500 w-5"></i><span>Forward</span></button>
                 <button @click="togglePinMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-thumbtack text-yellow-500 w-5"></i><span x-text="selectedMessageForOptions?.pinned ? 'Unpin' : 'Pin'"></span></button>
                 <button @click="copyMessageText()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-regular fa-copy text-gray-500 w-5"></i><span>Copy</span></button>
@@ -1205,6 +1236,19 @@
                     </div>
                 </template>
             </div>
+            <!-- Comment Sticker Picker -->
+            <div x-show="showCommentStickers" x-cloak @click.away="showCommentStickers = false" x-transition:enter="transition transform ease-out duration-200" x-transition:enter-start="translate-y-10 opacity-0" class="absolute bottom-20 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border dark:border-gray-700 p-4 z-[450]">
+                <div class="flex border-b dark:border-gray-700 pb-2 mb-2 space-x-4 overflow-x-auto no-scrollbar">
+                    <button @click="activeStickerCategory = 'smileys'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'smileys' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-face-smile"></i></button>
+                    <button @click="activeStickerCategory = 'gestures'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'gestures' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-thumbs-up"></i></button>
+                    <button @click="activeStickerCategory = 'hearts'" class="p-1 font-bold text-xs" :class="activeStickerCategory === 'hearts' ? 'text-blue-500' : 'text-gray-400'"><i class="fa-solid fa-heart"></i></button>
+                </div>
+                <div class="grid grid-cols-4 gap-4 h-48 overflow-y-auto no-scrollbar">
+                    <template x-for="sticker in stickerGroups[activeStickerCategory]">
+                        <button @click="sendCommentSticker(sticker)" class="text-4xl hover:scale-125 transition-transform p-2" x-text="sticker"></button>
+                    </template>
+                </div>
+            </div>
             <!-- Reply Preview Banner -->
             <div x-show="replyingToComment" x-transition class="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-800 flex justify-between items-center">
                 <div class="text-xs border-l-4 border-blue-500 pl-2">
@@ -1217,6 +1261,9 @@
                 <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
                 <div class="flex-1 relative">
                     <input type="text" x-model="commentInput" @keyup.enter="addComment()" placeholder="Add a comment..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-blue-500" :class="{'opacity-0': isRecordingComment}">
+                    <button @click="showCommentStickers = !showCommentStickers" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors">
+                        <i class="fa-solid fa-face-smile text-lg"></i>
+                    </button>
                     <div x-show="isRecordingComment" x-cloak class="absolute inset-0 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-between px-4 pointer-events-none">
                         <i class="fa-solid fa-microphone-lines text-red-500 animate-pulse"></i>
                         <span class="font-mono font-bold text-sm" x-text="formatRecordingTime(commentRecordingDuration)">00:00</span>

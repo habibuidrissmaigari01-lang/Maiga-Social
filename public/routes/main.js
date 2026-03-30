@@ -49,7 +49,7 @@ const formatTime = (date) => {
 router.get('/get_user', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId);
     res.json({
-        id: user._id, name: user.name, username: user.username,
+        id: user._id, name: user.name, username: user.username, account_type: user.account_type,
         avatar: user.avatar, dept: user.dept, bio: user.bio,
         email: user.email, is_admin: user.is_admin,
         followerIds: user.followers, followingIds: user.following
@@ -95,7 +95,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
     const skip = (page - 1) * limit;
-    const query = req.query.user_id ? { user: req.query.user_id } : {};
+    const query = req.query.user_id ? { user: req.query.user_id, media_type: { $ne: 'video' } } : { media_type: { $ne: 'video' } };
     
     // Populate 'user' and include fields needed for the 'full_name' virtual
     const posts = await Post.find(query)
@@ -164,10 +164,50 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
     res.json({ success: true });
 });
 
+router.post('/create_group', isAuthenticated, upload.single('avatar'), async (req, res) => {
+    try {
+        const { name, description, members, permissions, approve_members } = req.body;
+        let avatarUrl = 'img/default-group.png';
+        if (req.file) avatarUrl = await uploadToR2(req.file, 'groups');
+
+        // Creator must be added as an admin automatically
+        const parsedMembers = JSON.parse(members).map(id => ({ user: id, role: 'member' }));
+        parsedMembers.push({ user: req.session.userId, role: 'admin' });
+
+        const group = new Group({
+            name,
+            description,
+            avatar: avatarUrl,
+            members: parsedMembers,
+            permissions: JSON.parse(permissions || '{}'),
+            approve_members: approve_members === '1',
+            invite_link_code: Math.random().toString(36).substring(2, 8).toUpperCase()
+        });
+
+        await group.save();
+        res.json({ success: true, group });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/delete_chat_history', isAuthenticated, async (req, res) => {
+    const { chat_id } = req.body;
+    const userId = req.session.userId;
+    
+    await Message.deleteMany({
+        group: null,
+        $or: [
+            { sender: userId, receiver: chat_id },
+            { sender: chat_id, receiver: userId }
+        ]
+    });
+    res.json({ success: true });
+});
 router.get('/get_chats', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const messages = await Message.find({ $or: [{ sender: userId }, { receiver: userId }] })
-        .sort({ created_at: -1 }).populate('sender receiver', 'name avatar online');
+        .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online');
     
     const user = await User.findById(userId);
     const archivedIds = user.archived_chats.map(c => c.chat_id.toString());
@@ -178,13 +218,13 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
         
         const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
         const otherId = other._id.toString();
-
+        
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
                 lastMsg: m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`, 
-                time: formatTime(m.created_at)
+                time: formatTime(m.createdAt)
             });
         }
     });
@@ -200,7 +240,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
         
         const groupData = await Promise.all(groups.map(async g => {
             // Fetch the actual last message for this group to persist it after refresh
-            const lastMessage = await Message.findOne({ group: g._id }).sort({ created_at: -1 });
+            const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 });
             
             return {
                 id: g._id,
@@ -208,7 +248,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
                 avatar: g.avatar || 'img/default-group.png',
                 type: 'group',
                 lastMsg: lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `Sent a ${lastMessage.media_type}`) : 'No messages yet',
-                time: lastMessage ? formatTime(lastMessage.created_at) : '',
+                time: lastMessage ? formatTime(lastMessage.createdAt) : '',
                 unread: false
             };
         }));
@@ -305,13 +345,13 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
     }
 
     const messages = await Message.find(query)
-        .sort({ created_at: 1 })
+        .sort({ createdAt: 1 })
         .populate('sender', 'name first_name surname avatar')
         .populate('reply_to');
 
     res.json(messages.map(m => ({
         id: m._id, sender_id: m.sender._id, content: m.content,
-        media: m.media, media_type: m.media_type, created_at: m.created_at,
+        media: m.media, media_type: m.media_type, created_at: m.createdAt,
         is_read: m.is_read, avatar: m.sender.avatar, 
         pinned: m.is_pinned,
         is_edited: m.is_edited,
@@ -319,6 +359,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
         poll_id: m.poll?._id,
         question: m.poll?.question,
         options: m.poll?.options,
+        starred: m.starred_by.some(id => id.toString() === userId.toString()),
         replyTo: m.reply_to ? { author: 'User', content: m.reply_to.content } : null,
         first_name: m.sender.first_name || m.sender.name?.split(' ')[0] || 'User',
         surname: m.sender.surname || ''
@@ -363,6 +404,131 @@ router.post('/send_wave', isAuthenticated, async (req, res) => {
     res.json({ success: true });
 });
 
+router.post('/toggle_star_message', isAuthenticated, async (req, res) => {
+    try {
+        const { message_id } = req.body;
+        const userId = req.session.userId;
+        const msg = await Message.findById(message_id);
+        if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+        const index = msg.starred_by.findIndex(id => id.toString() === userId.toString());
+        let starred = false;
+        if (index === -1) {
+            msg.starred_by.push(userId);
+            starred = true;
+        } else {
+            msg.starred_by.splice(index, 1);
+        }
+        await msg.save();
+        res.json({ success: true, starred });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle star' });
+    }
+});
+
+router.get('/get_starred_messages', isAuthenticated, async (req, res) => {
+    const messages = await Message.find({ starred_by: req.session.userId })
+        .populate('sender', 'name avatar')
+        .sort({ createdAt: -1 });
+    res.json(messages);
+});
+
+router.post('/mark_chat_unread', isAuthenticated, async (req, res) => {
+    const { chat_id } = req.body;
+    const userId = req.session.userId;
+
+    // Remove the user from the read_by array for all messages in the chat
+    await Message.updateMany(
+        { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] },
+        { $pull: { read_by: { user: userId } }, $set: { is_read: false } }
+    );
+    res.json({ success: true });
+});
+
+router.post('/remove_follower', isAuthenticated, async (req, res) => {
+    const { user_id } = req.body; // The user to remove from current user's followers
+    const currentUserId = req.session.userId;
+
+    await User.findByIdAndUpdate(currentUserId, { $pull: { followers: user_id } });
+    await User.findByIdAndUpdate(user_id, { $pull: { following: currentUserId } });
+
+    res.json({ success: true });
+});
+
+router.post('/delete_comment', isAuthenticated, async (req, res) => {
+    const { comment_id } = req.body;
+    const userId = req.session.userId;
+
+    const comment = await Comment.findById(comment_id);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    // Only allow deletion by comment owner or post owner
+    const post = await Post.findById(comment.post);
+    if (!comment.user.equals(userId) && (!post || !post.user.equals(userId))) {
+        return res.status(403).json({ error: 'Unauthorized to delete this comment' });
+    }
+
+    await Comment.deleteOne({ _id: comment_id });
+    await Post.findByIdAndUpdate(comment.post, { $inc: { comments_count: -1 } });
+
+    res.json({ success: true });
+});
+
+router.post('/share_post', isAuthenticated, async (req, res) => {
+    const { post_id } = req.body;
+    const originalPost = await Post.findById(post_id);
+    if (!originalPost) return res.status(404).json({ error: 'Original post not found' });
+
+    const newPost = new Post({
+        user: req.session.userId,
+        content: originalPost.content, // Or add custom share text
+        media: originalPost.media,
+        media_type: originalPost.media_type,
+        original_post: originalPost._id // Reference to the original post
+    });
+    await newPost.save();
+
+    await Post.findByIdAndUpdate(post_id, { $inc: { shares: 1 } });
+
+    res.json({ success: true, post: newPost });
+});
+
+router.post('/delete_group', isAuthenticated, async (req, res) => {
+    const { group_id } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findById(group_id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    const member = group.members.find(m => m.user.equals(userId));
+    if (!member || member.role !== 'admin') {
+        return res.status(403).json({ error: 'Only group admins can delete the group' });
+    }
+
+    await Message.deleteMany({ group: group_id });
+    await Group.deleteOne({ _id: group_id });
+
+    res.json({ success: true });
+});
+
+router.post('/promote_group_member', isAuthenticated, async (req, res) => {
+    const { group_id, member_id } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findById(group_id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    const currentUserIsAdmin = group.members.some(m => m.user.equals(userId) && m.role === 'admin');
+    if (!currentUserIsAdmin) return res.status(403).json({ error: 'Only admins can promote members' });
+
+    const memberToPromote = group.members.find(m => m.user.equals(member_id));
+    if (!memberToPromote) return res.status(404).json({ error: 'Member not found in group' });
+
+    memberToPromote.role = 'admin';
+    await group.save();
+    res.json({ success: true });
+});
+
 router.post('/create_poll', isAuthenticated, async (req, res) => {
     const { receiver_id, group_id, question, options } = req.body;
     const pollData = {
@@ -400,22 +566,131 @@ router.post('/vote_poll', isAuthenticated, async (req, res) => {
     res.json({ success: !!result.modifiedCount });
 });
 
-router.get('/api/get_message_read_details', isAuthenticated, async (req, res) => {
+router.get('/get_message_read_details', isAuthenticated, async (req, res) => {
     const msg = await Message.findById(req.query.message_id).populate('read_by.user', 'name avatar');
     res.json(msg ? msg.read_by : []);
 });
 router.post('/toggle_reaction', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
-    const post = await Post.findById(req.body.post_id);
+    const { post_id, reaction } = req.body;
+    const post = await Post.findById(post_id);
     if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    const isLiked = post.likes.some(id => id.toString() === userId.toString());
-    if (isLiked) {
-        await post.updateOne({ $pull: { likes: userId } });
+    // Remove any existing reaction by this user
+    post.likes = post.likes.filter(id => id.toString() !== userId.toString());
+
+    // Add new reaction if it's not an un-react action
+    if (reaction) {
+        post.likes.push(userId);
+    }
+
+    await post.save();
+    res.json({ success: true });
+});
+
+router.post('/remove_group_member', isAuthenticated, async (req, res) => {
+    const { group_id, member_id } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findById(group_id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    const currentUserIsAdmin = group.members.some(m => m.user.equals(userId) && m.role === 'admin');
+    if (!currentUserIsAdmin) return res.status(403).json({ error: 'Only admins can remove members' });
+
+    await Group.findByIdAndUpdate(group_id, { $pull: { members: { user: member_id } } });
+    res.json({ success: true });
+});
+
+router.post('/toggle_group_invite_link', isAuthenticated, async (req, res) => {
+    const { group_id } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findById(group_id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    const currentUserIsAdmin = group.members.some(m => m.user.equals(userId) && m.role === 'admin');
+    if (!currentUserIsAdmin) return res.status(403).json({ error: 'Only admins can manage invite links' });
+
+    group.invite_link_active = !group.invite_link_active;
+    if (group.invite_link_active) {
+        group.invite_link_code = Math.random().toString(36).substring(2, 8).toUpperCase();
     } else {
-        await post.updateOne({ $addToSet: { likes: userId } });
+        group.invite_link_code = null;
+    }
+    await group.save();
+    res.json({ success: true, active: group.invite_link_active, new_code: group.invite_link_code });
+});
+
+router.post('/handle_join_request', isAuthenticated, async (req, res) => {
+    const { group_id, user_id, decision } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findById(group_id);
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    const currentUserIsAdmin = group.members.some(m => m.user.equals(userId) && m.role === 'admin');
+    if (!currentUserIsAdmin) return res.status(403).json({ error: 'Only admins can handle join requests' });
+
+    if (decision === 'approve') {
+        group.members.push({ user: user_id, role: 'member' });
+    }
+    group.join_requests = group.join_requests.filter(req => !req.equals(user_id));
+    await group.save();
+    res.json({ success: true });
+});
+
+router.post('/join_group_via_link', isAuthenticated, async (req, res) => {
+    const { code } = req.body;
+    const userId = req.session.userId;
+
+    const group = await Group.findOne({ invite_link_code: code, invite_link_active: true });
+    if (!group) return res.status(404).json({ error: 'Invalid or expired invite link' });
+    if (group.members.some(m => m.user.equals(userId))) return res.json({ success: true, message: 'Already a member' });
+
+    if (group.approve_members) {
+        group.join_requests.push(userId);
+        await group.save();
+        return res.json({ success: true, message: 'Join request sent to admins', action: 'requested' });
+    } else {
+        group.members.push({ user: userId, role: 'member' });
+        await group.save();
+        return res.json({ success: true, message: 'Joined group successfully', action: 'joined' });
+    }
+});
+
+router.post('/clear_chat', isAuthenticated, async (req, res) => {
+    const { chat_id, type } = req.body;
+    const userId = req.session.userId;
+
+    if (type === 'group') {
+        // For groups, mark messages as deleted for the current user
+        await Message.updateMany({ group: chat_id }, { $addToSet: { deleted_for: userId } });
+    } else {
+        // For 1-on-1 chats, mark messages as deleted for the current user
+        await Message.updateMany(
+            { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] },
+            { $addToSet: { deleted_for: userId } }
+        );
     }
     res.json({ success: true });
+});
+
+router.get('/saved_posts', isAuthenticated, async (req, res) => {
+    const userId = req.session.userId;
+    const posts = await Post.find({ saved_by: userId })
+        .populate('user', 'name first_name surname avatar is_verified')
+        .sort({ createdAt: -1 });
+
+    res.json(posts.map(p => ({
+        id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
+        content: p.content, media: p.media, media_type: p.media_type,
+        time: formatTime(p.createdAt), likes: p.likes.length,
+        comments: p.comments_count || 0,
+        views: p.views || 0,
+        saved: true, // Always true for saved posts list
+        myReaction: p.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
+    })));
 });
 
 router.post('/toggle_follow', isAuthenticated, async (req, res) => {
@@ -424,7 +699,7 @@ router.post('/toggle_follow', isAuthenticated, async (req, res) => {
         const myId = req.session.userId;
         const targetUser = await User.findById(targetId);
         
-        const isFollowing = targetUser.followers.includes(myId);
+        const isFollowing = targetUser.followers.some(id => id.toString() === myId.toString());
         if (isFollowing) {
             await User.findByIdAndUpdate(myId, { $pull: { following: targetId } });
             await User.findByIdAndUpdate(targetId, { $pull: { followers: myId } });
@@ -464,13 +739,13 @@ router.get('/get_comments', isAuthenticated, async (req, res) => {
 
 router.post('/add_comment', isAuthenticated, upload.single('media'), async (req, res) => {
     try {
-        const { post_id, content, parent_comment_id } = req.body;
+        const { post_id, content, parent_comment_id, media_type } = req.body;
         let mediaUrl = null;
         if (req.file) mediaUrl = await uploadToR2(req.file, 'comments');
 
         const comment = new Comment({
             post: post_id, user: req.session.userId, content, media: mediaUrl,
-            media_type: req.file ? (req.file.mimetype.startsWith('audio') ? 'audio' : 'image') : 'text',
+            media_type: media_type || (req.file ? (req.file.mimetype.startsWith('audio') ? 'audio' : 'image') : 'text'),
             parent_comment: parent_comment_id || null
         });
         await comment.save();
@@ -519,8 +794,15 @@ router.get('/friends/suggestions', isAuthenticated, async (req, res) => {
 });
 
 router.get('/get_connections', isAuthenticated, async (req, res) => {
-    const user = await User.findById(req.session.userId).populate('following', 'name avatar username online dept');
-    res.json(user.following.map(u => ({ id: u._id, name: u.name, avatar: u.avatar, username: u.username, online: u.online, dept: u.dept })));
+    const user = await User.findById(req.session.userId).populate('following', 'name first_name surname avatar username online dept');
+    res.json(user.following.filter(u => u != null).map(u => ({ 
+        id: u._id, 
+        name: u.full_name || u.name, 
+        avatar: u.avatar, 
+        username: u.username, 
+        online: u.online, 
+        dept: u.dept 
+    })));
 });
 
 router.post('/toggle_story_reaction', isAuthenticated, async (req, res) => {
@@ -624,7 +906,7 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
             if (story.audience === 'public') return true;
             // Close Friends stories only visible if current user is in the creator's list
             if (story.audience === 'close_friends') {
-                return story.user.close_friends.includes(userId);
+                return story.user.close_friends.some(cfId => cfId.toString() === userId);
             }
             return false;
         });
@@ -1179,10 +1461,6 @@ router.post('/toggle_mute', isAuthenticated, async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Failed to toggle mute status' });
     }
-});
-
-router.get('/vapid_public_key', isAuthenticated, (req, res) => {
-    res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
 router.get('/get_pinned_chats', isAuthenticated, async (req, res) => {

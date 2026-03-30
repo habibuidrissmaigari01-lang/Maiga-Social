@@ -101,6 +101,16 @@ userSchema.virtual('full_name').get(function() {
     return this.name; // Fallback to existing name field
 });
 
+// Indexes for User search and filtering
+userSchema.index({ online: 1 });
+userSchema.index({ account_type: 1 });
+userSchema.index({ blocked: 1 });
+userSchema.index({ username: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ gender: 1, avatar: 1 });
+userSchema.index({ blocked: 1, username: 1 }); // For admin search
+userSchema.index({ blocked: 1, email: 1 });    // For admin search
+
 const postSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     content: String,
@@ -114,6 +124,14 @@ const postSchema = new mongoose.Schema({
     viewed_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     music_track: String
 }, schemaOptions);
+
+// Performance: Indexes for feed filtering and Reels
+postSchema.index({ user: 1, createdAt: -1 });
+postSchema.index({ media_type: 1, createdAt: -1 });
+postSchema.index({ saved_by: 1, createdAt: -1 });
+postSchema.index({ content: "text" }); // For trending topics search
+postSchema.index({ user: 1, media_type: 1, createdAt: -1 }); // For get_reels by user
+postSchema.index({ createdAt: -1, user: 1 }); // Optimized index for 'most active users' aggregation
 
 // --- Mongoose 8 Hook: Automated R2 Cleanup ---
 // Intercepts deleteOne operations to remove media from Cloudflare R2
@@ -167,6 +185,9 @@ const commentSchema = new mongoose.Schema({
     parent_comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment' },
 }, schemaOptions);
 
+// Index for fetching comments on a post
+commentSchema.index({ post: 1, createdAt: 1 });
+
 const messageSchema = new mongoose.Schema({
     sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -187,13 +208,22 @@ const messageSchema = new mongoose.Schema({
     poll: {
         question: String,
         options: [{ text: String, votes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] }]
-    }
+    },
+    starred_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, schemaOptions);
+
+// Indexes for poll voting and starred messages
+messageSchema.index({ starred_by: 1, createdAt: -1 });
+// Critical indexes for messaging performance
+messageSchema.index({ group: 1, createdAt: 1 });
+messageSchema.index({ sender: 1, receiver: 1, createdAt: 1 });
+messageSchema.index({ receiver: 1, sender: 1, createdAt: 1 });
 
 // Virtual to count readers in a group chat
 messageSchema.virtual('read_count').get(function() {
     return this.read_by ? this.read_by.length : 0;
 });
+messageSchema.index({ "poll._id": 1 });
 
 // --- Mongoose 8 Hook: Automated Message R2 Cleanup ---
 messageSchema.pre('deleteOne', { document: false, query: true }, async function() {
@@ -250,6 +280,9 @@ const groupSchema = new mongoose.Schema({
     join_requests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, schemaOptions);
 
+// Index for group membership checks
+groupSchema.index({ 'members.user': 1 });
+
 const storySchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     media: String,
@@ -261,6 +294,9 @@ const storySchema = new mongoose.Schema({
     has_music: { type: Boolean, default: false },
     music_track: String
 }, schemaOptions);
+
+// Index for story feed (last 24 hours)
+storySchema.index({ user: 1, createdAt: -1 });
 
 // --- Mongoose 8 Hook: Automated Story R2 Cleanup ---
 storySchema.pre('deleteOne', { document: false, query: true }, async function() {
@@ -289,6 +325,9 @@ const baseNotificationSchema = new mongoose.Schema({
     timestamps: { createdAt: 'created_at', updatedAt: false },
     ...schemaOptions 
 });
+
+// Index for fetching notifications for a user
+baseNotificationSchema.index({ user: 1, created_at: -1 });
 
 // --- Real-time Notification Broadcast Hook ---
 baseNotificationSchema.post('save', function(doc) {
@@ -331,6 +370,9 @@ const callSchema = new mongoose.Schema({
     ice_candidates: [String],
     created_at: { type: Date, default: Date.now }
 });
+
+// Index for incoming call polling/checks
+callSchema.index({ receiver: 1, status: 1 });
 
 const reportSchema = new mongoose.Schema({
     reporter: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

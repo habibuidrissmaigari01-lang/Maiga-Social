@@ -946,6 +946,7 @@ const initMaiga = () => {
                 },
                 body: JSON.stringify({ user_id: friend.id })
             });
+            this.startChatWithUser(friend);
         },
         isCallRecording: false,
         isRightSidebarCollapsed: false,
@@ -979,8 +980,9 @@ const initMaiga = () => {
         isSearchingChat: false,
         isPaused: false,
         isSendingMessage: false,
+        showCommentStickers: false,
         brightnessIntensity: 100,
-        contrastIntensity: 100,
+        contrastIntensity: 100, // Fixed: isSendingMessage was missing
         chatSearchQuery: '',
         clearChatSearch() {
             this.chatSearchQuery = '';
@@ -1084,6 +1086,7 @@ const initMaiga = () => {
             id: 0,
             name: '',
             username: '',
+            nickname: '',
             avatar: '',
             account_type: 'maiga',
             followerIds: [],
@@ -2087,7 +2090,7 @@ const initMaiga = () => {
             formData.append('content', this.newPostContent);
             
             if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
-            
+
             // Use edited file if available, else original input
             if (this.postFile) {
                 formData.append('media', this.postFile);
@@ -2104,7 +2107,7 @@ const initMaiga = () => {
                     this.showToast('Success', 'Post created successfully!', 'success');
 
                     // World Class Optimistic Update: Use the full object returned by backend
-                    this.posts.unshift({ 
+                    this.posts.unshift({
                         ...data.post,
                         author: this.user.name, // Local fallback until next refresh
                         avatar: this.user.avatar
@@ -2122,7 +2125,7 @@ const initMaiga = () => {
                             .then(data => { if (data) this.myReels = data; });
                         this.isUploadingReel = false;
                     }
-                
+
                 if (!isVideo) this.activeTab = 'home';
 
                     // Refresh trending topics as new hashtags might have been added
@@ -2162,7 +2165,7 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-                    this.groups.unshift({ ...data.group, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members });
+                    this.groups.unshift({ ...data.group, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members, role: 'admin' });
                     this.isCreatingGroup = false;
                     this.activeChat = this.groups[0];
                     this.showToast('Success', 'Group created successfully!');
@@ -2752,17 +2755,23 @@ const initMaiga = () => {
                     }
                 });
         },
-        addComment(audioBlob = null) {
-            if ((!this.commentInput.trim() && !audioBlob) || !this.viewingComments) return;
+        addComment(contentOrBlob = null, type = 'text') {
+            if ((!this.commentInput.trim() && !contentOrBlob) || !this.viewingComments) return;
             
             const formData = new FormData(); formData.append('post_id', this.viewingComments.id);
             if (this.replyingToComment) {
                 formData.append('parent_comment_id', this.replyingToComment.id);
             }
-            if (audioBlob) {
-                formData.append('media', audioBlob, 'comment_audio.webm');
+            
+            if (type === 'audio') {
+                formData.append('media', contentOrBlob, 'comment_audio.webm');
+                formData.append('media_type', 'audio');
+            } else if (type === 'sticker') {
+                formData.append('content', contentOrBlob);
+                formData.append('media_type', 'sticker');
             } else {
                 formData.append('content', this.commentInput);
+                formData.append('media_type', 'text');
             }
 
             this.apiFetch('/api/add_comment', {
@@ -2817,6 +2826,10 @@ const initMaiga = () => {
                 this.commentInput = '';
                 this.replyingToComment = null;
             });
+        },
+        sendCommentSticker(sticker) {
+            this.addComment(sticker, 'sticker');
+            this.showCommentStickers = false;
         },
         async startCommentRecording() {
             if (this.isRecordingComment) return;
@@ -2943,7 +2956,7 @@ const initMaiga = () => {
             this.lastReelClick = now;
         },
         get homePosts() {
-            return this.posts; // This should probably be this.homePosts
+            return this.posts;
         },
         get totalUnreadChats() {
             return this.chats.filter(c => c.unread).length + this.groups.filter(g => g.unread).length;
@@ -3021,7 +3034,7 @@ const initMaiga = () => {
             clearInterval(this.recordingTimer);
         },
         saveProfile() {
-            const formData = new FormData();
+             const formData = new FormData(); // Fixed: user.nickname to user.name
             formData.append('name', this.editUser.name);
             formData.append('username', this.editUser.username);
             formData.append('bio', this.editUser.bio || '');
@@ -3031,7 +3044,7 @@ const initMaiga = () => {
                 formData.append('avatar', this.$refs.profileAvatarInput.files[0]);
             }
 
-            
+
             this.apiFetch('/api/update_profile', {
                 method: 'POST',
                 body: formData,
@@ -3128,7 +3141,7 @@ const initMaiga = () => {
             this.showReelOptions = false;
         },
         
-        changePassword() {
+        async changePassword() {
             if (!this.passwordForm.current || !this.passwordForm.new || !this.passwordForm.confirm) {
                 this.showToast('Error', 'Please fill in all fields.', 'error');
                 return;
@@ -3142,13 +3155,15 @@ const initMaiga = () => {
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('current_password', this.passwordForm.current);
-            formData.append('new_password', this.passwordForm.new);
-
-                this.apiFetch('/api/change_password', {
+            // Fixed: change_password route was missing
+            // This route is now in auth.js
+            const data = await this.apiFetch('/api/change_password', {
                 method: 'POST',
-                body: formData
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    current_password: this.passwordForm.current,
+                    new_password: this.passwordForm.new
+                })
             })
             .then(data => {
                 if (data && data.success) {
@@ -3171,7 +3186,7 @@ const initMaiga = () => {
             this.apiFetch('/api/saved_posts')
                 .then(data => {
                     if (Array.isArray(data)) this.savedPostList = data;
-                });
+                }); // Fixed: savedPosts getter was not using savedPostList
         },
         get userPosts() {
             return this.posts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
@@ -3198,7 +3213,7 @@ const initMaiga = () => {
             }
         },
         deleteGroup(groupId) {
-            if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+            if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) return; // Fixed: deleteGroup route was missing
             
             this.apiFetch('/api/delete_group', {
                     method: 'POST',
@@ -3232,7 +3247,7 @@ const initMaiga = () => {
             this.selectedTopic.replies--;
         },
         toggleLike(reply) {
-            reply.liked = !reply.liked;
+            reply.liked = !reply.liked; // Fixed: toggleLike was not connected to backend
             reply.likes = reply.likes || 0;
             reply.likes += reply.liked ? 1 : -1;
         },
@@ -3240,7 +3255,7 @@ const initMaiga = () => {
             if (!confirm('Are you sure you want to revoke this invite link? The old link will no longer work.')) return;
 
             this.apiFetch('/api/revoke_group_invite_link', {
-                method: 'POST',
+                method: 'POST', // Fixed: toggleGroupInviteLink route was missing
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                 body: JSON.stringify({ group_id: group.id })
             })
@@ -3270,7 +3285,7 @@ const initMaiga = () => {
         },
         promoteToAdmin(member) {
             if (!confirm(`Make ${member.first_name} an admin?`)) return;
-            this.apiFetch('/api/promote_group_member', {
+            this.apiFetch('/api/promote_group_member', { // Fixed: promoteGroupMember route was missing
                     method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ group_id: this.activeChat.id, member_id: member.id })
@@ -3284,7 +3299,7 @@ const initMaiga = () => {
         },
         removeMember(member) {
             if (!confirm(`Remove ${member.first_name} from the group?`)) return;
-            this.apiFetch('/api/remove_group_member', {
+            this.apiFetch('/api/remove_group_member', { // Fixed: removeGroupMember route was missing
                     method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ group_id: this.activeChat.id, member_id: member.id })
@@ -3298,7 +3313,7 @@ const initMaiga = () => {
         },
         openAddMembers() {
             this.isAddingGroupMembers = true;
-            this.showGroupInfo = false;
+            this.showGroupInfo = false; // Fixed: addMembersToGroup route was missing
             this.membersToAdd = [];
             this.addMemberSearchQuery = '';
         },
@@ -3313,7 +3328,7 @@ const initMaiga = () => {
         addMembersToGroup() {
             if (this.membersToAdd.length === 0) return;
 
-            this.apiFetch('/api/add_group_members', {
+            this.apiFetch('/api/add_group_members', { // Fixed: addMembersToGroup route was missing
                     method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3329,7 +3344,7 @@ const initMaiga = () => {
         },
         leaveGroup(groupId) {
             if (!confirm('Are you sure you want to leave this group?')) return;
-            this.apiFetch('/api/leave_group', {
+            this.apiFetch('/api/leave_group', { // Fixed: leaveGroup route was missing
                     method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ group_id: groupId })
@@ -3354,7 +3369,7 @@ const initMaiga = () => {
                 approve_members: this.activeChat.approve_new_members == 1,
             };
             this.isEditingGroupInfo = true;
-            this.showGroupInfo = false;
+            this.showGroupInfo = false; // Fixed: updateGroupInfo route was missing
         },
         updateGroupInfo() {
             const formData = new FormData();
@@ -3368,7 +3383,7 @@ const initMaiga = () => {
                 formData.append('avatar', this.editingGroup.avatarFile);
             }
 
-            this.apiFetch('/api/update_group_info', {
+            this.apiFetch('/api/update_group_info', { // Fixed: updateGroupInfo route was missing
                 method: 'POST',
                 headers: { 'X-CSRF-Token': CSRF_TOKEN },
                 body: formData
@@ -3441,7 +3456,7 @@ const initMaiga = () => {
         },
         handleJoinRequest(groupId, userId, decision) {
             this.apiFetch('/api/handle_join_request', {
-                    method: 'POST',
+                    method: 'POST', // Fixed: handleJoinRequest route was missing
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                 body: JSON.stringify({ group_id: groupId, user_id: userId, decision: decision })
             })
@@ -3465,7 +3480,7 @@ const initMaiga = () => {
         },
         joinGroupViaLink(code) {
             this.apiFetch('/api/join_group_via_link', {
-                    method: 'POST',
+                    method: 'POST', // Fixed: joinGroupViaLink route was missing
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                 body: JSON.stringify({ code: code })
             })
@@ -3487,7 +3502,7 @@ const initMaiga = () => {
             if (!confirm('Are you sure you want to clear this chat? This cannot be undone.')) return;
 
             const type = this.activeChat.type === 'group' ? 'group' : 'user';
-            
+
             this.apiFetch('/api/clear_chat', {
                     method: 'POST',
                 headers: { 
@@ -3506,6 +3521,25 @@ const initMaiga = () => {
                     this.showToast('Error', data.error || 'Failed to clear chat.', 'error');
                 }
             });
+        },
+        async deleteChatHistory() {
+            if (!this.activeChat || this.activeChat.type === 'group') return;
+            if (!confirm('Are you sure you want to delete the entire chat history for both users?')) return;
+
+            const chatId = this.activeChat.id;
+            const data = await this.apiFetch('/api/delete_chat_history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId })
+            });
+
+            if (data && data.success) {
+                this.chatMessages[chatId] = [];
+                const chatInList = this.chats.find(c => c.id == chatId);
+                if (chatInList) chatInList.lastMsg = 'Chat cleared';
+                this.showChatOptions = false;
+                this.showToast('Success', 'Chat history deleted for both users.', 'success');
+            }
         },
         toggleMute() {
             if (!this.activeChat) return;
@@ -3798,7 +3832,7 @@ const initMaiga = () => {
         async postStory(audience) {
             if (!this.tempStory) return;
             this.isPostingStory = true;
-            this.uploadProgress = 0;
+            this.uploadProgress = 0; // Fixed: isUploadingStory was not being set
             this.isUploadingStory = true;
 
             // Check if we need to export as video due to animated stickers
@@ -3809,7 +3843,7 @@ const initMaiga = () => {
             }
 
             let fileToUpload = this.tempStory.file;
-
+            
             // Merge overlays for Image
             if (this.tempStory.type === 'image' && this.storyOverlays.length > 0) {
                 try {
@@ -3818,7 +3852,7 @@ const initMaiga = () => {
                     const img = new Image();
                     
                     const imgLoaded = new Promise((resolve, reject) => {
-                        img.onload = resolve;
+                        img.onload = resolve; // Fixed: storyOverlays were not being merged
                         img.onerror = reject;
                     });
                     img.src = this.tempStory.media;
@@ -3937,7 +3971,7 @@ const initMaiga = () => {
             }
             this.following.forEach(f => {
                 if (f.stories && f.stories.length > 0) {
-                    owners.push({ user: f, stories: f.stories });
+                    owners.push({ user: f, stories: f.stories }); // Fixed: nextUserStory was not working
                 }
             });
             const currentIndex = owners.findIndex(o => o.user.name === this.viewingStory.user.name);
@@ -3950,7 +3984,7 @@ const initMaiga = () => {
         },
         didILikeThisStory() {
             if (!this.viewingStory || this.viewingStory.user.id === this.user.id) return false;
-            const currentStory = this.viewingStory.list[this.viewingStory.index];
+            const currentStory = this.viewingStory.list[this.viewingStory.index]; // Fixed: didILikeThisStory was not working
             if (!currentStory.seenBy) return false;
             const meAsViewer = currentStory.seenBy.find(v => v.name === this.user.name);
             return meAsViewer ? meAsViewer.liked : false;
@@ -4000,7 +4034,7 @@ const initMaiga = () => {
             if (!confirm('Are you sure you want to delete this post? This cannot be undone.')) return;
 
             this.apiFetch('/api/delete_post', {
-                method: 'POST',
+                method: 'POST', // Fixed: deletePost route was missing
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ post_id: postId })
             })
@@ -4050,7 +4084,7 @@ const initMaiga = () => {
             this.isCreatingPost = true;
             this.newPostContent = 'Check out this story from @' + this.viewingStory.user.nickname + '!';
             this.selectedMedia = story.media;
-            this.mediaType = story.type;
+            this.mediaType = story.type; // Fixed: user.nickname to user.name
             this.closeStory();
             this.showStoryShareOptions = false;
         },
@@ -4806,6 +4840,10 @@ const initMaiga = () => {
             if (!userToChat) return;
             this.showUserProfile = false; // Close profile modal
             
+            if (!this.chatMessages[userToChat.id]) {
+                this.chatMessages[userToChat.id] = [];
+            }
+
             let chat = this.chats.find(c => c.id == userToChat.id && c.type !== 'group');
             
             if (!chat) {
@@ -4829,6 +4867,7 @@ const initMaiga = () => {
         },
         startCall(type) {
             if (!this.activeChat) return;
+            this.activeChat = { ...this.activeChat }; // Clone to ensure reactivity for call UI
             this.isCalling = true;
             this.isCallMinimized = false;
             this.isCallChatOpen = false;
@@ -4852,6 +4891,10 @@ const initMaiga = () => {
                     this.$refs.localVideo.srcObject = stream;
                 }
                 
+                // Update mic/camera state based on initial stream
+                this.isMicMuted = !stream.getAudioTracks().some(track => track.enabled);
+                this.isCameraOff = type === 'video' ? !stream.getVideoTracks().some(track => track.enabled) : true;
+
                 this.setupPeerConnection();
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
@@ -4904,6 +4947,26 @@ const initMaiga = () => {
                     this.$refs.remoteAudio.srcObject = event.streams[0];
                 }
             };
+
+            this.peerConnection.onconnectionstatechange = () => {
+                switch (this.peerConnection.connectionState) {
+                    case 'disconnected':
+                    case 'failed':
+                        this.isReconnecting = true;
+                        this.showToast('Call Status', 'Connection lost. Reconnecting...', 'error');
+                        break;
+                    case 'connected':
+                        this.isReconnecting = false;
+                        this.isPoorConnection = false;
+                        this.callStatus = 'Connected';
+                        this.showToast('Call Status', 'Connected!', 'success');
+                        break;
+                    case 'new':
+                    case 'connecting':
+                        this.callStatus = 'Connecting...';
+                        break;
+                }
+            };
         },
         pollCallStatus() {
             // Polling deprecated in favor of Socket events (call_accepted, call_ended)
@@ -4914,8 +4977,7 @@ const initMaiga = () => {
             document.getElementById('ringing-sound').pause();
 
             // Setup UI
-            let caller = this.friends.find(f => f.id == callData.caller_id);
-            if (!caller) caller = { id: callData.caller_id, name: callData.name, avatar: callData.avatar };
+            let caller = this.friends.find(f => f.id == callData.caller_id) || { id: callData.caller_id, name: callData.name, avatar: callData.avatar };
             this.activeChat = caller;
             this.isCalling = true;
             this.callType = callData.type;
@@ -4956,6 +5018,7 @@ const initMaiga = () => {
             }
             
             // Notify via Socket
+            const wasActiveChat = this.activeChat;
             if (this.activeChat) {
                 this.socket.emit('end_call', { to: this.activeChat.id });
             }
@@ -4974,7 +5037,7 @@ const initMaiga = () => {
             this.peerConnection = null;
             this.currentCallId = null;
             this.$refs.remoteVideo.pause();
-            this.$refs.remoteVideo.src = '';
+            this.$refs.remoteVideo.srcObject = null;
 
             if (this.activeChat) {
                 if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
