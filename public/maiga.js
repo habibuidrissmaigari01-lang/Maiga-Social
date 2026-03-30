@@ -978,6 +978,7 @@ const initMaiga = () => {
         editingMessageId: null,
         isSearchingChat: false,
         isPaused: false,
+        isSendingMessage: false,
         brightnessIntensity: 100,
         contrastIntensity: 100,
         chatSearchQuery: '',
@@ -2177,6 +2178,7 @@ const initMaiga = () => {
 
             if (this.isBlocked(this.activeChat?.id)) return;
             let content = contentOverride || mediaData || this.newMessage;
+            this.isSendingMessage = true;
             
             // Handle Edit
             if (this.editingMessageId) {
@@ -2187,6 +2189,7 @@ const initMaiga = () => {
                 this.fetchMessages(this.activeChat, false);
                 this.newMessage = '';
                 this.editingMessageId = null;
+                this.isSendingMessage = false;
 
                 return;
             }

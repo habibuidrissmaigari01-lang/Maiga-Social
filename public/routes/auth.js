@@ -138,21 +138,32 @@ router.post('/register', [
 router.post('/login', async (req, res) => {
     try {
         const { login_identity, login_password, remember_me } = req.body;
-        const user = await User.findOne({ $or: [{ email: login_identity }, { username: login_identity }] }).select('+password');
+        const identity = login_identity.trim().toLowerCase();
+        const user = await User.findOne({ $or: [{ email: identity }, { username: identity }] }).select('+password');
         
         if (!user || !(await bcrypt.compare(login_password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
-        
-        // Handle Remember Me
-        if (remember_me) {
-            req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 Days
-        }
 
-        req.session.userId = user._id;
-        user.online = true;
-        await user.save();
-        res.json({ message: 'Login successful' });
+        // Regenerate the session to prevent session fixation and clear any previous user state
+        req.session.regenerate(async (err) => {
+            if (err) return res.status(500).json({ message: 'Session error' });
+
+            // Handle Remember Me
+            if (remember_me) {
+                req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 Days
+            }
+
+            req.session.userId = user._id.toString();
+            user.online = true;
+            await user.save();
+
+            // Explicitly save the session before sending the response to ensure consistency
+            req.session.save(saveErr => {
+                if (saveErr) return res.status(500).json({ message: 'Session save failed' });
+                res.json({ message: 'Login successful' });
+            });
+        });
     } catch (err) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -168,9 +179,12 @@ router.get('/check_username', async (req, res) => {
 });
 
 router.get('/logout', (req, res) => {
-    if (req.session.userId) User.findByIdAndUpdate(req.session.userId, { online: false }).exec();
-    req.session.destroy();
-    res.json({ success: true });
+    if (req.session.userId) {
+        User.findByIdAndUpdate(req.session.userId, { online: false }).exec();
+    }
+    req.session.destroy(() => {
+        res.json({ success: true });
+    });
 });
 
 router.post('/forgot-password', async (req, res) => {
