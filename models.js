@@ -177,6 +177,7 @@ const messageSchema = new mongoose.Schema({
     is_read: { type: Boolean, default: false },
     read_by: [{ 
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        first_name: String, // Cache name for quick display
         read_at: { type: Date, default: Date.now }
     }],
     deleted_for: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

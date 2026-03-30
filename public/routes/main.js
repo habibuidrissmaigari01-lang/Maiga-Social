@@ -32,10 +32,16 @@ const uploadToR2 = async (file, folder) => {
 
 // Helper
 const formatTime = (date) => {
-    const diff = Math.floor((new Date() - new Date(date)) / 1000);
+    const now = new Date();
+    const past = new Date(date);
+    const diff = Math.floor((now - past) / 1000);
+
+    if (diff < 0) return 'Just now'; 
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-    return new Date(date).toLocaleDateString();
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return past.toLocaleDateString();
 };
 
 // --- Routes ---
@@ -100,8 +106,10 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
         content: p.content, media: p.media, media_type: p.media_type,
         time: formatTime(p.createdAt), likes: p.likes.length,
-        saved: p.saved_by.includes(req.session.userId),
-        myReaction: p.likes.includes(req.session.userId) ? 'like' : null
+        comments: p.comments_count || 0, // Ensure comments count is included
+        views: p.views || 0, // Ensure views count is included
+        saved: p.saved_by.some(id => id.toString() === req.session.userId),
+        myReaction: p.likes.some(id => id.toString() === req.session.userId) ? 'like' : null
     })));
 });
 
@@ -118,15 +126,26 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
         media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 'image') : null
     });
     await post.save();
-    res.json({ success: true, post: await post.populate('user', 'name avatar') });
+    const populatedPost = await post.populate('user', 'name first_name surname avatar is_verified');
+    
+    // Return a fully formatted post object for optimistic UI update
+    res.json({ success: true, post: {
+        id: populatedPost._id, user_id: populatedPost.user?._id, author: populatedPost.user?.full_name || 'Deleted User', avatar: populatedPost.user?.avatar,
+        content: populatedPost.content, media: populatedPost.media, 
+        media_type: populatedPost.media_type || (req.file?.mimetype.startsWith('video') ? 'video' : 'image'),
+        time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null,
+        verified: populatedPost.user?.is_verified ?? false
+    }});
 });
 
 router.post('/send_message', isAuthenticated, upload.single('media'), async (req, res) => {
-    const { receiver_id, group_id, content, media_type } = req.body;
+    const { receiver_id, group_id, content, media_type, reply_to_id } = req.body;
     
     let mediaUrl = null;
     if (req.file) {
-        const folder = req.file.mimetype.startsWith('audio') ? 'voice_notes' : 'messages';
+        // Organize R2 storage by media type
+        const isAudio = req.file.mimetype.startsWith('audio') || media_type === 'audio';
+        const folder = isAudio ? 'voice_notes' : (media_type === 'sticker' ? 'stickers' : 'messages');
         mediaUrl = await uploadToR2(req.file, folder);
     }
 
@@ -136,7 +155,8 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
         group: group_id || null,
         content: content,
         media: mediaUrl,
-        media_type: media_type || 'text'
+        media_type: media_type || 'text',
+        reply_to: reply_to_id || null
     });
     
     // Hook in models.js now handles the socket emission automatically!
@@ -154,14 +174,17 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
 
     const chats = new Map();
     messages.forEach(m => {
-        const other = m.sender._id.equals(userId) ? m.receiver : m.sender;
+        if (!m.sender || !m.receiver) return; // Skip if user was deleted
+        
+        const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
         const otherId = other._id.toString();
 
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
-                lastMsg: m.content, time: formatTime(m.created_at)
+                lastMsg: m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`, 
+                time: formatTime(m.created_at)
             });
         }
     });
@@ -174,14 +197,22 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
         const archivedIds = user.archived_chats.map(c => c.chat_id.toString());
 
         const groups = await Group.find({ 'members.user': req.session.userId, _id: { $nin: archivedIds } });
-        res.json(groups.map(g => ({
-            id: g._id,
-            name: g.name,
-            avatar: g.avatar || 'img/default-group.png',
-            type: 'group',
-            lastMsg: 'Group chat',
-            unread: false
-        })));
+        
+        const groupData = await Promise.all(groups.map(async g => {
+            // Fetch the actual last message for this group to persist it after refresh
+            const lastMessage = await Message.findOne({ group: g._id }).sort({ created_at: -1 });
+            
+            return {
+                id: g._id,
+                name: g.name,
+                avatar: g.avatar || 'img/default-group.png',
+                type: 'group',
+                lastMsg: lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `Sent a ${lastMessage.media_type}`) : 'No messages yet',
+                time: lastMessage ? formatTime(lastMessage.created_at) : '',
+                unread: false
+            };
+        }));
+        res.json(groupData);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch groups' });
     }
@@ -216,8 +247,11 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
                 media_type: p.media_type,
                 time: formatTime(p.createdAt),
                 likes: p.likes.length,
-                author: user.full_name, // Redundant but useful for frontend consistency
-                avatar: user.avatar // Redundant but useful for frontend consistency
+                comments: p.comments_count || 0,
+                saved: p.saved_by.some(id => id.toString() === req.session.userId.toString()),
+                myReaction: p.likes.some(id => id.toString() === req.session.userId.toString()) ? 'like' : null,
+                author: user.full_name,
+                avatar: user.avatar
             })),
             hasMorePosts: posts.length > limit
         });
@@ -270,16 +304,106 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
         query.content = { $regex: req.query.search, $options: 'i' };
     }
 
-    const messages = await Message.find(query).sort({ created_at: 1 }).populate('sender', 'name first_name surname avatar');
+    const messages = await Message.find(query)
+        .sort({ created_at: 1 })
+        .populate('sender', 'name first_name surname avatar')
+        .populate('reply_to');
+
     res.json(messages.map(m => ({
         id: m._id, sender_id: m.sender._id, content: m.content,
         media: m.media, media_type: m.media_type, created_at: m.created_at,
-        is_read: m.is_read, avatar: m.sender.avatar,
+        is_read: m.is_read, avatar: m.sender.avatar, 
+        pinned: m.is_pinned,
+        is_edited: m.is_edited,
+        read_by: m.read_by,
+        poll_id: m.poll?._id,
+        question: m.poll?.question,
+        options: m.poll?.options,
+        replyTo: m.reply_to ? { author: 'User', content: m.reply_to.content } : null,
         first_name: m.sender.first_name || m.sender.name?.split(' ')[0] || 'User',
         surname: m.sender.surname || ''
     })));
 });
 
+router.post('/mark_messages_read', isAuthenticated, async (req, res) => {
+    const { chat_id, type } = req.body;
+    const userId = req.session.userId;
+    const user = await User.findById(userId);
+
+    const filter = type === 'group' 
+        ? { group: chat_id, 'read_by.user': { $ne: userId } }
+        : { sender: chat_id, receiver: userId, is_read: false };
+
+    await Message.updateMany(filter, { 
+        $set: { is_read: true },
+        $addToSet: { read_by: { user: userId, first_name: user.first_name || user.name } } 
+    });
+    res.json({ success: true });
+});
+
+router.post('/toggle_pin_message', isAuthenticated, async (req, res) => {
+    const { message_id } = req.body;
+    const msg = await Message.findById(message_id);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    
+    msg.is_pinned = !msg.is_pinned;
+    await msg.save();
+    res.json({ success: true, pinned: msg.is_pinned });
+});
+
+router.post('/send_wave', isAuthenticated, async (req, res) => {
+    const { user_id } = req.body;
+    const waveMsg = new Message({
+        sender: req.session.userId,
+        receiver: user_id,
+        content: '👋',
+        media_type: 'sticker'
+    });
+    await waveMsg.save();
+    res.json({ success: true });
+});
+
+router.post('/create_poll', isAuthenticated, async (req, res) => {
+    const { receiver_id, group_id, question, options } = req.body;
+    const pollData = {
+        question,
+        options: options.map(opt => ({ text: opt, votes: [] }))
+    };
+    
+    const msg = new Message({
+        sender: req.session.userId,
+        receiver: receiver_id || null,
+        group: group_id || null,
+        media_type: 'poll',
+        poll: pollData
+    });
+    await msg.save();
+    res.json({ success: true });
+});
+
+router.post('/vote_poll', isAuthenticated, async (req, res) => {
+    const { poll_id, option_id } = req.body;
+    const userId = req.session.userId;
+
+    // Find message containing this poll and remove user's existing votes in that poll
+    await Message.updateOne(
+        { "poll._id": poll_id },
+        { $pull: { "poll.options.$[].votes": userId } }
+    );
+
+    // Add vote to specific option
+    const result = await Message.updateOne(
+        { "poll.options._id": option_id },
+        { $addToSet: { "poll.options.$.votes": userId } }
+    );
+
+    res.json({ success: !!result.modifiedCount });
+});
+
+router.get('/api/get_message_read_details', isAuthenticated, async (req, res) => {
+    const msg = await Message.findById(req.query.message_id).populate('read_by.user', 'name avatar');
+    res.json(msg ? msg.read_by : []);
+});
 router.post('/toggle_reaction', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const post = await Post.findById(req.body.post_id);
@@ -314,8 +438,9 @@ router.post('/toggle_follow', isAuthenticated, async (req, res) => {
 
 router.post('/toggle_save', isAuthenticated, async (req, res) => {
     const post = await Post.findById(req.body.post_id);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
     const userId = req.session.userId;
-    const index = post.saved_by.indexOf(userId);
+    const index = post.saved_by.findIndex(id => id.toString() === userId.toString());
     if (index === -1) {
         post.saved_by.push(userId);
     } else {
@@ -358,10 +483,14 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
     const query = { media_type: 'video' };
     if (req.query.user_id) query.user = req.query.user_id;
     const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 });
+    const userId = req.session.userId;
     res.json(reels.map(r => ({
         id: r._id, user_id: r.user._id, author: r.user.name, avatar: r.user.avatar,
-        media: r.media, caption: r.content, likes: r.likes.length, views: r.views,
-        liked: r.likes.includes(req.session.userId)
+        media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0,
+        comments: r.comments_count || 0, // Ensure comments count is included
+        liked: r.likes.some(id => id.toString() === userId.toString()),
+        saved: r.saved_by.some(id => id.toString() === userId.toString()),
+        myReaction: r.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
     })));
 });
 
@@ -503,7 +632,7 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
         res.json(filteredStories.map(s => ({
             id: s._id,
             user_id: s.user._id,
-            first_name: s.user.name.split(' ')[0],
+            first_name: s.user.first_name || s.user.name?.split(' ')[0] || 'User',
             avatar: s.user.avatar,
             media: s.media,
             type: s.type,

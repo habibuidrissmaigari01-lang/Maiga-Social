@@ -11,6 +11,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
     <script src="maiga.js" defer></script>
     <script src="alpine.js" defer></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -80,6 +81,7 @@
         .anim-skew:hover .anim-unskew {
             transform: skewX(0deg) scale(1);
         }
+        .vertical-range { writing-mode: bt-lr; -webkit-appearance: slider-vertical; }
     </style>
 </head>
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
@@ -574,13 +576,14 @@
                         <i class="fa-solid fa-microphone-lines text-red-500 animate-pulse"></i>
                         <span class="font-mono font-bold text-sm" x-text="formatRecordingTime(recordingDuration)">00:00</span>
                         <span class="text-xs text-gray-500">Release to send</span>
+                        <span class="text-xs text-gray-500" x-text="isSendingMessage ? 'Sending...' : 'Release to send'"></span>
                     </div>
                 </div>
-                <button x-show="!newMessage.trim()" @mousedown="startRecording()" @mouseup="stopRecording()" @touchstart.prevent="startRecording()" @touchend.prevent="stopRecording()" class="p-2 text-blue-600 disabled:opacity-30 transition-all" :disabled="isBlocked(activeChat?.id)">
-                    <i class="fa-solid text-xl" :class="isRecording ? 'fa-stop text-red-500' : 'fa-microphone'"></i>
+                <button x-show="!newMessage.trim()" @mousedown="startRecording()" @mouseup="stopRecording()" @touchstart.prevent="startRecording()" @touchend.prevent="stopRecording()" class="p-2 text-blue-600 disabled:opacity-30 transition-all" :disabled="isBlocked(activeChat?.id) || isSendingMessage">
+                    <i class="fa-solid text-xl" :class="isSendingMessage ? 'fa-circle-notch fa-spin' : (isRecording ? 'fa-stop text-red-500' : 'fa-microphone')"></i>
                 </button>
-                <button x-show="newMessage.trim()" @click="sendMessage()" class="p-2 text-blue-600 disabled:opacity-30 transition-all" :disabled="!newMessage.trim() || isBlocked(activeChat?.id)">
-                    <i class="fa-solid fa-paper-plane text-xl"></i>
+                <button x-show="newMessage.trim()" @click="sendMessage()" class="p-2 text-blue-600 disabled:opacity-30 transition-all" :disabled="!newMessage.trim() || isBlocked(activeChat?.id) || isSendingMessage">
+                    <i class="fa-solid text-xl" :class="isSendingMessage ? 'fa-circle-notch fa-spin' : 'fa-paper-plane'"></i>
                 </button>
             </div>
         </div>
@@ -917,7 +920,7 @@
                         <span class="font-bold text-sm text-white" x-text="viewingPost?.author"></span>
                         <template x-if="viewingPost?.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template>
                     </div>
-                    <span class="text-[11px] text-gray-400" x-text="viewingPost?.time + ' ago'"></span>
+                    <span class="text-[11px] text-gray-400" x-text="viewingPost?.time"></span>
                 </div>
             </div>
             <p class="text-sm leading-relaxed mb-4 text-gray-200 whitespace-pre-wrap" x-text="viewingPost?.content"></p>
@@ -1006,7 +1009,7 @@
         <div class="absolute bottom-4 left-4 z-30" x-show="viewingStory?.user?.id === user.id">
              <button @click="showSeenList = true; clearInterval(storyTimer)" class="flex items-center space-x-2 text-white font-bold text-sm drop-shadow-md bg-black/20 backdrop-blur-md px-3 py-1.5 rounded-full">
                  <i class="fa-solid fa-eye"></i>
-                 <span x-text="viewingStory?.list[viewingStory.index].seenBy?.length || 0"></span>
+                 <span x-text="viewingStory?.list[viewingStory.index].viewCount || 0"></span>
              </button>
         </div>
 
@@ -1075,7 +1078,7 @@
             </div>
             <!-- Upload Progress Overlay -->
             <div x-show="isPostingStory" class="absolute inset-0 z-20 bg-black/80 flex flex-col items-center justify-center">
-                <div class="w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div class="w-64 h-2 bg-gray-800 rounded-full overflow-hidden relative">
                     <div class="h-full bg-blue-600 transition-all duration-100 ease-out" :style="`width: ${uploadProgress}%`"></div>
                 </div>
                 <p class="text-white text-xs font-bold mt-4 uppercase tracking-widest">Uploading <span x-text="uploadProgress + '%'"></span></p>
@@ -1908,12 +1911,12 @@
                         <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700"> 
                         <div class="hover:underline">
                             <div class="flex items-center space-x-1"><span class="font-bold text-sm" x-text="post.author"></span><template x-if="post.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template></div> 
-                            <span class="text-[11px] text-gray-500 font-medium" x-text="post.time + ' ago'"></span>
+                            <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
                         </div>
                     </div>
                     <button @click.stop="selectedPostForMenu = post; showPostOptions = true" class="p-2 text-gray-400"><i class="fa-solid fa-ellipsis"></i></button>
                 </div>
-                <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-text="post.content"></p>
+                <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content)"></p>
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
                         <template x-if="post.mediaType !== 'video'"><img :src="post.media" class="w-full h-auto object-cover"></template>
@@ -1950,7 +1953,7 @@
                             </div>
 
                             <!-- Main Like Button -->
-                            <button @click.stop="setReaction(post, 'like')" class="flex items-center space-x-1.5 transition-colors active:scale-125" :class="getReactionColor(post.myReaction)">
+                            <button @click.stop="setReaction(post, 'like')" class="flex items-center space-x-1.5 transition-colors duration-75 active:scale-125" :class="getReactionColor(post.myReaction)">
                                 <i class="text-xl" :class="getReactionIcon(post.myReaction)"></i>
                                 <span class="text-xs font-bold" x-text="post.likes"></span>
                             </button>
@@ -1989,12 +1992,12 @@
                                         <span @click.stop="openUserProfile(reel.user_id)" class="font-bold text-sm cursor-pointer hover:underline" x-text="reel.author"></span>
                                         <button x-show="!isFollowing(reel.user_id) && user.id != reel.user_id" @click.stop="toggleFollow(reel.user_id)" class="text-white text-sm font-bold">· Follow</button>
                                     </div>
-                                </div>
+                                </div> 
                                 <p class="text-sm" x-text="reel.caption"></p>
                             </div>
                             <div class="flex flex-col items-center space-y-6 pointer-events-auto">
                                 <button @click.stop="toggleReelLike(reel)" class="flex flex-col items-center group">
-                                    <i class="fa-solid fa-heart text-3xl transition-all duration-200 group-active:scale-125" :class="reel.liked ? 'text-red-500' : 'text-white'"></i>
+                                    <i class="fa-solid fa-heart text-3xl transition-all duration-75 group-active:scale-125" :class="reel.liked ? 'text-red-500' : 'text-white'"></i>
                                     <span class="text-xs font-bold" x-text="reel.likes"></span>
                                 </button>
                                 <button @click.stop="openComments(reel, 'reel')" class="flex flex-col items-center group">
@@ -2038,7 +2041,7 @@
                         <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700">
                         <div>
                             <div class="flex items-center space-x-1"><span class="font-bold text-sm" x-text="post.author"></span><template x-if="post.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template></div>
-                            <span class="text-[11px] text-gray-500 font-medium" x-text="post.time + ' ago'"></span>
+                            <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
                         </div>
                     </div>
                     <button @click.stop="selectedPostForMenu = post; showPostOptions = true" class="p-2 text-gray-400"><i class="fa-solid fa-ellipsis"></i></button>
@@ -2296,7 +2299,7 @@
                                 <img :src="post.avatar" class="w-8 h-8 rounded-full">
                                 <div>
                                     <span class="font-bold text-sm" x-text="post.author"></span>
-                                    <span class="text-xs text-gray-500"> • <span x-text="post.time"></span> ago</span>
+                                    <span class="text-xs text-gray-500"> • <span x-text="post.time"></span></span>
                                 </div>
                             </div>
                             <p class="text-sm leading-relaxed line-clamp-2" x-text="post.content"></p>
@@ -2659,12 +2662,13 @@
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm hidden lg:block" @click="isCreatingPost = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
         <div class="bg-white dark:bg-gray-900 flex flex-col p-4 w-full h-full lg:w-[600px] lg:h-auto lg:rounded-3xl lg:shadow-2xl relative animate-slideUp" :style="`transform: translate(${createPostOffset.x}px, ${createPostOffset.y}px)`">
         <div class="flex justify-between items-center mb-6 lg:cursor-move"
-             @mousedown="startCreatePostDrag($event)"
-             @mousemove.window="handleCreatePostDrag($event)"
-             @mouseup.window="stopCreatePostDrag()">
+             @mousedown="startCreatePostDrag($event)" @mousemove.window="handleCreatePostDrag($event)" @mouseup.window="stopCreatePostDrag()">
             <button @click="isCreatingPost = false" class="text-gray-500 font-bold p-2">Cancel</button>
-            <h3 class="font-black">Create Post</h3>
-            <button @click="createPost()" class="bg-blue-600 text-white px-6 py-2 rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all">Post</button>
+            <h3 class="font-black" x-text="isUploadingPost ? 'Uploading...' : 'Create Post'"></h3>
+            <button @click="createPost()" :disabled="isUploadingPost || isUploadingReel" class="bg-blue-600 text-white px-6 py-2 rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all">
+                <template x-if="isUploadingPost || isUploadingReel"><i class="fa-solid fa-spinner fa-spin mr-2"></i></template>
+                Post
+            </button>
         </div>
         <div class="flex items-center space-x-3 mb-4">
             <img :src="user.avatar" class="w-10 h-10 rounded-full border shadow-sm">
@@ -2690,115 +2694,110 @@
         <div class="border-t dark:border-gray-800 py-4 flex items-center space-x-8">
             <button @click="$refs.postMedia.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
             <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia">
-            <button @click="openCamera('post')" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
+            <button @click="openCamera('post')" :disabled="isUploadingPost || isUploadingReel" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
             <button class="text-orange-500 flex items-center space-x-2"><i class="fa-solid fa-face-smile text-xl"></i><span class="text-xs font-black">Feeling</span></button>
         </div>
         </div>
     </div>
 
-    <!-- Web-based Camera Interface UI -->
-    <div x-show="isCameraOpen" x-cloak class="fixed inset-0 z-[1200] bg-black flex flex-col animate-fadeIn" style="display: none;">
-        <!-- Recording Progress Bar -->
-        <div x-show="isCameraRecording" class="absolute top-0 left-0 right-0 h-1.5 bg-white/20 z-50">
-            <div class="h-full bg-red-600 transition-all duration-100 ease-linear" :style="`width: ${recordingProgress}%`"></div>
-        </div>
+    <!-- Professional Camera Modal -->
+    <template x-if="isCameraOpen">
+        <div class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center overflow-hidden font-sans">
+            <!-- Hidden Video Source -->
+            <video x-ref="cameraFeed" autoplay playsinline class="hidden"></video>
+            
+            <!-- Live Canvas Output -->
+            <div class="relative w-full h-full flex items-center justify-center bg-black">
+                <canvas x-ref="cameraCanvas" 
+                        class="w-full h-full object-cover transition-transform duration-300"
+                        :style="`transform: scale(${zoomScale})`"
+                        @touchstart="handlePinchStart($event)"
+                        @touchmove="handlePinchMove($event)"
+                        @touchend="handlePinchEnd()"></canvas>
 
-        <!-- Visual Countdown Overlay -->
-        <div x-show="isCountdownActive" x-transition class="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none">
-            <span class="text-white text-9xl font-black drop-shadow-2xl animate-pulse" x-text="countdownValue"></span>
-        </div>
-
-        <!-- Viewport: Hidden video source and visible filtered canvas -->
-        <video x-ref="cameraFeed" class="hidden" autoplay playsinline></video>
-        <canvas x-ref="cameraCanvas" class="absolute inset-0 w-full h-full object-cover transition-transform duration-100 ease-out"
-                :style="`transform: perspective(1000px) scale(${dollyZoomScale}) translateZ(${(dollyZoomScale - 1) * 200}px)`"></canvas>
-        <audio x-ref="cameraMusicPlayer" class="hidden"></audio>
-        <video x-ref="secondaryVideo" :src="secondaryVideoUrl" class="hidden" autoplay loop muted playsinline></video>
-        <input type="file" x-ref="overlayUpload" class="hidden" accept="video/*" @change="handleOverlayUpload">
-        
-        <!-- Top Navigation -->
-        <div class="relative z-10 p-4 flex justify-between items-center bg-gradient-to-b from-black/60 to-transparent">
-            <button @click="closeCamera()" class="p-2 text-white bg-black/20 rounded-full backdrop-blur-md">
-                <i class="fa-solid fa-xmark text-xl"></i>
-            </button>
-            <button @click="musicPickerSource = 'camera'; showMusicPicker = true" class="flex items-center space-x-2 px-4 py-1.5 bg-black/40 text-white rounded-full backdrop-blur-md border border-white/10 text-sm font-bold transition-all" :class="cameraMusic ? 'border-blue-500' : ''" :style="`transform: scale(${1 + (micVolume/500)})`">
-                <i class="fa-solid fa-music"></i>
-                <span x-text="cameraMusic ? cameraMusic.title : 'Add Sound'"></span>
-                <div x-show="micVolume > 10" class="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping ml-1"></div>
-                <i x-show="cameraMusic" @click.stop="cameraMusic = null" class="fa-solid fa-circle-xmark ml-2 text-red-400"></i>
-            </button>
-            <!-- Right Cluster -->
-            <div class="flex flex-col space-y-4 bg-black/20 p-2 rounded-2xl backdrop-blur-md border border-white/5">
-                <!-- Double Exposure Toggle & Long-press for Upload -->
-                <div class="flex flex-col items-center space-y-1">
-                    <button @click="isDoubleExposureActive = !isDoubleExposureActive" @contextmenu.prevent="$refs.overlayUpload.click()" class="p-2 hover:scale-110 transition-transform" :class="isDoubleExposureActive ? 'text-cyan-400' : 'text-white'"><i class="fa-solid fa-clone text-xl"></i></button>
-                    <span x-show="isDoubleExposureActive" @click="$refs.overlayUpload.click()" class="text-[8px] text-cyan-400 font-bold uppercase cursor-pointer">Change</span>
+                <!-- Top Action Bar -->
+                <div class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+                    <button @click="closeCamera()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all">
+                        <i class="fa-solid fa-xmark text-2xl"></i>
+                    </button>
+                    
+                    <div class="flex gap-4">
+                        <button @click="showMusicPicker = true; musicPickerSource = 'camera'" 
+                                class="p-3 text-white hover:bg-white/20 rounded-full transition-all"
+                                :class="cameraMusic ? 'bg-indigo-600' : ''">
+                            <i class="fa-solid fa-music text-xl"></i>
+                        </button>
+                        <button @click="flipCamera()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all">
+                            <i class="fa-solid fa-camera-rotate text-xl"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <button @click="isGlitchActive = !isGlitchActive" class="p-2 hover:scale-110 transition-transform" :class="isGlitchActive ? 'text-red-500 animate-pulse' : 'text-white'"><i class="fa-solid fa-bolt-lightning text-xl"></i></button>
-                <button @click="voiceEffect = (voiceEffect === 'none' ? 'deep' : (voiceEffect === 'deep' ? 'chipmunk' : 'none'))" class="p-2 hover:scale-110 transition-transform" :class="voiceEffect !== 'none' ? 'text-purple-400' : 'text-white'"><i class="fa-solid fa-microphone-lines text-xl"></i></button>
-                <button @click="arFilterMode = (arFilterMode === 'mask' ? 'hat' : 'mask')" class="p-2 hover:scale-110 transition-transform" :class="arFilterMode === 'hat' ? 'text-orange-400' : 'text-blue-400'"><i class="fa-solid fa-hat-wizard text-xl"></i></button>
-                <button @click="isBackgroundRemovalActive = !isBackgroundRemovalActive; if(isBackgroundRemovalActive) initSelfieSegmentation()" class="p-2 hover:scale-110 transition-transform" :class="isBackgroundRemovalActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-user-gear text-xl"></i></button>
-                <button @click="isFaceMeshActive = !isFaceMeshActive; if(isFaceMeshActive) initFaceMesh()" class="p-2 hover:scale-110 transition-transform" :class="isFaceMeshActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-face-viewfinder text-xl"></i></button>
-                <button @click="flipCamera()" class="text-white p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-camera-rotate text-xl"></i></button>
-                <button @click="isGreenScreenActive = !isGreenScreenActive" class="p-2 hover:scale-110 transition-transform" :class="isGreenScreenActive ? 'text-green-400' : 'text-white'"><i class="fa-solid fa-person-rays text-xl"></i></button>
-                <button @click="isAutoCaptureActive = !isAutoCaptureActive" class="p-2 hover:scale-110 transition-transform" :class="isAutoCaptureActive ? 'text-yellow-400' : 'text-white'"><i class="fa-solid fa-face-laugh text-xl"></i></button>
-                <button @click="isGhostModeActive = !isGhostModeActive" class="p-2 hover:scale-110 transition-transform" :class="isGhostModeActive ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-ghost text-xl"></i></button>
-                <button class="text-white p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-bolt text-xl"></i></button>
-                <button @click="toggleBeautyFilter()" class="p-2 hover:scale-110 transition-transform" :class="beautyFilter !== 'none' ? 'text-blue-400' : 'text-white'"><i class="fa-solid fa-wand-magic-sparkles text-xl"></i></button>
+                <!-- Vertical Sidebar (Tools & Sliders) -->
+                <div class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-6 items-center p-4 rounded-3xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl">
+                    <button @click="toggleBeautyFilter()" 
+                            class="flex flex-col items-center gap-1 group"
+                            :class="filters[filterIndex].name === 'Beauty' ? 'text-yellow-400' : 'text-white'">
+                        <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
+                        <span class="text-[9px] font-bold tracking-tighter uppercase">Beauty</span>
+                    </button>
+
+                    <!-- Intensity Sliders (Active only in Beauty Mode) -->
+                    <div x-show="filters[filterIndex].name === 'Beauty'" x-collapse class="flex flex-col gap-8 py-4 border-t border-white/10">
+                        <div class="flex flex-col items-center group">
+                            <input type="range" min="50" max="200" x-model="brightnessIntensity" 
+                                   class="appearance-none bg-white/20 h-28 w-1.5 rounded-full outline-none vertical-range cursor-pointer">
+                            <i class="fa-solid fa-sun text-[10px] text-white/50 mt-2"></i>
+                        </div>
+                        <div class="flex flex-col items-center group">
+                            <input type="range" min="50" max="200" x-model="contrastIntensity" 
+                                   class="appearance-none bg-white/20 h-28 w-1.5 rounded-full outline-none vertical-range cursor-pointer">
+                            <i class="fa-solid fa-circle-half-stroke text-[10px] text-white/50 mt-2"></i>
+                        </div>
+                    </div>
+
+                    <button @click="isFaceMeshActive = !isFaceMeshActive; if(isFaceMeshActive) initFaceMesh()" 
+                            class="flex flex-col items-center gap-1"
+                            :class="isFaceMeshActive ? 'text-blue-400' : 'text-white'">
+                        <i class="fa-solid fa-face-smile text-xl"></i>
+                        <span class="text-[9px] font-bold tracking-tighter uppercase">AR</span>
+                    </button>
+                </div>
+
+                <!-- Bottom Interface -->
+                <div class="absolute bottom-0 left-0 right-0 pb-12 pt-20 flex flex-col items-center bg-gradient-to-t from-black/90 to-transparent">
+                    <!-- Mode Selector Carousel -->
+                    <div class="flex gap-8 mb-8 items-center justify-center w-full">
+                        <template x-for="mode in ['photo', '15s', '30s', '60s']">
+                            <button @click="cameraMode = mode" 
+                                    class="relative transition-all"
+                                    :class="cameraMode === mode ? 'text-white scale-110 font-bold' : 'text-white/50 scale-90 text-xs'">
+                                <span x-text="mode === 'photo' ? 'PHOTO' : mode"></span>
+                                <div x-show="cameraMode === mode" class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></div>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Shutter System -->
+                    <div class="relative">
+                        <div x-show="isCameraRecording" class="absolute inset-[-8px]">
+                            <svg class="w-[112px] h-[112px] -rotate-90">
+                                <circle cx="56" cy="56" r="52" stroke="currentColor" stroke-width="4" fill="transparent" class="text-white/10" />
+                                <circle cx="56" cy="56" r="52" stroke="#ef4444" stroke-width="4" fill="transparent" 
+                                        stroke-dasharray="326.7" :stroke-dashoffset="326.7 - (326.7 * recordingProgress / 100)"
+                                        stroke-linecap="round" />
+                            </svg>
+                        </div>
+                        <button @click="triggerShutter()" 
+                                class="w-24 h-24 rounded-full border-[6px] border-white flex items-center justify-center transition-all active:scale-95">
+                            <div class="transition-all duration-300"
+                                 :class="isCameraRecording ? 'w-10 h-10 bg-red-600 rounded-lg' : 'w-20 h-20 bg-white rounded-full scale-90'"></div>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-
-        <!-- Dolly Zoom (Vertigo) Slider -->
-        <div class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col items-center space-y-2 z-20">
-            <span class="text-[8px] font-bold text-white uppercase vertical-text tracking-widest opacity-60">Vertigo</span>
-            <div class="h-48 w-1.5 bg-white/20 rounded-full relative overflow-hidden">
-                <input type="range" min="1" max="2" step="0.01" x-model="dollyZoomScale" class="absolute inset-0 w-48 h-1.5 origin-center -rotate-90 translate-y-24 -translate-x-[90px] bg-transparent appearance-none cursor-pointer accent-white">
-            </div>
-        </div>
-
-        <!-- Bottom Controls -->
-        <div class="mt-auto relative z-10 p-6 pb-10 bg-gradient-to-t from-black/80 to-transparent flex flex-col items-center">
-            <!-- Horizontal Mode Selector -->
-            <div class="flex space-x-6 mb-6 overflow-x-auto no-scrollbar snap-x px-20">
-                <template x-for="mode in ['15s', '30s', '60s', 'Photo']">
-                    <button @click="cameraMode = mode.toLowerCase()" 
-                            class="snap-center text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap"
-                            :class="cameraMode === mode.toLowerCase() ? 'text-white scale-110' : 'text-white/40'"
-                            x-text="mode"></button>
-                </template>
-            </div>
-
-            <div class="w-full flex justify-between items-center max-w-sm">
-                <!-- Effects Button -->
-                <button class="flex flex-col items-center space-y-1 group">
-                    <div class="w-12 h-12 rounded-xl border-2 border-white/20 bg-black/40 flex items-center justify-center backdrop-blur-md group-hover:border-white transition-colors">
-                        <i class="fa-solid fa-face-grin-stars text-white text-xl"></i>
-                    </div>
-                    <span class="text-[10px] text-white font-bold uppercase tracking-tighter">Effects</span>
-                </button>
-
-                <!-- Shutter Button -->
-                <button @click="triggerShutter()" class="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center p-1 active:scale-95 transition-all" :style="`transform: scale(${1 + (micVolume/800)})`">
-                    <div class="w-full h-full rounded-full transition-all duration-300" 
-                         :class="[cameraMode === 'photo' ? 'bg-white' : 'bg-red-600', 
-                                  isCameraRecording ? 'scale-75 rounded-lg' : 'scale-100']"
-                         :style="`opacity: ${0.8 + (micVolume/255)}`"
-                    >
-                    </div>
-                </button>
-
-                <!-- Upload Button -->
-                <button @click="$refs.postMedia.click(); closeCamera()" class="flex flex-col items-center space-y-1 group">
-                    <div class="w-12 h-12 rounded-xl border-2 border-white/20 bg-black/40 flex items-center justify-center backdrop-blur-md overflow-hidden group-hover:border-white transition-colors">
-                        <img :src="user.avatar" class="w-full h-full object-cover opacity-50 grayscale">
-                        <i class="fa-solid fa-arrow-up-from-bracket absolute text-white text-sm"></i>
-                    </div>
-                    <span class="text-[10px] text-white font-bold uppercase tracking-tighter">Upload</span>
-                </button>
-            </div>
-        </div>
-    </div>
+    </template>
     </div>
     </div>
     </div>
@@ -3036,20 +3035,4 @@
                  <button @click="toggleGlobalPlayback()" class="w-16 h-16 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform active:scale-95">
                      <i class="fa-solid text-2xl" :class="globalPlayer.playing ? 'fa-pause pl-1' : 'fa-play pl-1'"></i>
                  </button>
-                 <button class="text-gray-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-forward-step text-xl"></i></button>
-             </div>
-        </div>
-    </div>
-
-    <!-- Loading Screen -->
-    <template x-if="isLoading">
-        <div class="fixed inset-0 bg-white dark:bg-gray-900 z-[1000] flex flex-col items-center justify-center">
-            <img :src="user.account_type === 'ysu' ? 'img/ysu-logo.jpg' : 'img/logo.png'" class="w-32 h-32 mb-6 animate-bounce object-contain rounded-2xl shadow-xl">
-            <div class="w-24 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner">
-                <div class="h-full bg-blue-600 animate-progress"></div>
-            </div>
-            <p class="mt-4 text-[10px] font-black uppercase tracking-widest text-gray-400" x-text="user.account_type === 'ysu' ? 'Starting YSU Social...' : 'Starting Maiga Social...'">Loading...</p>
-        </div>
-    </template>
-</body>
-</html>
+                 <button class

@@ -278,13 +278,14 @@ io.on('connection', (socket) => {
             ? { group: data.chat_id, 'read_by.user': { $ne: socket.userId } }
             : { sender: data.chat_id, receiver: socket.userId, is_read: false };
 
-        const update = data.type === 'group'
-            ? { $push: { read_by: { user: socket.userId, read_at: new Date() } } }
-            : { $set: { is_read: true }, $push: { read_by: { user: socket.userId, read_at: new Date() } } };
+        // Persist the seen status to the database
+        await Message.updateMany(filter, { 
+            $set: { is_read: true },
+            $addToSet: { read_by: { user: socket.userId } } 
+        });
 
-        await Message.updateMany(filter, update);
-        
-        io.to(data.chat_id).emit('messages_seen', { viewer_id: socket.userId });
+        const target = data.type === 'group' ? `group_${data.chat_id}` : data.chat_id;
+        io.to(target).emit('messages_seen', { viewer_id: socket.userId });
     });
     socket.on('update_last_seen', () => {
         if (socket.userId) User.findByIdAndUpdate(socket.userId, { last_seen: new Date(), online: true }).exec();

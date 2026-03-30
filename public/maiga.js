@@ -31,6 +31,7 @@ const initMaiga = () => {
             if (savedRecents) {
                 this.recentlyUsedStickers = JSON.parse(savedRecents);
             }
+            this.initVisibilityListener();
             
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
@@ -153,6 +154,9 @@ const initMaiga = () => {
         isAddingEditorText: false,
         editorText: '',
         editorTextColor: '#ffffff',
+        isUploadingPost: false,
+        isUploadingStory: false,
+        isUploadingReel: false,
         editorTextFont: 'sans-serif',
         editorFonts: ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'Arial', 'Verdana', 'Times New Roman'],
         videoDuration: 0,
@@ -333,6 +337,8 @@ const initMaiga = () => {
         cameraRecorder: null,
         cameraChunks: [],
         beautyFilter: 'none',
+        brightnessIntensity: 100,
+        contrastIntensity: 100,
         dollyZoomScale: 1,
         isGlitchActive: false,
         isDoubleExposureActive: false,
@@ -447,14 +453,16 @@ const initMaiga = () => {
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
+                    video: {
                         facingMode: this.facingMode,
-                        width: { ideal: 1080 },
-                        height: { ideal: 1920 }
+                        width: { ideal: 1920, min: 1280 },
+                        height: { ideal: 1080, min: 720 },
+                        frameRate: { ideal: 30, max: 60 },
+                        aspectRatio: { ideal: 1.7777777778 }
                     },
                     audio: true
                 });
-                this.cameraStream = stream;
+                this.cameraStream = Alpine.raw(stream);
                 this.$refs.cameraFeed.srcObject = stream;
 
                 // Setup Lip Sync Analyser
@@ -468,15 +476,24 @@ const initMaiga = () => {
                 this.$refs.cameraFeed.onloadedmetadata = () => {
                     const video = this.$refs.cameraFeed;
                     const canvas = this.$refs.cameraCanvas;
-                    // Match canvas to video stream resolution
+                    // Professional High-Res Sync: Match canvas pixels to camera pixels
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
+                    canvas.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
                     this.startCanvasLoop();
                 };
             } catch (err) {
                 this.showToast('Camera Error', 'Could not access camera. Please check permissions.', 'error');
                 this.isCameraOpen = false;
             }
+        },
+
+        initVisibilityListener() {
+            if (window._visibilityListenerAdded) return;
+            window._visibilityListenerAdded = true;
+            document.addEventListener('visibilitychange', () => {
+                this.isPaused = document.hidden;
+            });
         },
 
         startCanvasLoop() {
@@ -490,7 +507,7 @@ const initMaiga = () => {
             let faceStayCount = 0;
 
             const render = async () => {
-                if (!this.isCameraOpen) return;
+                if (!this.isCameraOpen || this.isPaused) return;
 
                 // 0. Update Lip Sync volume
                 if (this.micAnalyser) {
@@ -499,13 +516,13 @@ const initMaiga = () => {
                 }
 
                 // 0. Process Selfie Segmentation
-                if (this.isBackgroundRemovalActive && this.selfieSegmentation && Date.now() - lastSegmentationUpdate > 40) {
+                if (this.isBackgroundRemovalActive && this.selfieSegmentation && Date.now() - lastSegmentationUpdate > 100) {
                     lastSegmentationUpdate = Date.now();
                     await this.selfieSegmentation.send({ image: video });
                 }
 
-                // 0. Process Face Mesh (Throttled for performance)
-                if (this.isFaceMeshActive && this.faceMesh && Date.now() - lastFaceMeshUpdate > 30) {
+                // 0. Process Face Mesh (Throttled further to prevent overheating)
+                if (this.isFaceMeshActive && this.faceMesh && Date.now() - lastFaceMeshUpdate > 60) {
                     lastFaceMeshUpdate = Date.now();
                     await this.faceMesh.send({ image: video });
                 }
@@ -519,8 +536,8 @@ const initMaiga = () => {
                     ctx.globalAlpha = 1.0;
                 }
 
-                // 0. Glitch Pixel Manipulation (Applied at the end of capture)
-                if (this.isGlitchActive && Math.random() > 0.7) {
+                // 0. Optimized Glitch logic
+                if (this.isGlitchActive && Math.random() > 0.85) {
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imgData.data;
                     const width = canvas.width;
@@ -546,6 +563,12 @@ const initMaiga = () => {
                     ctx.putImageData(imgData, 0, 0);
                 }
 
+                // Logic for Manual Beauty Sliders
+                let activeFilter = this.beautyFilter;
+                if (this.filters[this.filterIndex].name === 'Beauty') {
+                    activeFilter = `brightness(${this.brightnessIntensity}%) contrast(${this.contrastIntensity}%) saturate(110%)`;
+                }
+
                 // --- COMPOSITING ENGINE ---
                 if (this.isBackgroundRemovalActive && this.segmentationMask) {
                     // 1. Draw Background Image
@@ -556,7 +579,7 @@ const initMaiga = () => {
                     const offCtx = offCanvas.getContext('2d');
                     offCtx.drawImage(this.segmentationMask, 0, 0, canvas.width, canvas.height);
                     offCtx.globalCompositeOperation = 'source-in';
-                    offCtx.filter = this.beautyFilter;
+                    offCtx.filter = activeFilter;
                     offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     // 3. Composite person over background
@@ -579,7 +602,7 @@ const initMaiga = () => {
                     // Offscreen processing for Chroma Key
                     const offCanvas = new OffscreenCanvas(canvas.width, canvas.height);
                     const offCtx = offCanvas.getContext('2d');
-                    offCtx.filter = this.beautyFilter;
+                    offCtx.filter = activeFilter;
                     offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     const imgData = offCtx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imgData.data;
@@ -591,8 +614,15 @@ const initMaiga = () => {
                     }
                     ctx.putImageData(imgData, 0, 0);
                 } else {
-                    ctx.filter = this.beautyFilter;
+                    ctx.save();
+                    // Mirror the selfie camera for a professional feel
+                    if (this.facingMode === 'user') {
+                        ctx.translate(canvas.width, 0);
+                        ctx.scale(-1, 1);
+                    }
+                    ctx.filter = activeFilter;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
                 }
                 ctx.filter = 'none';
 
@@ -947,6 +977,9 @@ const initMaiga = () => {
         touchTimer: null,
         editingMessageId: null,
         isSearchingChat: false,
+        isPaused: false,
+        brightnessIntensity: 100,
+        contrastIntensity: 100,
         chatSearchQuery: '',
         clearChatSearch() {
             this.chatSearchQuery = '';
@@ -1859,7 +1892,7 @@ const initMaiga = () => {
             
             const fetchedMyStories = [];
             const storiesByUser = new Map(); // For friends' stories
-
+            
             data.forEach(story => {
                 const storyObj = {
                     id: story.id,
@@ -1881,9 +1914,9 @@ const initMaiga = () => {
                     if (!storiesByUser.has(story.user_id)) {
                         storiesByUser.set(story.user_id, {
                             id: story.user_id,
-                            name: story.first_name + ' ' + story.surname,
+                            name: (story.first_name || 'User') + ' ' + (story.surname || ''),
                             // Use story.avatar from DB, fallback to dicebear if missing
-                            avatar: story.avatar || ('https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(story.first_name || 'User')),
+                            avatar: story.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user_id}`,
                             stories: []
                         });
                     }
@@ -2044,16 +2077,15 @@ const initMaiga = () => {
             reader.readAsDataURL(file);
         },
         createPost() {
-            if (!this.newPostContent && !this.selectedMedia) return;
+            if ((!this.newPostContent && !this.selectedMedia) || this.isUploadingPost || this.isUploadingReel) return;
 
             const content = this.newPostContent;
-            const mediaPreview = this.selectedMedia;
-            const mediaType = this.mediaType;
-
-
             const isVideo = this.mediaType === 'video';
+            
             const formData = new FormData();
             formData.append('content', this.newPostContent);
+            
+            if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
             
             // Use edited file if available, else original input
             if (this.postFile) {
@@ -2070,21 +2102,11 @@ const initMaiga = () => {
                 if (data && data.success) {
                     this.showToast('Success', 'Post created successfully!', 'success');
 
-                        // Optimistic Update: Add post to feed immediately
-                    this.posts.unshift({
-                        id: data.post ? data.post._id : Date.now(),
-                        user_id: this.user.id,
-                        author: this.user.name,
-                        avatar: this.user.avatar,
-                        content: content,
-                        media: mediaPreview,
-                        media_type: mediaType,
-                        time: 'Just now',
-                        likes: 0,
-                        comments: 0,
-                        shares: 0,
-                        saved: false,
-                        verified: this.user.is_verified || false
+                    // World Class Optimistic Update: Use the full object returned by backend
+                    this.posts.unshift({ 
+                        ...data.post,
+                        author: this.user.name, // Local fallback until next refresh
+                        avatar: this.user.avatar
                     });
                     
                     this.newPostContent = '';
@@ -2094,25 +2116,24 @@ const initMaiga = () => {
                     if (isVideo) {
                         this.activeTab = 'reels';
                         this.apiFetch('/api/get_reels')
-                            .then(data => {
-                                if (data) this.reels = data;
-                            });
+                            .then(data => { if (data) this.reels = data; });
                         this.apiFetch(`/api/get_reels?user_id=${this.user.id}`)
-                            .then(data => {
-                                if (data) this.myReels = data;
-                            });
-                    } else {
-                        this.activeTab = 'home';
-                        this.refreshHomeFeed();
+                            .then(data => { if (data) this.myReels = data; });
+                        this.isUploadingReel = false;
                     }
+                
+                if (!isVideo) this.activeTab = 'home';
 
                     // Refresh trending topics as new hashtags might have been added
                     this.apiFetch('/api/get_trending')
                         .then(data => {
                             if (data) this.trendingTopics = data;
                         });
+                    this.isUploadingPost = false;
                 } else {
                     this.showToast('Error', data.error || 'Failed to create post.', 'error');
+                    this.isUploadingPost = false;
+                    this.isUploadingReel = false;
                 }
             });
             this.isCreatingPost = false;
@@ -2261,8 +2282,12 @@ const initMaiga = () => {
                 }).then(data => {
                     if (data && data.success) {
                         document.getElementById('sent-sound').play().catch(()=>{});
+                    } else {
+                        this.showToast('Error', 'Message failed to send.', 'error');
                     }
-                });
+                })
+                .catch(() => this.showToast('Error', 'Connection lost.', 'error'))
+                .finally(() => { this.isSendingMessage = false; });
             } else if ('serviceWorker' in navigator && 'SyncManager' in window) {
                 // Background Sync Logic
                 const pendingMsg = {
@@ -2278,6 +2303,7 @@ const initMaiga = () => {
                 const reg = await navigator.serviceWorker.ready;
                 await reg.sync.register('send-pending-messages');
                 this.showToast('Offline', 'Message will be sent automatically when online.', 'info');
+                this.isSendingMessage = false;
             }
 
             this.newMessage = '';
@@ -2356,8 +2382,8 @@ const initMaiga = () => {
                         // Poll specific data
                         question: m.question,
                         options: m.options ? m.options.map(opt => ({
-                            id: opt.id,
-                            text: opt.option_text,
+                            id: opt._id || opt.id,
+                            text: opt.text,
                             votes: opt.votes || []
                         })) : null,
                         poll_id: m.poll_id
@@ -2903,7 +2929,7 @@ const initMaiga = () => {
                 }
                 
                 reel.showHeart = true;
-                setTimeout(() => reel.showHeart = false, 1000);
+                setTimeout(() => reel.showHeart = false, 600);
             } else {
                 // Single tap (wait to see if it's double)
                 this.reelClickTimer = setTimeout(() => {
@@ -3039,7 +3065,7 @@ const initMaiga = () => {
             reel.liked = !reel.liked;
             reel.likes += reel.liked ? 1 : -1;
             if (reel.liked) reel.showHeart = true;
-            if (reel.showHeart) setTimeout(() => reel.showHeart = false, 1000);
+            if (reel.showHeart) setTimeout(() => reel.showHeart = false, 600);
 
             this.apiFetch('/api/toggle_reaction', {
                 method: 'POST',
@@ -3639,6 +3665,7 @@ const initMaiga = () => {
                 const viewerExists = currentStory.seenBy.find(v => v.name === this.user.name);
                 if (!viewerExists) {
                     currentStory.seenBy.push({ id: 0, name: this.user.name, avatar: this.user.avatar, liked: false });
+                    currentStory.viewCount++; // Optimistic update for total views
                 }
                 
                 // Record view in DB
@@ -3769,6 +3796,7 @@ const initMaiga = () => {
             if (!this.tempStory) return;
             this.isPostingStory = true;
             this.uploadProgress = 0;
+            this.isUploadingStory = true;
 
             // Check if we need to export as video due to animated stickers
             const hasAnimations = this.storyOverlays.some(o => o.isAnimated);
@@ -3872,6 +3900,7 @@ const initMaiga = () => {
                     this.isPostingStory = false;
                     this.showToast('Error', 'Upload failed', 'error');
                 }
+                this.isUploadingStory = false;
             };
             xhr.send(formData);
         },
@@ -4477,10 +4506,10 @@ const initMaiga = () => {
             };
             xhr.send(formData);
         },
-        async generateFinalStoryImage(baseFile, text, overlays) {
+        async generateFinalStoryImage(baseFile, text, overlays, providedCtx = null) {
             return new Promise(resolve => {
                 const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
+                 const ctx = providedCtx || canvas.getContext('2d');
                 canvas.width = 1080;
                 canvas.height = 1920;
                 const drawFrame = async () => {
@@ -4555,7 +4584,7 @@ const initMaiga = () => {
                 // Run animation for 5 seconds
                 const startTime = Date.now();
                 const animate = async () => {
-                    await this.drawFrameOnCanvas(ctx, canvas, baseFile, text, overlays);
+                    await this.generateFinalStoryImage(baseFile, text, overlays, ctx);
                     if (Date.now() - startTime < 5000) {
                         requestAnimationFrame(animate);
                     } else {
