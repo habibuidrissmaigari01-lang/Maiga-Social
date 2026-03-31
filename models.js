@@ -109,8 +109,6 @@ userSchema.virtual('full_name').get(function() {
 userSchema.index({ online: 1 });
 userSchema.index({ account_type: 1 });
 userSchema.index({ blocked: 1 });
-userSchema.index({ username: 1 });
-userSchema.index({ email: 1 });
 userSchema.index({ gender: 1, avatar: 1 });
 userSchema.index({ blocked: 1, username: 1 }); // For admin search
 userSchema.index({ blocked: 1, email: 1 });    // For admin search
