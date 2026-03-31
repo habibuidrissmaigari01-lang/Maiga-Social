@@ -15,12 +15,6 @@ const protectMassAssignment = (allowedFields) => {
         const disallowed = incomingFields.filter(field => !allowedFields.includes(field));
 
         if (disallowed.length > 0) {
-            console.error(`[SECURITY] Mass Assignment Attempt detected!`, {
-                user: req.session.userId || 'Anonymous',
-                path: req.originalUrl,
-                attemptedFields: disallowed,
-                ip: req.ip
-            });
             disallowed.forEach(field => delete req.body[field]);
         }
         next();

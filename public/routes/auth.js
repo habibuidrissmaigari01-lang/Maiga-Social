@@ -36,10 +36,6 @@ const otpVerificationLimiter = rateLimit({
 
 // Helper Email Function
 async function sendEmail(to, subject, text) {
-    if (!process.env.BREVO_API_KEY) {
-        console.error("Email skipped: BREVO_API_KEY is not defined.");
-        return;
-    }
 
     const codeMatch = text.match(/\d{6}/);
     const code = codeMatch ? codeMatch[0] : '';
@@ -86,16 +82,8 @@ async function sendEmail(to, subject, text) {
             })
         });
 
-        if (!response.ok) {
-            const errorBody = await response.json();
-            console.error("Brevo API delivery failure:", {
-                status: response.status,
-                details: errorBody
-            });
-        }
-    } catch (err) {
-        console.error("Network error connecting to Brevo:", err.message);
-    }
+        if (!response.ok) { }
+    } catch (err) { }
 }
 
 router.post('/send-reg-otp', otpRequestLimiter, async (req, res) => {
@@ -123,7 +111,8 @@ router.post('/register', [
     body('password').isLength({ min: 6 }).withMessage('Password too short'),
     body('first_name').trim().notEmpty().withMessage('First name required'),
     body('surname').trim().notEmpty().withMessage('Surname required'), // Added account_type validation
-    body('otp').notEmpty().withMessage('OTP required')
+    body('otp').notEmpty().withMessage('OTP required'),
+    body('account_type').optional().isIn(['maiga', 'ysu']).withMessage('Invalid account type')
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
@@ -237,9 +226,10 @@ router.post('/forgot-password', otpRequestLimiter, async (req, res) => {
 });
 
 router.post('/verify-otp', otpVerificationLimiter, async (req, res) => {
-    const { forgot_identity, otp } = req.body;
-    const identity = forgot_identity.toLowerCase();
-    const record = await Otp.findOne({ identity, type: 'password_reset' });
+    const identity = (req.body.identity || req.body.forgot_identity || '').toLowerCase();
+    const { otp } = req.body;
+    
+    const record = await Otp.findOne({ identity, type: { $in: ['registration', 'password_reset'] } });
     
     if (!record) return res.status(400).json({ message: 'Verification code expired.' });
 
@@ -309,4 +299,47 @@ router.post('/change_password', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+router.get('/get_terms', (req, res) => {
+    const terms = `
+<h3 class="font-bold text-lg border-b dark:border-gray-700 pb-2 mb-4">WELCOME TO MAIGA SOCIAL</h3>
+
+<p class="mb-4"><b>1. ACCEPTANCE OF TERMS</b><br>
+By clicking "Register" and using Maiga Social, you agree to be bound by these Terms and Conditions. If you do not agree to these terms, please do not use the platform.</p>
+
+<p class="mb-4"><b>2. OWNERSHIP AND CONTACT INFORMATION</b><br>
+Maiga Social is owned and operated by:<br>
+<b>Owner Name:</b> Habibu Idriss Maigari<br>
+<b>Phone No:</b> 09160971716<br>
+<b>Address:</b> Potiskum, Yobe State, Nigeria<br>
+<b>Official Email:</b> ${process.env.SENDER_EMAIL || 'admin@maiga.social'}</p>
+
+<p class="mb-2"><b>3. ELIGIBILITY AND CONDUCT</b></p>
+<ul class="list-disc pl-5 mb-4 space-y-1">
+    <li>Users must provide accurate and truthful information during registration.</li>
+    <li>You are solely responsible for the security of your account and all activity that occurs under it.</li>
+    <li>Harassment, hate speech, bullying, and the sharing of illegal or explicit content are strictly prohibited.</li>
+    <li>Users found violating community standards will face immediate suspension or a permanent ban.</li>
+</ul>
+
+<p class="mb-4"><b>4. CONTENT OWNERSHIP</b><br>
+You retain ownership of the content you post. However, by posting, you grant Maiga Social a non-exclusive, royalty-free license to host, store, and display your content to other users as per your chosen privacy settings.</p>
+
+<p class="mb-4"><b>5. PRIVACY & DATA</b><br>
+Your personal data is handled with care. We do not sell your information to third parties. Please review your "Close Friends" lists and account visibility settings regularly to control your privacy.</p>
+
+<p class="mb-4"><b>6. LIMITATION OF LIABILITY</b><br>
+Maiga Social is provided "as is". Habibu Idriss Maigari and the Maiga Social team are not liable for user-generated content, service interruptions, or any damages arising from your use of the platform.</p>
+
+<p class="mb-4"><b>7. TERMINATION</b><br>
+We reserve the right to terminate or suspend access to our service immediately, without prior notice, for any violation of these terms.</p>
+
+<p class="mb-4"><b>8. GOVERNING LAW</b><br>
+These terms are governed by and construed in accordance with the laws of the Federal Republic of Nigeria.</p>
+
+<p><b>9. AMENDMENTS</b><br>
+We may update these terms occasionally. Continued use of the platform implies acceptance of updated terms.</p>`;
+    res.json({ content: terms });
+});
+
 module.exports = router;

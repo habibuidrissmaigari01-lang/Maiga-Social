@@ -76,9 +76,7 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
                         Bucket: process.env.R2_BUCKET_NAME,
                         Key: oldKey
                     }));
-                } catch (cleanupErr) {
-                    console.error("Old avatar cleanup failed:", cleanupErr.message);
-                }
+                } catch (cleanupErr) { }
             }
             updates.avatar = await uploadToR2(req.file, 'avatars');
         }
@@ -86,7 +84,6 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
         await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
         res.json({ success: true });
     } catch (error) {
-        console.error("Profile update failed:", error);
         res.status(500).json({ success: false, error: 'Failed to update profile details.' });
     }
 });

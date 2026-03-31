@@ -552,11 +552,10 @@
                     .then(async res => {
                         const isJson = res.headers.get('content-type')?.includes('application/json');
                         let data = null;
-                        try {
-                            if (isJson) data = await res.json();
-                        } catch (jsonErr) {
-                            console.warn("Received invalid JSON from server:", jsonErr);
-                        }
+                        try { 
+                            if (isJson) data = await res.json(); 
+                        } catch (jsonErr) { }
+
                         if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
                         return data;
                     })
@@ -569,7 +568,7 @@
                             feedbackEl.innerHTML = '<i class="fa-solid fa-times-circle text-red-500"></i>';
                             suggestionsEl.innerHTML = '<span class="text-red-500">Username taken.</span>';
                         }
-                    }).catch(err => console.error(err));
+                    }).catch(err => { });
             }, 500);
         }
 
@@ -585,9 +584,9 @@
             fetch(`${API_BASE_URL}/api/get_terms`)
                 .then(res => res.json())
                 .then(data => {
-                    document.getElementById('termsContent').innerText = data.content || 'No terms content available.';
+                    document.getElementById('termsContent').innerHTML = data.content || 'No terms content available.';
                 }).catch(() => {
-                    document.getElementById('termsContent').innerText = 'Could not load Terms & Conditions. Please check your connection.';
+                    document.getElementById('termsContent').innerHTML = 'Could not load Terms & Conditions. Please check your connection.';
                 });
         }
 
@@ -853,7 +852,6 @@
                         }
                     })
                     .catch(err => {
-                        console.error(err);
                         showMessage(err.message || 'Network error. Could not send code.', 'error');
                     })
                     .finally(() => {
@@ -1137,12 +1135,6 @@
             const lastPopup = localStorage.getItem('installPopupShown');
             const now = Date.now();
             
-            // Dark Mode Check
-            if (localStorage.getItem('darkMode') === 'true' || 
-               (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
-
             // OS Check for Download Button
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const btnSpan = document.querySelector('#pwaInstallBtn span');
@@ -1168,7 +1160,7 @@
                 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
                         .then(stream => stream.getTracks().forEach(track => track.stop())) // Close immediately, just wanted permission
-                        .catch(err => console.log('Permissions not granted yet:', err));
+                        .catch(err => { });
                 }
             } else if (!lastPopup || (now - parseInt(lastPopup)) > oneDay) {
                 // Show install popup if not installed and not shown recently
@@ -1191,7 +1183,7 @@
                 }
             } else {
                 // Fallback
-                console.log('Installation not available.');
+                // Installation not available.
             }
         });
 
@@ -1204,7 +1196,7 @@
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().then(() => {
                     localStorage.setItem('maiga_fullscreen', 'true');
-                }).catch(e => console.log(e));
+                }).catch(e => { });
             } else {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
@@ -1223,7 +1215,6 @@
                         url: window.location.href
                     });
                 } catch (err) {
-                    console.log('Share failed:', err);
                 }
             } else {
                 try {
@@ -1241,5 +1232,4 @@
     </script>
 </body>
 </html>
-
  

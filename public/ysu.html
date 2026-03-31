@@ -23,6 +23,10 @@
         }
     </script>
     <style>
+        .logo-grayscale { filter: grayscale(100%); }
+        .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
+    </style>
+    <style>
         body {
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
@@ -203,7 +207,7 @@
     <div class="glass-card p-6 md:p-10" id="authCard">
         <div class="flex flex-col items-center justify-center mb-6">
             <img src="img/ysu.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
-            <h1 class="text-2xl font-black text-gray-800 italic">YSU Social</h1>
+            <h1 class="text-2xl font-black text-gray-800 dark:text-gray-200 italic">YSU Social</h1>
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->
@@ -478,7 +482,7 @@
     <!-- Welcome Popup -->
     <div id="welcomePopup" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
         <div class="glass-card p-6 md:p-8 max-w-sm w-11/12 mx-auto text-center transform transition-all scale-100 shadow-2xl">
-            <div class="flex flex-col items-center mb-6">
+            <div class="flex flex-col items-center mb-6"> 
                 <img src="img/ysu.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social">
                 <h2 class="text-xl font-black text-gray-800">YSU Social App</h2>
                 <p class="text-gray-500 text-xs mt-1">For the best experience, download our app or use fullscreen.</p>

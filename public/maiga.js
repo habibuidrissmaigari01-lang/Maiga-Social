@@ -79,7 +79,6 @@ const initMaiga = () => {
                     this.showToast('Server Error', msg, 'error');
                     return null;
                 } else {
-                    const errorText = await response.text();
                     // If server returns 404 (e.g. endpoint not found), try mock data
                     const mock = this.getMockData(url);
                     if (mock) return mock;
@@ -95,6 +94,29 @@ const initMaiga = () => {
             }
         },
         activeTab: localStorage.getItem('maiga_active_tab') || 'home',
+        
+        // --- CHAT & CALL STATE (Consolidated) ---
+        activeMessageTab: 'all',
+        chatStarFilter: false,
+        callHistory: [],
+        starredMessages: [],
+        get missedCallsCount() {
+            if (!this.callHistory || !this.user?.id) return 0;
+            // Safe check for receiver existence using optional chaining
+            return (this.callHistory || []).filter(c => c?.receiver?._id == this.user.id && c.is_missed).length;
+        },
+        get starredMessagesInActiveChat() {
+            if (!this.activeChat?.id || !this.chatMessages?.[this.activeChat.id]) return [];
+            return this.chatMessages[this.activeChat.id].filter(m => m.starred);
+        },
+        get activeChatPinnedMsg() {
+            if (!this.activeChat?.id || !this.chatMessages?.[this.activeChat.id]) return null;
+            return this.chatMessages[this.activeChat.id].find(m => m.pinned);
+        },
+        async fetchCallHistory() {
+            const data = await this.apiFetch('/api/get_call_history');
+            if (data) this.callHistory = data;
+        },
 
         
         // --- MEDIA EDITOR STATE ---
@@ -132,7 +154,7 @@ const initMaiga = () => {
         },
 
         get filteredStickers() {
-            if (!this.stickerSearchQuery.trim()) return this.stickerGroups[this.activeStickerCategory];
+            if (!this.stickerSearchQuery?.trim()) return this.stickerGroups?.[this.activeStickerCategory] || [];
             
             // Combine all groups for search
             const allStickers = Object.values(this.stickerGroups).flat();
@@ -223,7 +245,7 @@ const initMaiga = () => {
         friendsSearchQuery: '',
         friendsTab: 'suggestions',
         get unreadBadgeDisplay() {
-            const count = this.totalUnreadChats;
+           const count = this.totalUnreadChats || 0;
             return count > 9 ? '9+' : count;
         },
         getSeenByText(msg) {
@@ -236,18 +258,18 @@ const initMaiga = () => {
             return `Seen by: ${names}`;
         },
         get filteredFollowingList() {
-            if (!this.friendsSearchQuery.trim()) return this.followingList;
+            if (!this.friendsSearchQuery?.trim()) return this.followingList || [];
             const q = this.friendsSearchQuery.toLowerCase();
-            return this.followingList.filter(f =>
+            return (this.followingList || []).filter(f =>
                 (f.name && f.name.toLowerCase().includes(q)) ||
                 (f.username && f.username.toLowerCase().includes(q)) ||
                 (f.dept && f.dept.toLowerCase().includes(q))
             );
         },
         get potentialGroupMembers() {
-            if (!this.activeChat || !this.activeChat.members) return this.filteredFollowingForGroup;
-            const existingMemberIds = this.activeChat.members.map(m => m.id);
-            let potential = this.followingList.filter(f => !existingMemberIds.includes(f.id));
+            if (!this.activeChat || !this.activeChat?.members) return this.filteredFollowingForGroup || [];
+            const existingMemberIds = (this.activeChat?.members || []).map(m => m.id);
+            let potential = (this.followingList || []).filter(f => !existingMemberIds.includes(f.id));
 
             // If adding to a YSU group, only show YSU members
             if (this.activeChat.account_type === 'ysu') {
@@ -261,18 +283,18 @@ const initMaiga = () => {
             return potential.filter(f => (f.name && f.name.toLowerCase().includes(q)) || (f.username && f.username.toLowerCase().includes(q)));
         },
         get filteredFriendsList() {
-            if (!this.friendsSearchQuery.trim()) return this.friends;
+            if (!this.friendsSearchQuery?.trim()) return this.friends || [];
             const q = this.friendsSearchQuery.toLowerCase();
-            return this.friends.filter(f =>
+            return (this.friends || []).filter(f =>
                 (f.name && f.name.toLowerCase().includes(q)) ||
                 (f.username && f.username.toLowerCase().includes(q)) ||
                 (f.dept && f.dept.toLowerCase().includes(q))
             );
         },
         get filteredFollowingForGroup() {
-            if (!this.groupSearchQuery.trim()) return this.followingList;
+            if (!this.groupSearchQuery?.trim()) return this.followingList || [];
             const q = this.groupSearchQuery.toLowerCase();
-            return this.followingList.filter(f =>
+            return (this.followingList || []).filter(f =>
                 (f.name && f.name.toLowerCase().includes(q)) ||
                 (f.username && f.username.toLowerCase().includes(q)) ||
                 (f.dept && f.dept.toLowerCase().includes(q))
@@ -979,11 +1001,9 @@ const initMaiga = () => {
         touchTimer: null,
         editingMessageId: null,
         isSearchingChat: false,
-        isPaused: false,
         isSendingMessage: false,
         showCommentStickers: false,
-        brightnessIntensity: 100,
-        contrastIntensity: 100, // Fixed: isSendingMessage was missing
+        // brightnessIntensity and contrastIntensity already defined above
         chatSearchQuery: '',
         clearChatSearch() {
             this.chatSearchQuery = '';
@@ -1126,49 +1146,6 @@ const initMaiga = () => {
         blockedUsers: [],
         showGroupInfo: false,
         replyContent: '',
-        activeMessageTab: 'all',
-        chatStarFilter: false,
-        callHistory: [],
-        starredMessages: [], // Fix: Define this to prevent Alpine ReferenceErrors
-        async fetchCallHistory() {
-            const data = await this.apiFetch('/api/get_call_history');
-            if (data) this.callHistory = data;
-        },
-        async clearCallHistory() {
-            if (!confirm('Are you sure you want to clear your call history?')) return;
-            const data = await this.apiFetch('/api/clear_call_history', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            if (data && data.success) {
-                this.callHistory = [];
-                this.showToast('Success', 'Call history cleared');
-            }
-        },
-        async deleteCallLog(callId) {
-            const data = await this.apiFetch('/api/delete_call_log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ call_id: callId })
-            });
-            if (data && data.success) {
-                this.callHistory = this.callHistory.filter(c => c._id !== callId);
-                this.showToast('Deleted', 'Call log removed');
-            }
-        },
-        callback(call) {
-            const otherUser = call.caller._id == this.user.id ? call.receiver : call.caller;
-            this.startChatWithUser({ id: otherUser._id, name: otherUser.name, avatar: otherUser.avatar, online: otherUser.online });
-            this.$nextTick(() => this.startCall(call.type));
-        },
-        get missedCallsCount() {
-            // Count calls where I am the receiver and it was missed and unread (if you add an is_read field to Call)
-            return this.callHistory.filter(c => c.receiver._id == this.user.id && c.is_missed).length;
-        },
-        get starredMessagesInActiveChat() {
-            if (!this.activeChat || !this.chatMessages[this.activeChat.id]) return [];
-            return this.chatMessages[this.activeChat.id].filter(m => m.starred);
-        },
         privacySettings: {
             privateAccount: false,
             activityStatus: true,
@@ -1578,11 +1555,10 @@ const initMaiga = () => {
                     await this.crypto.init(this);
                     const hasKeys = await this.crypto.hasKeys();
                     if (!hasKeys) {
-                        await this.crypto.generateAndStoreKeys(this);
+                        await this.crypto.generateAndStoreKeys();
                         this.showToast('Security', 'Encryption keys generated and stored securely.', 'success');
                     }
-                } catch (e) { /* Crypto init skipped */ }
-            }
+                } catch (e) { }            }
             this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
             
             // Watch for changes to isFullScreen and save to localStorage
@@ -1725,27 +1701,20 @@ const initMaiga = () => {
                 const video = document.querySelector('.story-video');
                 if (video) val ? video.pause() : video.play();
             });
-            /* Auto-Delete: Remove stories older than 24 hours */
-            setInterval(() => {
-                const now = Date.now();
-                this.myStories = this.myStories.filter(s => (now - s.time) < 24 * 60 * 60 * 1000);
-            }, 60000);
-            // Check scheduled messages every 5 seconds
-            setInterval(() => {
-                const now = new Date();
-                this.scheduledMessages.forEach((msg, index) => {
-                    if (new Date(msg.dueTime) <= now) {
-                        this.sendScheduledMessage(msg, index);
-                    }
-                });
-            }, 5000);
 
-            // Expose functions for x-html clicks
-            window.openHashtag = (tag) => this.openHashtag(tag);
-            window.openUserProfileByName = (name) => this.openUserProfileByName(name);
-            window.openUserProfile = (id) => this.openUserProfile(id);
-            
-            this.initPushNotifications();
+            // Setup cryptography - Fix for phone/non-secure context
+            if (window.isSecureContext && window.crypto && window.crypto.subtle) {
+                try {
+                    await this.crypto.init(this);
+                    const hasKeys = await this.crypto.hasKeys();
+                    if (!hasKeys) {
+                        await this.crypto.generateAndStoreKeys();
+                        this.showToast('Security', 'Encryption keys generated and stored securely.', 'success');
+                    }
+                } catch (e) { }
+            }
+
+            this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
         },
         toggleFullScreen() {
             if (!document.fullscreenElement) {
@@ -1905,7 +1874,7 @@ const initMaiga = () => {
             return this.myReels;
         },
         get userLikedPosts() {
-            return this.posts.filter(p => p.myReaction !== null);
+           return (this.posts || []).filter(p => p.myReaction !== null);
         },
         get filteredConnectionList() {
             if (!this.connectionSearchQuery.trim()) {
@@ -2474,10 +2443,6 @@ const initMaiga = () => {
             this.showMessageOptions = false;
             this.$nextTick(() => document.querySelector('input[x-model="newMessage"]')?.focus());
         },
-        get activeChatPinnedMsg() {
-            if (!this.activeChat || !this.chatMessages[this.activeChat.id]) return null;
-            return this.chatMessages[this.activeChat.id].find(m => m.pinned);
-        },
         togglePinMessage() {
             if (!this.selectedMessageForOptions || !this.activeChat) return;
             const chatId = this.activeChat.id;
@@ -2948,10 +2913,10 @@ const initMaiga = () => {
             return this.posts;
         },
         get totalUnreadChats() {
-            return this.chats.filter(c => c.unread).length + this.groups.filter(g => g.unread).length;
+            return (this.chats || []).filter(c => c?.unread).length + (this.groups || []).filter(g => g?.unread).length;
         },
         get sortedChats() {
-            const all = [...this.chats, ...this.groups];
+            const all = [...(this.chats || []), ...(this.groups || [])].filter(Boolean);
             return all.sort((a, b) => {
                 const aPinned = this.isPinned(a.id, a.type || 'user');
                 const bPinned = this.isPinned(b.id, b.type || 'user');
@@ -3178,7 +3143,7 @@ const initMaiga = () => {
                 }); // Fixed: savedPosts getter was not using savedPostList
         },
         get userPosts() {
-            return this.posts.filter(p => p.user_id == this.user.id || p.author === this.user.name);
+             return (this.posts || []).filter(p => p.user_id == this.user?.id || p.author === this.user?.name);
         },
         addToRecent(term) {
             if (!term) return;
@@ -3878,7 +3843,6 @@ const initMaiga = () => {
                         fileToUpload = new File([blob], "story_edited.jpg", { type: "image/jpeg" });
                     }
                 } catch (e) {
-                    console.error("Error merging story", e);
                     this.showToast('Error', 'Failed to process image for story', 'error');
                     this.isPostingStory = false;
                     this.isUploadingStory = false;
@@ -4346,7 +4310,6 @@ const initMaiga = () => {
                 try {
                     finalFile = await this.generateEditedImage(this.editorFile, this.editorFilter, this.editorOverlays, this.drawings, containerDims);
                 } catch (e) {
-                    console.error("Editor processing failed", e);
                     this.showToast('Error', 'Failed to process image', 'error');
                     return;
                 }
@@ -4684,9 +4647,9 @@ const initMaiga = () => {
                 id: Date.now(),
                 type: 'svg',
                 isAnimated: true,
-                content: stickerObj.url,
+            url: stickerObj.url,
                 img: Object.assign(new Image(), { src: stickerObj.url }),
-                content: sticker,
+            content: stickerObj.name || 'sticker',
                 x: 50, // Center X
                 y: 50, // Center Y
                 scale: 1,
@@ -5484,7 +5447,7 @@ const initMaiga = () => {
                         }
                     };
                     request.onsuccess = e => { this.db = e.target.result; resolve(); };
-                    request.onerror = e => { console.error("IndexedDB error:", e.target.error); reject(e.target.error); };
+                    request.onerror = e => { reject(e.target.error); };
                 });
             },
 

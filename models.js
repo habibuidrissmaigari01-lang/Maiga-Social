@@ -108,6 +108,7 @@ userSchema.virtual('full_name').get(function() {
 // Indexes for User search and filtering
 userSchema.index({ online: 1 });
 userSchema.index({ account_type: 1 });
+userSchema.index({ name: 'text', username: 'text' });
 userSchema.index({ blocked: 1 });
 userSchema.index({ gender: 1, avatar: 1 });
 userSchema.index({ blocked: 1, username: 1 }); // For admin search
@@ -219,10 +220,11 @@ const messageSchema = new mongoose.Schema({
 
 // Indexes for poll voting and starred messages
 messageSchema.index({ starred_by: 1, createdAt: -1 });
-// Critical indexes for messaging performance
-messageSchema.index({ group: 1, createdAt: 1 });
-messageSchema.index({ sender: 1, receiver: 1, createdAt: 1 });
-messageSchema.index({ receiver: 1, sender: 1, createdAt: 1 });
+// Optimized compound indexes for messaging performance (handling deletions)
+messageSchema.index({ group: 1, deleted_for: 1, createdAt: 1 });
+messageSchema.index({ sender: 1, receiver: 1, deleted_for: 1, createdAt: 1 });
+messageSchema.index({ receiver: 1, sender: 1, deleted_for: 1, createdAt: 1 });
+messageSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual to count readers in a group chat
 messageSchema.virtual('read_count').get(function() {
@@ -317,9 +319,7 @@ storySchema.pre('deleteOne', { document: false, query: true }, async function() 
                 Bucket: process.env.R2_BUCKET_NAME,
                 Key: key
             }));
-        } catch (error) {
-            console.error("Story media cleanup failed:", error.message);
-        }
+        } catch (error) { }
     }
 });
 
@@ -334,6 +334,7 @@ const baseNotificationSchema = new mongoose.Schema({
 
 // Index for fetching notifications for a user
 baseNotificationSchema.index({ user: 1, created_at: -1 });
+baseNotificationSchema.index({ user: 1, is_read: 1 });
 
 // --- Real-time Notification Broadcast Hook ---
 baseNotificationSchema.post('save', function(doc) {

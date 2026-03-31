@@ -26,6 +26,10 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
+    <style>
+        .logo-grayscale { filter: grayscale(100%); }
+        .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
+    </style>
     <script src="maiga.js" defer></script>
     <script src="alpine.js" defer></script>
     <script src="/socket.io/socket.io.js"></script>
@@ -163,8 +167,8 @@
     <!-- Desktop Sidebar -->
     <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0 transition-all duration-300 z-40" :class="isLeftSidebarCollapsed ? 'w-24' : 'w-72'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
-            <img src="img/logo.png" class="w-10 h-10 mr-2">
-            <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-blue-600 italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale">
+            <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-gray-800 dark:text-gray-200 italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
             <img :src="user.avatar" class="w-12 h-12 parallelogram-sm object-cover">
@@ -250,8 +254,8 @@
     <header class="flex-none bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg px-4 py-3 flex justify-between items-center z-[100] border-b dark:border-gray-800">
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
-            <div class="flex items-center lg:hidden">
-                <span class="text-blue-600 text-2xl font-black italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200">
+                <span class="text-2xl font-black italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>

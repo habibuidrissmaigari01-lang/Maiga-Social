@@ -18,7 +18,7 @@ const ASSETS_TO_CACHE = [
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
 
-const CACHE_NAME = `${APP_TYPE}-offline-v1`;
+const CACHE_NAME = `${APP_TYPE}-offline-v3`;
 const OFFLINE_URL = '/offline.html';
 const DB_NAME = 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
@@ -94,6 +94,7 @@ self.addEventListener('install', (event) => {
 
 // 2. Activate Event: Clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
+  console.log(`[Service Worker] Activating new cache: ${CACHE_NAME}`);
   event.waitUntil(
     Promise.all([
       // Take control of all open tabs/clients immediately

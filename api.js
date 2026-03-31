@@ -1,31 +1,24 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const multer = require('multer');
-const fs = require('fs');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
-const webpush = require('web-push');
 
 // Updated paths because routes were moved into the public folder
 const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Comment, Group, Story, Call, setIo, s3Client } = require('./models'); 
+const { User, Message, Post, Group, Story, Call, setIo } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 setIo(io); // Connect Socket.io to Mongoose middleware
-
-const upload = multer({ storage: multer.memoryStorage() });
 
 // --- Mongoose 8 Configuration ---
 // Explicitly set strictQuery to maintain predictable filtering behavior
@@ -58,19 +51,8 @@ const requiredEnvVars = [
 const missingVars = requiredEnvVars.filter(v => !v.value);
 
 if (missingVars.length > 0) {
-    missingVars.forEach(v => console.error(`CRITICAL ERROR: ${v.name} is not defined in environment variables.`));
-    console.error("Please check your Railway Dashboard -> Variables tab and ensure all Database and R2 keys are present.");
     process.exit(1);
 }
-
-// Temporary: Log environment variables for debugging
-console.log("DEBUG: MONGO_URI =", MONGO_URI ? "Set" : "Not Set");
-console.log("DEBUG: SESSION_SECRET =", SESSION_SECRET ? "Set" : "Not Set");
-console.log("DEBUG: R2_ACCESS_KEY_ID =", process.env.R2_ACCESS_KEY_ID ? "Set" : "Not Set");
-console.log("DEBUG: R2_SECRET_ACCESS_KEY =", process.env.R2_SECRET_ACCESS_KEY ? "Set" : "Not Set");
-console.log("DEBUG: R2_BUCKET_NAME =", process.env.R2_BUCKET_NAME ? "Set" : "Not Set");
-console.log("DEBUG: R2_S3_API_URL =", process.env.R2_S3_API_URL ? "Set" : "Not Set");
-console.log("DEBUG: R2_PUBLIC_URL =", R2_PUBLIC_URL ? "Set" : "Not Set");
 
 // --- Middleware ---
 app.set('trust proxy', 1); // Required for secure cookies on Railway
@@ -84,7 +66,6 @@ app.use((req, res, next) => {
 });
 
 // Session Setup
-console.log("DATABASE: Starting connection attempt...");
 const mongoConnection = mongoose.connect(MONGO_URI, {
     // Prevent the app from hanging forever if DB is down
     serverSelectionTimeoutMS: 5000, 
@@ -92,32 +73,16 @@ const mongoConnection = mongoose.connect(MONGO_URI, {
 });
 
 app.use(session({
-    secret: SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: MONGO_URI,
         collectionName: 'sessions',
         stringify: false,
         autoRemove: 'interval'
     }),
-    cookie: { 
+    cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
         sameSite: 'lax'
     }
 }));
-
-// --- Global Error Handling for Crash Loops ---
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// --- MongoDB Connection Event Listeners ---
-mongoose.connection.on('connecting', () => console.log('DATABASE: Mongoose is connecting... ⏳'));
-mongoose.connection.on('error', (err) => console.error('DATABASE: Mongoose connection error:', err));
-mongoose.connection.on('disconnected', () => console.warn('DATABASE: Mongoose disconnected! ❌'));
-mongoose.connection.on('reconnected', () => console.log('DATABASE: Mongoose reconnected! 🔄'));
 
 // --- Background Tasks ---
 const cleanupExpiredStories = async () => {
@@ -131,10 +96,8 @@ const cleanupExpiredStories = async () => {
                 // Calling deleteOne on the query triggers the hook in models.js for R2 cleanup
                 await Story.deleteOne({ _id: story._id });
             }
-            console.log(`CLEANUP: Automatically removed ${expiredStories.length} expired stories and their R2 assets. 🧹`);
         }
     } catch (err) {
-        console.error("Story cleanup task failed:", err);
     }
 };
 
@@ -149,10 +112,8 @@ const cleanupExpiredMessages = async () => {
                 // Triggers the 'deleteOne' hook in models.js for R2 media removal
                 await Message.deleteOne({ _id: msg._id });
             }
-            console.log(`CLEANUP: Automatically removed ${expiredMessages.length} expired messages (>30 days). 🧹`);
         }
     } catch (err) {
-        console.error("Message cleanup task failed:", err);
     }
 };
 
@@ -166,26 +127,21 @@ const cleanupExpiredPosts = async () => {
                 // Calling deleteOne on the query triggers the hook in models.js for R2 cleanup
                 await Post.deleteOne({ _id: post._id });
             }
-            console.log(`CLEANUP: Automatically removed ${expiredPosts.length} expired posts (>1 year). 🧹`);
         }
     } catch (err) {
-        console.error("Post cleanup task failed:", err);
     }
 };
 
 // MongoDB Connection
-mongoConnection
-    .then(() => {
-        console.log("DATABASE: Successfully connected to MongoDB ✅");
-        
-        // --- Mongoose 8 Change Stream: Read Receipts ---
-        try {
+mongoConnection.then(() => {
+    // --- Mongoose 8 Change Stream: Read Receipts ---
+    try {
         const messageChangeStream = Message.watch([], { fullDocument: 'updateLookup' });
         messageChangeStream.on('change', (change) => {
             if (change.operationType === 'update') {
                 const doc = change.fullDocument;
                 const updatedFields = change.updateDescription.updatedFields;
-                
+
                 // Trigger event if is_read or read_by is updated
                 if (updatedFields.is_read === true || updatedFields.read_by) {
                     io.to(doc.sender.toString()).emit('read_receipt', {
@@ -196,28 +152,20 @@ mongoConnection
                 }
             }
         });
-        } catch (streamErr) {
-            console.warn("Change Streams not supported on this DB deployment. Read receipts will not be real-time.");
-        }
+    } catch (streamErr) { }
 
-        // Run cleanups immediately on start, then every 60 minutes
-        const runAllCleanups = () => {
-            cleanupExpiredStories();
-            cleanupExpiredMessages();
-            cleanupExpiredPosts(); // Add this line
-        };
-        
-        runAllCleanups();
-        setInterval(runAllCleanups, 60 * 60 * 1000);
-    })
-    .catch(err => {
-        console.error("MongoDB connection error:", err);
-    });
+    // Run cleanups immediately on start, then every 60 minutes
+    const runAllCleanups = () => {
+        cleanupExpiredStories();
+        cleanupExpiredMessages();
+        cleanupExpiredPosts();
+    };
 
-// Start listening immediately so Railway's health check passes
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`ONLINE: Server listening on 0.0.0.0:${PORT} (Detected: ${process.env.PORT ? 'Railway' : 'Local'})`);
-});
+    runAllCleanups();
+    setInterval(runAllCleanups, 60 * 60 * 1000);
+}).catch(err => { });
+
+server.listen(PORT, '0.0.0.0');
 
 // --- Routes ---
 app.use('/api', authRoutes);

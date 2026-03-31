@@ -36,7 +36,6 @@ export default {
 
             // Defensive: Ensure we hit the public HTTPS edge, not the internal port
             const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
-            console.log(`Proxying request to: ${target}`);
 
             try {
                 const headers = new Headers(request.headers);
@@ -54,7 +53,6 @@ export default {
                 if (response.status >= 500) return jsonError(`Backend Error (${response.status})`, response.status);
                 return response;
             } catch (err) {
-                console.error(`Proxy Error: ${err.message} | Target: ${target}`);
                 return jsonError('Backend unreachable. Check if Railway service is running.', 502);
             }
         } else {
