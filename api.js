@@ -18,7 +18,7 @@ const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Comment, Group, Story, setIo, s3Client } = require('./models'); 
+const { User, Message, Post, Comment, Group, Story, Call, setIo, s3Client } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -252,6 +252,8 @@ io.on('connection', (socket) => {
         });
 
         await User.findByIdAndUpdate(userId, { online: true });
+        // Broadcast to everyone that this user is now online
+        socket.broadcast.emit('user_status', { userId: userId, status: 'online' });
     });
     socket.on('join_group', (groupId) => socket.join(`group_${groupId}`));
     socket.on('typing', (data) => {
@@ -263,35 +265,77 @@ io.on('connection', (socket) => {
             const caller = await User.findById(data.from);
             const receiver = await User.findById(data.userToCall);
             if (caller && receiver && !caller.blocked_users.includes(receiver._id) && !receiver.blocked_users.includes(caller._id)) {
-                io.to(data.userToCall).emit('incoming_call', { signal: data.signalData, from: data.from, name: data.name, avatar: data.avatar, type: data.type });
+                // Create call record in DB
+                const call = await Call.create({
+                    caller: data.from,
+                    receiver: data.userToCall,
+                    type: data.type,
+                    status: 'ringing'
+                });
+
+                io.to(data.userToCall).emit('incoming_call', { 
+                    callId: call._id,
+                    signal: data.signalData, 
+                    from: data.from, 
+                    name: data.name, 
+                    avatar: data.avatar, 
+                    type: data.type 
+                });
             } else { io.to(data.from).emit('call_ended'); }
         } catch (e) { }
     });
-    socket.on('answer_call', (data) => io.to(data.to).emit('call_accepted', data.signal));
+    socket.on('answer_call', async (data) => {
+        await Call.findByIdAndUpdate(data.callId, { status: 'accepted', is_missed: false });
+        io.to(data.to).emit('call_accepted', data.signal);
+    });
     socket.on('ice_candidate', (data) => io.to(data.to).emit('ice_candidate', data.candidate));
-    socket.on('end_call', (data) => io.to(data.to).emit('call_ended'));
-    socket.on('reject_call', (data) => io.to(data.to).emit('call_ended'));
+    socket.on('end_call', async (data) => {
+        await Call.findByIdAndUpdate(data.callId, { status: 'ended', duration: data.duration || 0 });
+        io.to(data.to).emit('call_ended');
+    });
+    socket.on('reject_call', async (data) => {
+        await Call.findByIdAndUpdate(data.callId, { status: 'rejected' });
+        io.to(data.to).emit('call_ended');
+    });
     socket.on('mark_seen', async (data) => {
         if (!socket.userId) return;
         
         const filter = data.type === 'group' 
             ? { group: data.chat_id, 'read_by.user': { $ne: socket.userId } }
-            : { sender: data.chat_id, receiver: socket.userId, is_read: false };
+            : { sender: data.chat_id, receiver: socket.userId, is_read: false, group: null };
 
         // Persist the seen status to the database
+        // This triggers the Mongoose Change Stream which emits 'read_receipt'
+        const user = await User.findById(socket.userId);
         await Message.updateMany(filter, { 
             $set: { is_read: true },
-            $addToSet: { read_by: { user: socket.userId } } 
+            $addToSet: { read_by: { user: socket.userId, first_name: user.name.split(' ')[0] } } 
         });
 
         const target = data.type === 'group' ? `group_${data.chat_id}` : data.chat_id;
         io.to(target).emit('messages_seen', { viewer_id: socket.userId });
     });
+    socket.on('message_received', async (data) => {
+        if (!socket.userId || !data.message_id) return;
+        
+        const msg = await Message.findByIdAndUpdate(data.message_id, { 
+            $set: { is_delivered: true, delivered_at: new Date() } 
+        }, { new: true });
+
+        if (msg) {
+            // Notify the sender that the message was delivered
+            io.to(msg.sender.toString()).emit('message_delivered', { message_id: msg._id });
+        }
+    });
     socket.on('update_last_seen', () => {
         if (socket.userId) User.findByIdAndUpdate(socket.userId, { last_seen: new Date(), online: true }).exec();
     });
     socket.on('disconnect', () => {
-        if (socket.userId) User.findByIdAndUpdate(socket.userId, { online: false }).exec();
+        if (socket.userId) {
+            User.findByIdAndUpdate(socket.userId, { online: false }).exec();
+            // Notify everyone that this user went offline
+            socket.broadcast.emit('user_status', { userId: socket.userId, status: 'offline' });
+        }
     });
 });
 

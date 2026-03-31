@@ -149,6 +149,14 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
         mediaUrl = await uploadToR2(req.file, folder);
     }
 
+    // Handle Disappearing Messages (24h)
+    const user = await User.findById(req.session.userId);
+    const isDisappearing = user.disappearing_chats.some(c => c.chat_id.toString() === (receiver_id || group_id));
+    let expiryDate = null;
+    if (isDisappearing) {
+        expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+
     const msg = new Message({
         sender: req.session.userId,
         receiver: receiver_id || null,
@@ -156,7 +164,8 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
         content: content,
         media: mediaUrl,
         media_type: media_type || 'text',
-        reply_to: reply_to_id || null
+        reply_to: reply_to_id || null,
+        expires_at: expiryDate
     });
     
     // Hook in models.js now handles the socket emission automatically!
@@ -214,7 +223,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
 
     const chats = new Map();
     messages.forEach(m => {
-        if (!m.sender || !m.receiver) return; // Skip if user was deleted
+        if (!m.sender || !m.receiver || !m.sender._id || !m.receiver._id) return; 
         
         const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
         const otherId = other._id.toString();
@@ -344,6 +353,11 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
         query.content = { $regex: req.query.search, $options: 'i' };
     }
 
+    // Add Star filter
+    if (req.query.starred === 'true') {
+        query.starred_by = userId;
+    }
+
     const messages = await Message.find(query)
         .sort({ createdAt: 1 })
         .populate('sender', 'name first_name surname avatar')
@@ -352,6 +366,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
     res.json(messages.map(m => ({
         id: m._id, sender_id: m.sender._id, content: m.content,
         media: m.media, media_type: m.media_type, created_at: m.createdAt,
+        delivered: m.is_delivered,
         is_read: m.is_read, avatar: m.sender.avatar, 
         pinned: m.is_pinned,
         is_edited: m.is_edited,
@@ -566,9 +581,45 @@ router.post('/vote_poll', isAuthenticated, async (req, res) => {
     res.json({ success: !!result.modifiedCount });
 });
 
+router.get('/get_call_history', isAuthenticated, async (req, res) => {
+    const userId = req.session.userId;
+    let calls = await Call.find({ 
+        $or: [{ caller: userId }, { receiver: userId }],
+        deleted_for: { $ne: userId }
+    })
+        .sort({ created_at: -1 })
+        .populate('caller receiver', 'name avatar online');
+    
+    // Filter out potential nulls from deleted accounts
+    calls = calls.filter(c => c.caller && c.receiver);
+    res.json(calls);
+});
+
+router.post('/clear_call_history', isAuthenticated, async (req, res) => {
+    const userId = req.session.userId;
+    await Call.updateMany(
+        { $or: [{ caller: userId }, { receiver: userId }] },
+        { $addToSet: { deleted_for: userId } }
+    );
+    res.json({ success: true });
+});
+
+router.post('/delete_call_log', isAuthenticated, async (req, res) => {
+    const { call_id } = req.body;
+    const userId = req.session.userId;
+    await Call.findByIdAndUpdate(call_id, { 
+        $addToSet: { deleted_for: userId } 
+    });
+    res.json({ success: true });
+});
+
 router.get('/get_message_read_details', isAuthenticated, async (req, res) => {
-    const msg = await Message.findById(req.query.message_id).populate('read_by.user', 'name avatar');
-    res.json(msg ? msg.read_by : []);
+    const msg = await Message.findById(req.query.message_id)
+        .populate('read_by.user', 'name avatar');
+    res.json({
+        delivered_at: msg?.delivered_at,
+        read_details: msg ? msg.read_by : []
+    });
 });
 router.post('/toggle_reaction', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
@@ -1182,6 +1233,33 @@ router.post('/increment_reel_view', isAuthenticated, async (req, res) => {
     res.json({ success: true });
 });
 
+router.post('/toggle_disappearing_mode', isAuthenticated, async (req, res) => {
+    try {
+        const { chat_id, type } = req.body;
+        const user = await User.findById(req.session.userId);
+        const index = user.disappearing_chats.findIndex(c => c.chat_id.toString() === chat_id);
+        
+        let active = false;
+        if (index === -1) {
+            user.disappearing_chats.push({ chat_id, chat_type: type });
+            active = true;
+        } else {
+            user.disappearing_chats.splice(index, 1);
+        }
+
+        await user.save();
+        
+        // Notify the other side via Socket
+        const target = type === 'group' ? `group_${chat_id}` : chat_id;
+        req.io.to(target).emit('disappearing_mode_changed', { 
+            chat_id, 
+            active,
+            user_name: user.name 
+        });
+
+        res.json({ success: true, active });
+    } catch (error) { res.status(500).json({ error: 'Failed' }); }
+});
 router.get('/get_post_likes', isAuthenticated, async (req, res) => {
     const post = await Post.findById(req.query.post_id).populate('likes', 'name avatar');
     res.json(post?.likes || []);

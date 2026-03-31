@@ -285,7 +285,10 @@
                 <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Group</button>
                 <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Forum</button>
                 <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
-                <button @click="activeMessageTab = 'starred'; fetchStarredMessages()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'starred' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Starred</button>
+                <button @click="activeMessageTab = 'calls'; fetchCallHistory()" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'calls' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span>Calls</span>
+                    <span x-show="missedCallsCount > 0" class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-3 h-3 flex items-center justify-center rounded-full font-bold" x-text="missedCallsCount"></span>
+                </button>
                 <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Reports</button>
             </div>
             <div class="flex-1 overflow-y-auto">
@@ -311,7 +314,15 @@
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
                                 </div>
                                 <div class="flex justify-between items-center mt-1">
-                                    <p class="text-sm text-gray-500 truncate w-48" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
+                                    <template x-if="chat.isTyping">
+                                        <div class="flex items-center space-x-1">
+                                            <span class="text-xs font-bold text-blue-600 animate-pulse">Typing</span>
+                                            <div class="flex space-x-0.5"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!chat.isTyping">
+                                        <p class="text-sm text-gray-500 truncate w-48" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
+                                    </template>
                                     <template x-if="chat.unread">
                                         <span class="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
                                     </template>
@@ -351,21 +362,31 @@
                         </div>
                     </template>
                 </div>
-                <!-- Starred Messages -->
-                <div x-show="activeMessageTab === 'starred'">
-                    <template x-for="msg in starredMessages" :key="msg.id">
-                        <div class="p-4 border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <img :src="msg.avatar" class="w-8 h-8 rounded-full">
-                                <div class="flex-1 min-w-0">
-                                    <div class="flex justify-between items-center"><span class="font-bold text-sm" x-text="msg.author"></span><span class="text-[9px] text-gray-400" x-text="msg.time"></span></div>
-                                    <p class="text-xs text-gray-500 truncate" x-text="msg.type === 'text' ? msg.content : 'Media'"></p>
+                <!-- Call History -->
+                <div x-show="activeMessageTab === 'calls'" class="p-2">
+                    <div x-show="callHistory.length > 0" class="px-3 py-2 border-b dark:border-gray-800 flex justify-end">
+                        <button @click="clearCallHistory()" class="text-[10px] font-black text-red-500 uppercase hover:underline tracking-widest">Clear History</button>
+                    </div>
+                    <template x-for="call in callHistory" :key="call._id">
+                        <div class="flex items-center p-3 space-x-4 border-b dark:border-gray-800">
+                            <img :src="call.caller._id == user.id ? call.receiver.avatar : call.caller.avatar" class="w-10 h-10 rounded-full">
+                            <div class="flex-1">
+                                <p class="font-bold text-sm" x-text="call.caller._id == user.id ? call.receiver.name : call.caller.name"></p>
+                                <div class="flex items-center text-[10px] text-gray-500">
+                                    <i class="fa-solid mr-1" :class="call.caller._id == user.id ? 'fa-arrow-up-right text-green-500' : 'fa-arrow-down-left text-blue-500'"></i>
+                                    <span x-text="call.type === 'video' ? 'Video Call' : 'Voice Call'"></span>
+                                    <span class="mx-1">•</span>
+                                    <span x-text="new Date(call.created_at).toLocaleString()"></span>
                                 </div>
-                                <i class="fa-solid fa-star text-yellow-500 text-xs"></i>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button @click="startChatWithUser({id: call.caller._id == user.id ? call.receiver._id : call.caller._id, name: call.caller._id == user.id ? call.receiver.name : call.caller.name, avatar: call.caller._id == user.id ? call.receiver.avatar : call.caller.avatar})" class="p-2 text-gray-400 hover:text-blue-600 transition-colors" title="Chat"><i class="fa-solid fa-comment-dots"></i></button>
+                                <button @click="callback(call)" class="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-all" title="Callback"><i class="fa-solid" :class="call.type === 'video' ? 'fa-video' : 'fa-phone'"></i></button>
+                                <button @click="deleteCallLog(call._id)" class="p-2 text-gray-300 hover:text-red-500 transition-colors" title="Delete Log"><i class="fa-solid fa-trash-can text-xs"></i></button>
                             </div>
                         </div>
                     </template>
-                    <div x-show="starredMessages.length === 0" class="p-8 text-center text-gray-500 text-xs">No starred messages.</div>
+                    <div x-show="callHistory.length === 0" class="p-8 text-center text-gray-500 text-xs">No call history.</div>
                 </div>
                 <!-- Archived Chats -->
                 <div x-show="activeMessageTab === 'archived'">
@@ -482,6 +503,11 @@
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
                     <input type="text" x-model="chatSearchQuery" @input.debounce.500ms="fetchMessages(activeChat)" placeholder="Search in conversation..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-2 pl-9 pr-10 text-sm focus:ring-1 focus:ring-blue-500">
                     
+                    <!-- Star Filter Toggle -->
+                    <button @click="chatStarFilter = !chatStarFilter" class="absolute right-10 top-1/2 -translate-y-1/2 p-1 transition-colors" :class="chatStarFilter ? 'text-yellow-500' : 'text-gray-400'">
+                        <i class="fa-solid fa-star"></i>
+                    </button>
+
                     <!-- Clear Search Button -->
                     <button x-show="chatSearchQuery" @click="clearChatSearch()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-500 transition-colors">
                         <i class="fa-solid fa-times-circle"></i>
@@ -496,6 +522,18 @@
                     <span class="text-xs truncate text-gray-700 dark:text-gray-300" x-text="activeChatPinnedMsg?.content || 'Media message'"></span>
                 </div>
                 <button @click.stop="unpinMessage(activeChatPinnedMsg)" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <!-- Starred Messages Bar -->
+            <div x-show="starredMessagesInActiveChat.length > 0" class="bg-blue-50 dark:bg-blue-900/20 p-2 px-4 flex items-center border-b dark:border-gray-800 overflow-x-auto no-scrollbar gap-2">
+                <span class="text-[10px] font-black text-blue-600 uppercase flex-shrink-0"><i class="fa-solid fa-star"></i> Starred</span>
+                <div class="flex gap-2">
+                    <template x-for="sMsg in starredMessagesInActiveChat" :key="sMsg.id">
+                        <div @click="scrollToMessage(sMsg.id)" class="bg-white dark:bg-gray-800 px-3 py-1 rounded-full border dark:border-gray-700 text-[10px] font-bold whitespace-nowrap cursor-pointer hover:border-blue-500 transition-colors">
+                            <span x-text="sMsg.type === 'text' ? sMsg.content : 'Media'"></span>
+                        </div>
+                    </template>
+                </div>
             </div>
             
             <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900/50">
@@ -564,6 +602,10 @@
                     <button @click="isCreatingPoll = true; showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-square-poll-vertical text-yellow-500 text-xl"></i></div><span class="text-[10px] font-bold">Poll</span></button>
                 </template>
                 <button class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
+                <button @click="toggleDisappearingMode()" class="flex flex-col items-center space-y-2 group">
+                    <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-hourglass-half text-indigo-500 text-xl"></i></div>
+                    <span class="text-[10px] font-bold">24h Timer</span>
+                </button>
                 <button @click="clearChat()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-trash text-red-500 text-xl"></i></div><span class="text-[10px] font-bold">Clear Chat</span></button>
                 <button @click="deleteChatHistory()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-user-xmark text-red-600 text-xl"></i></div><span class="text-[10px] font-bold">Delete History</span></button>
                 <template x-if="activeChat?.type !== 'group'">
@@ -868,6 +910,40 @@
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2">
                 <input type="text" x-model="replyContent" @keyup.enter="postReply()" placeholder="Write a reply..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 px-4 text-sm focus:ring-1 focus:ring-blue-500">
                 <button @click="postReply()" class="p-2 text-blue-600 disabled:opacity-30" :disabled="!replyContent.trim()"><i class="fa-solid fa-paper-plane text-xl"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Info Modal -->
+    <div x-show="showMsgInfo" x-cloak class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-fadeIn">
+            <div class="p-4 border-b dark:border-gray-800 flex justify-between items-center">
+                <h3 class="font-black">Message Info</h3>
+                <button @click="showMsgInfo = false" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="flex items-start space-x-4">
+                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500"><i class="fa-solid fa-check-double"></i></div>
+                    <div>
+                        <p class="font-bold text-sm">Delivered</p>
+                        <p class="text-xs text-gray-500" x-text="messageInfoData.delivered_at ? new Date(messageInfoData.delivered_at).toLocaleString() : 'Pending...'"></p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Read By</p>
+                    <template x-if="messageInfoData.read_details?.length === 0">
+                        <p class="text-xs text-gray-500 italic">No one has read this yet.</p>
+                    </template>
+                    <template x-for="read in messageInfoData.read_details" :key="read.user.id">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <img :src="read.user.avatar" class="w-8 h-8 rounded-full">
+                                <span class="text-sm font-bold" x-text="read.user.name"></span>
+                            </div>
+                            <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(read.read_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
     </div>
@@ -1703,7 +1779,7 @@
         <div class="relative z-10 flex flex-col items-center mt-10 transition-all duration-500" :class="(callType === 'video' && callStatus === 'Connected') ? 'opacity-0 hover:opacity-100' : ''">
             <img :src="activeChat?.avatar" class="w-32 h-32 rounded-full border-4 border-white/10 shadow-2xl mb-6 animate-pulse object-cover">
             <h2 class="text-white text-3xl font-black tracking-tight drop-shadow-lg" x-text="activeChat?.name"></h2>
-            <p class="text-gray-300 font-medium mt-2 text-lg drop-shadow-md" x-text="callStatus === 'Connected' ? formatRecordingTime(callDuration) : callStatus"></p>
+            <p class="text-gray-300 font-medium mt-2 text-lg drop-shadow-md" x-text="callStatus === 'Connected' ? 'Connected • ' + formatRecordingTime(callDuration) : callStatus"></p>
         </div>
 
         <!-- Video Placeholder (if video call) -->

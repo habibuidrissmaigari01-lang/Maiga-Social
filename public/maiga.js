@@ -861,7 +861,7 @@ const initMaiga = () => {
             this.showMessageOptions = false;
             const data = await this.apiFetch(`/api/get_message_read_details?message_id=${msg.id}`);
             if (data) {
-                this.messageInfoData = data;
+                this.messageInfoData = data; // Now contains delivered_at and read_details
                 this.showMsgInfo = true;
             }
         },
@@ -1127,6 +1127,48 @@ const initMaiga = () => {
         showGroupInfo: false,
         replyContent: '',
         activeMessageTab: 'all',
+        chatStarFilter: false,
+        callHistory: [],
+        starredMessages: [], // Fix: Define this to prevent Alpine ReferenceErrors
+        async fetchCallHistory() {
+            const data = await this.apiFetch('/api/get_call_history');
+            if (data) this.callHistory = data;
+        },
+        async clearCallHistory() {
+            if (!confirm('Are you sure you want to clear your call history?')) return;
+            const data = await this.apiFetch('/api/clear_call_history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            if (data && data.success) {
+                this.callHistory = [];
+                this.showToast('Success', 'Call history cleared');
+            }
+        },
+        async deleteCallLog(callId) {
+            const data = await this.apiFetch('/api/delete_call_log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ call_id: callId })
+            });
+            if (data && data.success) {
+                this.callHistory = this.callHistory.filter(c => c._id !== callId);
+                this.showToast('Deleted', 'Call log removed');
+            }
+        },
+        callback(call) {
+            const otherUser = call.caller._id == this.user.id ? call.receiver : call.caller;
+            this.startChatWithUser({ id: otherUser._id, name: otherUser.name, avatar: otherUser.avatar, online: otherUser.online });
+            this.$nextTick(() => this.startCall(call.type));
+        },
+        get missedCallsCount() {
+            // Count calls where I am the receiver and it was missed and unread (if you add an is_read field to Call)
+            return this.callHistory.filter(c => c.receiver._id == this.user.id && c.is_missed).length;
+        },
+        get starredMessagesInActiveChat() {
+            if (!this.activeChat || !this.chatMessages[this.activeChat.id]) return [];
+            return this.chatMessages[this.activeChat.id].filter(m => m.starred);
+        },
         privacySettings: {
             privateAccount: false,
             activityStatus: true,
@@ -1146,7 +1188,6 @@ const initMaiga = () => {
         chatMessages: {}, // Will populate via API
         reels: [],
         myReels: [],
-        starredMessages: [],
         observer: null,
         viewedReels: new Set(),
         reelPage: 1,
@@ -1313,27 +1354,41 @@ const initMaiga = () => {
                 document.getElementById('receive-sound').play().catch(()=>{}); // Play notification sound
 
                 // Make sure it's not our own message coming back
-                if (data.sender_id === this.user.id) return;
+                if (data.sender_id == this.user.id) return;
+
+                // Acknowledge delivery to the server
+                this.socket.emit('message_received', { message_id: data.id });
+
+                // If we are currently looking at this chat, mark incoming message as read
+                if (this.activeChat && this.activeChat.id == data.sender_id) {
+                    this.markAsRead(this.activeChat);
+                }
 
                 // Decrypt E2EE messages
                 if (data.media_type === 'e2ee') {
                     try {
                         const privKey = await this.crypto.getPrivateKey();
                         data.content = await this.crypto.decrypt(data.content, privKey);
-                        data.type = 'text'; 
+                        data.media_type = 'text'; 
                     } catch (e) {
                         data.content = '🔒 Encrypted Message';
-                        data.type = 'text';
+                        data.media_type = 'text';
                     }
                 }
 
-                const chatId = data.sender_id;
+                // Normalize message for Alpine templates (match fetchMessages format)
+                const formattedMsg = {
+                    ...data,
+                    sender: 'them',
+                    type: data.media_type || 'text',
+                    time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
 
+                const chatId = data.sender_id;
                 if (!this.chatMessages[chatId]) {
                     this.chatMessages[chatId] = [];
                 }
-
-                this.chatMessages[chatId].push(data);
+                this.chatMessages[chatId].push(formattedMsg);
 
                 const chatInList = this.chats.find(c => c.id == chatId);
                 if (chatInList) {
@@ -1347,6 +1402,7 @@ const initMaiga = () => {
             this.socket.on('incoming_call', (data) => {
                 if (this.isCalling || this.incomingCall) return; // Busy
                 this.incomingCall = {
+                    id: data.callId,
                     caller_id: data.from,
                     name: data.name,
                     avatar: data.avatar,
@@ -1357,11 +1413,10 @@ const initMaiga = () => {
             });
 
             this.socket.on('call_accepted', (signal) => {
-                this.callStatus = 'Connected';
+                this.callStatus = 'Connecting...';
                 document.getElementById('ringing-sound').pause();
                 this.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
                 clearInterval(this.connectionInterval); // Stop any fallback polling
-                this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
             });
 
             this.socket.on('ice_candidate', (candidate) => {
@@ -1377,28 +1432,47 @@ const initMaiga = () => {
 
             // Listen for typing events
             this.socket.on('display_typing', (data) => {
-                // data.chat_id is the Group ID (for groups) or Sender ID (for 1-on-1)
+                const chat = this.chats.find(c => c.id == data.chat_id);
+                if (chat) {
+                    chat.isTyping = true;
+                    clearTimeout(chat.typingTimeout);
+                    chat.typingTimeout = setTimeout(() => chat.isTyping = false, 3000);
+                }
+                
                 if (this.activeChat && this.activeChat.id == data.chat_id && data.sender_id != this.user.id) {
-                    if (!this.typingUsers.includes(data.sender_id)) {
-                        this.typingUsers.push(data.sender_id);
-                    }
-                    // Auto-hide typing indicator after 3 seconds
-                    setTimeout(() => {
-                        this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
-                    }, 3000);
+                    if (!this.typingUsers.includes(data.sender_id)) this.typingUsers.push(data.sender_id);
                 }
             });
 
             this.socket.on('message_deleted', (data) => {
-                const chatId = this.activeChat?.id;
-                if (chatId && this.chatMessages[chatId]) {
+                // Look through all chat buckets to find and remove the deleted message
+                for (let chatId in this.chatMessages) {
                     this.chatMessages[chatId] = this.chatMessages[chatId].filter(m => m.id != data.message_id);
                 }
             });
 
+            // Listen for delivery receipts
+            this.socket.on('message_delivered', (data) => {
+                for (let chatId in this.chatMessages) {
+                    const msg = this.chatMessages[chatId].find(m => m.id == data.message_id);
+                    if (msg) {
+                        msg.delivered = true;
+                        break;
+                    }
+                }
+            });
+
             this.socket.on('hide_typing', (data) => {
+                const chat = this.chats.find(c => c.id == data.chat_id);
+                if (chat) chat.isTyping = false;
                 if (this.activeChat && this.activeChat.id == data.chat_id) {
                     this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
+                }
+            });
+
+            this.socket.on('disappearing_mode_changed', (data) => {
+                if (this.activeChat && this.activeChat.id == data.chat_id) {
+                    this.showToast('Chat Update', `Disappearing messages ${data.active ? 'enabled' : 'disabled'} by ${data.user_name}`, 'info');
                 }
             });
 
@@ -1529,6 +1603,15 @@ const initMaiga = () => {
             // Watch for chat search queries to filter messages
             this.$watch('chatSearchQuery', (val) => {
                 if (this.activeChat) this.fetchMessages(this.activeChat, false);
+            });
+             
+            this.$watch('chatStarFilter', (val) => {
+                if (this.activeChat) this.fetchMessages(this.activeChat, false);
+            });
+            
+            // Automatically mark as read when switching chats
+            this.$watch('activeChat', (newChat) => {
+                if (newChat) this.markAsRead(newChat);
             });
 
             // Re-join room if user data loads after socket connects
@@ -2163,7 +2246,11 @@ const initMaiga = () => {
             const chatInList = this.chats.find(c => c.id == this.activeChat.id);
             if (chatInList) {
                 chatInList.lastMsg = content;
+                chatInList.time = 'Just now';
                 chatInList.pending = !navigator.onLine;
+            } else if (this.activeChat.type !== 'group') {
+                // If it's a new chat not yet in the list, add it
+                this.chats.unshift({ ...this.activeChat, lastMsg: content, time: 'Just now' });
             }
 
             if (navigator.onLine) {
@@ -2232,11 +2319,27 @@ const initMaiga = () => {
             this.sendMessage(null, this.mediaPreviewType, null, this.mediaPreviewFile);
             this.closeMediaPreview();
         },
+        async toggleDisappearingMode() {
+            if (!this.activeChat) return;
+            const type = this.activeChat.type === 'group' ? 'group' : 'user';
+            const data = await this.apiFetch('/api/toggle_disappearing_mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: this.activeChat.id, type: type })
+            });
+            if (data && data.success) {
+                this.showToast('Success', `Disappearing messages ${data.active ? 'ON' : 'OFF'}`);
+                this.showChatOptions = false;
+            }
+        },
         fetchMessages(chat, forceScroll = true) {
             const type = chat.type === 'group' ? 'group' : 'user';
             let url = `/api/get_messages?chat_id=${chat.id}&type=${type}`;
             if (this.chatSearchQuery) {
                 url += `&search=${encodeURIComponent(this.chatSearchQuery)}`;
+            }
+            if (this.chatStarFilter) {
+                url += `&starred=true`;
             }
 
             this.apiFetch(url)
@@ -4846,6 +4949,8 @@ const initMaiga = () => {
                         this.isPoorConnection = false;
                         this.callStatus = 'Connected';
                         this.showToast('Call Status', 'Connected!', 'success');
+                        clearInterval(this.callTimer);
+                        this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
                         break;
                     case 'new':
                     case 'connecting':
@@ -4868,8 +4973,8 @@ const initMaiga = () => {
             this.isCalling = true;
             this.callType = callData.type;
             this.currentCallId = callData.id;
-            this.callStatus = 'Connected';
-            this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
+            this.callStatus = 'Connecting...';
+            this.callDuration = 0;
 
             navigator.mediaDevices.getUserMedia({
                 video: this.callType === 'video',
@@ -4885,6 +4990,7 @@ const initMaiga = () => {
                 this.peerConnection.createAnswer().then(answer => {
                     this.peerConnection.setLocalDescription(answer);
                     this.socket.emit('answer_call', {
+                        callId: callData.id,
                         to: callData.caller_id,
                         signal: answer
                     });
@@ -4893,7 +4999,7 @@ const initMaiga = () => {
         },
         rejectCall() {
             if (!this.incomingCall) return;
-            this.socket.emit('reject_call', { to: this.incomingCall.caller_id });
+            this.socket.emit('reject_call', { callId: this.incomingCall.id, to: this.incomingCall.caller_id });
             this.incomingCall = null;
             document.getElementById('ringing-sound').pause();
         },
@@ -4906,7 +5012,11 @@ const initMaiga = () => {
             // Notify via Socket
             const wasActiveChat = this.activeChat;
             if (this.activeChat) {
-                this.socket.emit('end_call', { to: this.activeChat.id });
+                this.socket.emit('end_call', { 
+                    callId: this.currentCallId, 
+                    to: this.activeChat.id, 
+                    duration: this.callDuration 
+                });
             }
 
             const wasConnected = this.callStatus === 'Connected';

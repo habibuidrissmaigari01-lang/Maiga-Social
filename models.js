@@ -70,6 +70,10 @@ const userSchema = new mongoose.Schema({
         chat_id: { type: mongoose.Schema.Types.ObjectId, required: true },
         chat_type: { type: String, enum: ['user', 'group'], required: true }
     }],
+    disappearing_chats: [{
+        chat_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+        chat_type: { type: String, enum: ['user', 'group'], required: true }
+    }],
     is_verified: { type: Boolean, default: false },
     blocked: { type: Boolean, default: false },
     banned_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -195,6 +199,9 @@ const messageSchema = new mongoose.Schema({
     content: String,
     media: String,
     media_type: { type: String, default: 'text' },
+    is_delivered: { type: Boolean, default: false },
+    delivered_at: Date,
+    expires_at: { type: Date, index: { expires: 0 } }, // TTL Index: Deletes doc when this time is reached
     is_read: { type: Boolean, default: false },
     read_by: [{ 
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -251,8 +258,9 @@ messageSchema.post('save', async function(doc) {
     const populatedMsg = await doc.populate('sender', 'name first_name surname avatar');
     const msgData = {
         id: doc._id,
+        sender_id: doc.sender._id,
         content: doc.content,
-        type: doc.media_type,
+        media_type: doc.media_type,
         author: populatedMsg.sender.full_name, // Using the virtual here!
         avatar: populatedMsg.sender.avatar,
         created_at: doc.createdAt
@@ -364,9 +372,12 @@ const callSchema = new mongoose.Schema({
     caller: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     type: String,
+    duration: { type: Number, default: 0 },
+    is_missed: { type: Boolean, default: true },
     sdp_offer: String,
     sdp_answer: String,
-    status: { type: String, default: 'ringing' },
+    status: { type: String, default: 'ringing' }, // ringing, accepted, ended, rejected
+    deleted_for: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     ice_candidates: [String],
     created_at: { type: Date, default: Date.now }
 });
