@@ -73,13 +73,18 @@ const mongoConnection = mongoose.connect(MONGO_URI, {
 });
 
 app.use(session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: MONGO_URI,
         collectionName: 'sessions',
         stringify: false,
         autoRemove: 'interval'
     }),
     cookie: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Only send over HTTPS in production
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
     }
 }));

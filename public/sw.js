@@ -9,7 +9,7 @@ const ASSETS_TO_CACHE = [
   '/manifest-maiga.json',
   '/manifest-ysu.json',
   '/img/logo.png',
-  '/img/ysu-logo.jpg',
+  '/img/ysu.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
 ];
@@ -94,7 +94,6 @@ self.addEventListener('install', (event) => {
 
 // 2. Activate Event: Clean up old caches and take control immediately
 self.addEventListener('activate', (event) => {
-  console.log(`[Service Worker] Activating new cache: ${CACHE_NAME}`);
   event.waitUntil(
     Promise.all([
       // Take control of all open tabs/clients immediately

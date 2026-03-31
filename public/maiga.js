@@ -204,20 +204,6 @@ const initMaiga = () => {
         editorTextOpacity: 1,
         editorTextRotation: 0,
 
-        isLeftSidebarCollapsed: false,
-        socket: null,
-        followLoading: [],
-        connectionList: [],
-        connectionSearchQuery: '',
-        isCreatingPost: false,
-        isCreatingStory: false,
-        postFile: null, // Store raw file for posts
-        storyFile: null,
-        storyMediaPreview: null,
-        textStoryStyleIndex: 0,
-        musicPickerSource: 'editor', // 'editor' or 'camera'
-        showMusicPicker: false,
-        musicTracks: [], // Will fetch from backend
         selectMusic(track) {
             if (this.musicPickerSource === 'camera') {
                 this.cameraMusic = track;
@@ -983,7 +969,6 @@ const initMaiga = () => {
         isReconnecting: false,
         connectionInterval: null,
         callType: null,
-        facingMode: 'user',
         isScreenSharing: false,
         localStream: null,
         callStatus: '',
@@ -992,18 +977,15 @@ const initMaiga = () => {
         isSpeakerOn: false,
         callDuration: 0,
         callTimer: null,
-        isDragging: false,
         dragInfo: { startX: 0, startY: 0, initialX: 0, initialY: 0 },
         minimizedCallTransform: { x: 0, y: 0 },
         swipeStart: { x: 0, y: 0 },
         swipingMsgId: null,
-        swipeOffset: 0,
-        touchTimer: null,
+        // Removed duplicate swipeOffset, isDragging, isPaused declarations
         editingMessageId: null,
         isSearchingChat: false,
         isSendingMessage: false,
         showCommentStickers: false,
-        // brightnessIntensity and contrastIntensity already defined above
         chatSearchQuery: '',
         clearChatSearch() {
             this.chatSearchQuery = '';
@@ -1122,7 +1104,6 @@ const initMaiga = () => {
         viewingPost: null, // ... other properties
         viewingStory: null,
         showSeenList: false, // ... other properties
-        isUploadingStory: false,
         showCloseFriendsManager: false,
         newStoryText: '',
         newStoryContent: '',
@@ -1312,8 +1293,12 @@ const initMaiga = () => {
                 history.go(1);
             };
 
-            // --- SOCKET.IO IMPLEMENTATION ---
-            this.socket = io(API_BASE_URL);
+            // --- RESILIENT SOCKET.IO INITIALIZATION ---
+            if (typeof io !== 'undefined') {
+                this.socket = io(API_BASE_URL);
+            } else {
+                this.socket = { on: () => {}, emit: () => {}, connected: false };
+            }
 
             // 2. Join a room based on the user's ID once connected and user is loaded
             this.socket.on('connect', () => {
