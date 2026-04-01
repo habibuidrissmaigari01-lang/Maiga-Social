@@ -51,6 +51,10 @@ const initMaiga = () => {
         isReporting: false, // Initialize isReporting
         pinnedChats: [], // Initialize pinnedChats for isPinned getter
         homeSearchTab: 'users',
+        friendsTab: 'suggestions',
+        friendsSearchQuery: '',
+        groupSearchQuery: '',
+        showStoryStickerPicker: false,
         connectionSearchQuery: '',
         connectionList: [],
         isCreatingStory: false,
@@ -316,24 +320,24 @@ const initMaiga = () => {
                 return potential;
             }
             const q = this.addMemberSearchQuery.toLowerCase();
-            return potential.filter(f => (f.name && f.name.toLowerCase().includes(q)) || (f.username && f.username.toLowerCase().includes(q)));
+            return potential.filter(f => (f.name?.toLowerCase().includes(q)) || (f.username?.toLowerCase().includes(q)));
         },
         get filteredFriendsList() {
             if (!this.friendsSearchQuery?.trim()) return this.friends || [];
             const q = this.friendsSearchQuery.toLowerCase();
             return (this.friends || []).filter(f =>
-                (f.name && f.name.toLowerCase().includes(q)) ||
-                (f.username && f.username.toLowerCase().includes(q)) ||
-                (f.dept && f.dept.toLowerCase().includes(q))
+                (f.name?.toLowerCase().includes(q)) ||
+                (f.username?.toLowerCase().includes(q)) ||
+                (f.dept?.toLowerCase().includes(q))
             );
         },
         get filteredFollowingForGroup() {
             if (!this.groupSearchQuery?.trim()) return this.followingList || [];
             const q = this.groupSearchQuery.toLowerCase();
             return (this.followingList || []).filter(f =>
-                (f.name && f.name.toLowerCase().includes(q)) ||
-                (f.username && f.username.toLowerCase().includes(q)) ||
-                (f.dept && f.dept.toLowerCase().includes(q))
+                (f.name?.toLowerCase().includes(q)) ||
+                (f.username?.toLowerCase().includes(q)) ||
+                (f.dept?.toLowerCase().includes(q))
             );
         },
         isMessaging: false,
@@ -1904,9 +1908,9 @@ const initMaiga = () => {
             }
             const query = this.connectionSearchQuery.toLowerCase();
             return this.connectionList.filter(person =>
-                person.name.toLowerCase().includes(query) ||
-                (person.username && person.username.toLowerCase().includes(query)) ||
-                (person.dept && person.dept.toLowerCase().includes(query))
+                person.name?.toLowerCase().includes(query) ||
+                (person.username?.toLowerCase().includes(query)) ||
+                (person.dept?.toLowerCase().includes(query))
             );
         },
         isFollowing(friendId) {
