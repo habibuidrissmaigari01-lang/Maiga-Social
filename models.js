@@ -259,6 +259,7 @@ messageSchema.post('save', async function(doc) {
     const msgData = {
         id: doc._id,
         sender_id: doc.sender._id,
+        group_id: doc.group,
         content: doc.content,
         media_type: doc.media_type,
         author: populatedMsg.sender.full_name, // Using the virtual here!

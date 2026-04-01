@@ -93,7 +93,10 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = 10;
         const skip = (page - 1) * limit;
-        const query = req.query.user_id ? { user: req.query.user_id, media_type: { $ne: 'video' } } : { media_type: { $ne: 'video' } };
+        
+        // Ensure we get images AND text-only posts (media_type null), but exclude videos (Reels)
+        const baseQuery = { media_type: { $ne: 'video' } };
+        const query = req.query.user_id ? { user: req.query.user_id, ...baseQuery } : baseQuery;
         
         // Populate 'user' and include fields needed for the 'full_name' virtual
         const posts = await Post.find(query)
@@ -230,11 +233,13 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
         const otherId = other._id.toString();
         
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
+            const isUnread = m.receiver?._id?.toString() === userId.toString() && !m.is_read;
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
                 lastMsg: m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`, 
-                time: formatTime(m.createdAt)
+                time: formatTime(m.createdAt),
+                unread: isUnread
             });
         }
     });
@@ -259,7 +264,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
                 type: 'group',
                 lastMsg: lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `Sent a ${lastMessage.media_type}`) : 'No messages yet',
                 time: lastMessage ? formatTime(lastMessage.createdAt) : '',
-                unread: false
+                unread: lastMessage ? !lastMessage.read_by.some(r => r.user.toString() === req.session.userId) : false
             };
         }));
         res.json(groupData);
@@ -1222,6 +1227,15 @@ router.get('/get_notifications', isAuthenticated, async (req, res) => {
     const notifications = await Notification.find({ user: req.session.userId })
         .sort({ created_at: -1 }).limit(20);
     res.json(notifications);
+});
+
+router.post('/mark_notifications_read', isAuthenticated, async (req, res) => {
+    try {
+        await Notification.updateMany({ user: req.session.userId, is_read: false }, { $set: { is_read: true } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Failed to clear notifications' });
+    }
 });
 
 router.post('/update_public_key', isAuthenticated, async (req, res) => {

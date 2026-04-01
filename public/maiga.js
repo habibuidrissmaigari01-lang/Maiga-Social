@@ -112,6 +112,9 @@ const initMaiga = () => {
         chatStarFilter: false,
         callHistory: [],
         starredMessages: [],
+        get unreadNotificationsCount() {
+            return (this.notifications || []).filter(n => !n.is_read).length;
+        },
         get missedCallsCount() {
             if (!this.callHistory || !this.user?.id) return 0;
             // Safe check for receiver existence using optional chaining
@@ -244,6 +247,10 @@ const initMaiga = () => {
         friendsTab: 'suggestions',
         get unreadBadgeDisplay() {
            const count = this.totalUnreadChats || 0;
+            return count > 9 ? '9+' : count;
+        },
+        get unreadNotificationsDisplay() {
+            const count = this.unreadNotificationsCount || 0;
             return count > 9 ? '9+' : count;
         },
         getSeenByText(msg) {
@@ -1358,13 +1365,15 @@ const initMaiga = () => {
                     time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
 
-                const chatId = data.sender_id;
+                const chatId = data.group_id || data.sender_id;
                 if (!this.chatMessages[chatId]) {
                     this.chatMessages[chatId] = [];
                 }
                 this.chatMessages[chatId].push(formattedMsg);
 
-                const chatInList = this.chats.find(c => c.id == chatId);
+                const chatInList = data.group_id 
+                    ? this.groups.find(g => g.id == data.group_id)
+                    : this.chats.find(c => c.id == data.sender_id);
                 if (chatInList) {
                     chatInList.lastMsg = data.content;
                     chatInList.time = 'Just now';
@@ -1546,18 +1555,7 @@ const initMaiga = () => {
             window.addEventListener('offline', () => { 
                 this.isOffline = true; 
             });
-            // Setup cryptography - Fix for phone/non-secure context
-            if (window.isSecureContext && window.crypto && window.crypto.subtle) {
-                try {
-                    await this.crypto.init(this);
-                    const hasKeys = await this.crypto.hasKeys();
-                    if (!hasKeys) {
-                        await this.crypto.generateAndStoreKeys();
-                        this.showToast('Security', 'Encryption keys generated and stored securely.', 'success');
-                    }
-                } catch (e) { }            }
-            this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
-            
+                       
             // Watch for changes to isFullScreen and save to localStorage
             this.$watch('isFullScreen', (value) => {
                 localStorage.setItem('maiga_fullscreen', value);
@@ -2893,15 +2891,30 @@ const initMaiga = () => {
         handleReelClick(reel, event) {
             const now = Date.now();
             if (now - this.lastReelClick < 300) {
-                // Double tap detected
+                // Double (or multi) tap detected
                 clearTimeout(this.reelClickTimer);
+
+                // Trigger haptic feedback (vibration)
+                if (navigator.vibrate) navigator.vibrate(40);
+
+                // 1. Capture exact tap coordinates relative to the video container
+                const rect = event.currentTarget.getBoundingClientRect();
+                reel.heartX = event.clientX - rect.left;
+                reel.heartY = event.clientY - rect.top;
                 
+                // 2. Re-trigger animation for every single tap in a sequence
+                reel.showHeart = false;
+                this.$nextTick(() => {
+                    reel.showHeart = true;
+                    // Auto-hide the heart after the animation completes
+                    clearTimeout(reel.heartTimer);
+                    reel.heartTimer = setTimeout(() => reel.showHeart = false, 800);
+                });
+
+                // 3. Only count the like once (TikTok logic: double tap doesn't unlike)
                 if (!reel.liked) {
-                    this.toggleReelLike(reel);
+                    this.likeReel(reel);
                 }
-                
-                reel.showHeart = true;
-                setTimeout(() => reel.showHeart = false, 600);
             } else {
                 // Single tap (wait to see if it's double)
                 this.reelClickTimer = setTimeout(() => {
@@ -2911,6 +2924,36 @@ const initMaiga = () => {
             }
             this.lastReelClick = now;
         },
+
+        // Specifically for double-tap (Add only)
+        likeReel(reel) {
+            if (reel.liked) return;
+            
+            reel.liked = true;
+            reel.likes++;
+
+            this.apiFetch('/api/toggle_reaction', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': CSRF_TOKEN
+                },
+                body: JSON.stringify({ post_id: reel.id, reaction: 'like' })
+            }).catch(() => {
+                // Revert on network failure
+                reel.liked = false;
+                reel.likes--;
+            });
+        },
+
+        async markNotificationsRead() {
+            if (this.unreadNotificationsCount === 0) return;
+            this.notifications.forEach(n => n.is_read = true);
+            await this.apiFetch('/api/mark_notifications_read', {
+                method: 'POST'
+            });
+        },
+
         get homePosts() {
             return this.posts;
         },
