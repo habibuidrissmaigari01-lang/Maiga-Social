@@ -45,6 +45,11 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
 
         // Missing UI State Variables
+        friends: [], // Initialize friends
+        trendingTopics: [], // Initialize trendingTopics
+        savedPostList: [], // Initialize savedPostList for savedPosts getter
+        isReporting: false, // Initialize isReporting
+        pinnedChats: [], // Initialize pinnedChats for isPinned getter
         homeSearchTab: 'users',
         connectionSearchQuery: '',
         connectionList: [],
@@ -129,6 +134,14 @@ const initMaiga = () => {
         get unreadNotificationsCount() {
             return (this.notifications || []).filter(n => !n.is_read).length;
         },
+        get didYouMeanFriend() {
+            if (!this.friendsSearchQuery?.trim() || (this.filteredFriendsList || []).length > 0) return { name: '' }; 
+            const q = this.friendsSearchQuery.toLowerCase();
+            return (this.friends || []).find(f => 
+                this.fuzzyMatch(q, f.name || '') || 
+                this.fuzzyMatch(q, f.username || '')
+            ) || { name: '' };
+        },
         get missedCallsCount() {
             if (!this.callHistory || !this.user?.id) return 0;
             // Safe check for receiver existence using optional chaining
@@ -141,6 +154,9 @@ const initMaiga = () => {
         get activeChatPinnedMsg() {
             if (!this.activeChat?.id || !this.chatMessages?.[this.activeChat.id]) return null;
             return this.chatMessages[this.activeChat.id].find(m => m.pinned);
+        },        
+        get savedPosts() { 
+            return (this.savedPostList || []).length > 0 ? this.savedPostList : (this.posts || []).filter(p => p.saved);
         },
         async fetchCallHistory() {
             const data = await this.apiFetch('/api/get_call_history');
@@ -252,24 +268,10 @@ const initMaiga = () => {
         textStoryStyles: [
             { background: 'linear-gradient(to bottom, #4f46e5, #9333ea)', color: '#ffffff' },
             { background: 'linear-gradient(to bottom, #f97316, #fde047)', color: '#ffffff' },
-            { background: '#18181b', color: '#ffffff' },
-            { background: '#ffffff', color: '#18181b' },
         ],
-        showStoryStickerPicker: false,
-        groupSearchQuery: '',
-        friendsSearchQuery: '',
-        friendsTab: 'suggestions',
         get unreadBadgeDisplay() {
            const count = this.totalUnreadChats || 0;
             return count > 9 ? '9+' : count;
-         },
-        get didYouMeanFriend() {
-            if (!this.friendsSearchQuery?.trim() || this.filteredFriendsList.length > 0) return null;
-            const q = this.friendsSearchQuery.toLowerCase();
-            return (this.friends || []).find(f => 
-                this.fuzzyMatch(q, f.name || '') || 
-                this.fuzzyMatch(q, f.username || '')
-            );
         },
         highlight(text, query) {
             if (!query || !text) return text || '';
@@ -1915,7 +1917,7 @@ const initMaiga = () => {
             return this.mutedChats.some(m => m.chat_id == chatId && m.type == type);
         },
         isPinned(chatId, type) {
-            return this.pinnedChats.some(p => p.chat_id == chatId && p.type == type);
+            return (this.pinnedChats || []).some(p => p.chat_id == chatId && p.type == type);
         },
         toggleFollow(friendId) {
             if (this.followLoading.includes(friendId)) return;
