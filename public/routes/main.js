@@ -110,7 +110,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
             comments: p.comments_count || 0,
             views: p.views || 0,
             saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
-            myReaction: p.likes.some(id => id.toString() === req.session.userId?.toString()) ? 'like' : null
+            myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null
         })));
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' });

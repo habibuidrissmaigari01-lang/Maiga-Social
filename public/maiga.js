@@ -74,7 +74,7 @@ const initMaiga = () => {
             const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
 
             const maxRetries = options.retries ?? 2;
-            const timeout = options.timeout ?? 10000; // 10s default per request
+            const timeout = options.timeout ?? 60000; // 60s default for media uploads
 
             for (let i = 0; i <= maxRetries; i++) {
                 try {
@@ -1391,6 +1391,17 @@ const initMaiga = () => {
                     chatInList.lastMsg = data.content;
                     chatInList.time = 'Just now';
                     if (this.activeChat?.id != chatId) chatInList.unread = true;
+                } else if (!data.group_id) {
+                    // Create the chat entry for the receiver if it doesn't exist yet
+                    this.chats.unshift({
+                        id: data.sender_id,
+                        name: data.author,
+                        avatar: data.avatar,
+                        lastMsg: data.content,
+                        time: 'Just now',
+                        unread: true,
+                        status: 'online'
+                    });
                 }
             });
 
@@ -1428,7 +1439,9 @@ const initMaiga = () => {
 
             // Listen for typing events
             this.socket.on('display_typing', (data) => {
-                const chat = this.chats.find(c => c.id == data.chat_id);
+                const chat = this.chats.find(c => c.id == data.chat_id) || 
+                             this.groups.find(g => g.id == data.chat_id);
+
                 if (chat) {
                     chat.isTyping = true;
                     clearTimeout(chat.typingTimeout);
@@ -1634,12 +1647,7 @@ const initMaiga = () => {
                     this.apiFetch('/api/get_connections?type=following')
                 ]);
 
-                // Fail-safe: If critical data takes > 15s, proceed with what we have to unfreeze the UI
-                const syncTimeout = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Sync Timeout')), 15000)
-                );
-
-                const [userData, postsData, chatsData, groupsData, connectionsData] = await Promise.race([criticalDataFetch, syncTimeout]);
+                const [userData, postsData, chatsData, groupsData, connectionsData] = await criticalDataFetch;
 
                 if (userData) {
                     this.user = { ...this.user, ...userData };
@@ -2010,6 +2018,7 @@ const initMaiga = () => {
             formData.append('content', this.newPostContent);
             
             if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
+            this.uploadProgress = 0;
 
             // Use edited file if available, else original input
             if (this.postFile) {
@@ -2017,49 +2026,53 @@ const initMaiga = () => {
             }
             if (this.editorMusic && this.editorSource === 'post') formData.append('music_track', this.editorMusic.src);
 
-            this.apiFetch('/api/create_post', {
-                    method: 'POST',
-                headers: { 'X-CSRF-Token': CSRF_TOKEN },
-                body: formData
-            })
-            .then(data => {
-                if (data && data.success) {
-                    this.showToast('Success', 'Post created successfully!', 'success');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${API_BASE_URL}/api/create_post`, true);
+            xhr.setRequestHeader('X-CSRF-Token', CSRF_TOKEN);
 
-                    // World Class Optimistic Update: Use the full object returned by backend
-                    this.posts.unshift({
-                        ...data.post,
-                        author: this.user.name, // Local fallback until next refresh
-                        avatar: this.user.avatar
-                    });
-                    
-                    this.newPostContent = '';
-                    this.selectedMedia = null;
-                    this.mediaType = null;
-
-                    if (isVideo) {
-                        this.activeTab = 'reels';
-                        this.apiFetch('/api/get_reels')
-                            .then(data => { if (data) this.reels = data; });
-                        this.apiFetch(`/api/get_reels?user_id=${this.user.id}`)
-                            .then(data => { if (data) this.myReels = data; });
-                        this.isUploadingReel = false;
-                    }
-
-                if (!isVideo) this.activeTab = 'home';
-
-                    // Refresh trending topics as new hashtags might have been added
-                    this.apiFetch('/api/get_trending')
-                        .then(data => {
-                            if (data) this.trendingTopics = data;
-                        });
-                    this.isUploadingPost = false;
-                } else {
-                    this.showToast('Error', data.error || 'Failed to create post.', 'error');
-                    this.isUploadingPost = false;
-                    this.isUploadingReel = false;
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    this.uploadProgress = Math.round((e.loaded / e.total) * 100);
                 }
-            });
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data && data.success) {
+                        this.showToast('Success', 'Post created successfully!', 'success');
+                        this.posts.unshift({ ...data.post, author: this.user.name, avatar: this.user.avatar });
+                        this.newPostContent = '';
+                        this.selectedMedia = null;
+                        this.mediaType = null;
+                        this.postFile = null;
+
+                        if (isVideo) {
+                            this.activeTab = 'reels';
+                            this.apiFetch('/api/get_reels').then(d => { if (d) this.reels = d; });
+                            this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (d) this.myReels = d; });
+                        } else {
+                            this.activeTab = 'home';
+                        }
+                        this.apiFetch('/api/get_trending').then(d => { if (d) this.trendingTopics = d; });
+                    } else {
+                        this.showToast('Error', data.error || 'Failed to create post.', 'error');
+                    }
+                } else {
+                    this.showToast('Error', 'Upload failed.', 'error');
+                }
+                this.isUploadingPost = false;
+                this.isUploadingReel = false;
+                this.uploadProgress = 0;
+            };
+
+            xhr.onerror = () => {
+                this.showToast('Error', 'Network error.', 'error');
+                this.isUploadingPost = false;
+                this.isUploadingReel = false;
+            };
+
+            xhr.send(formData);
             this.isCreatingPost = false;
         },
         createGroup() {
@@ -3038,7 +3051,7 @@ const initMaiga = () => {
                     this.showToast('Success', 'Profile updated successfully.');
                     // Refresh user data to get new avatar URL if changed
                     
-                    this.apiFetch('/api/get_user')
+                    this.apiFetch(`/api/get_user?t=${Date.now()}`) // Cache-bust avatar refresh
                         .then(userData => {
                             if(userData) {
                                 this.user = { ...this.user, ...userData };
@@ -4537,7 +4550,19 @@ const initMaiga = () => {
                         await imgLoaded;
                         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     } else {
-                        ctx.fillStyle = this.textStoryStyles[this.textStoryStyleIndex].background;
+                        const style = this.textStoryStyles[this.textStoryStyleIndex];
+                        // Canvas fillStyle does not support CSS linear-gradient strings
+                        if (style.background.includes('gradient')) {
+                            const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                            if (style.background.includes('#4f46e5')) {
+                                grd.addColorStop(0, '#4f46e5'); grd.addColorStop(1, '#9333ea');
+                            } else {
+                                grd.addColorStop(0, '#f97316'); grd.addColorStop(1, '#fde047');
+                            }
+                            ctx.fillStyle = grd;
+                        } else {
+                            ctx.fillStyle = style.background;
+                        }
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
                     }
 

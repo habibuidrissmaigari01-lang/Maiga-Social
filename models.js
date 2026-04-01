@@ -267,8 +267,10 @@ messageSchema.post('save', async function(doc) {
         created_at: doc.createdAt
     };
 
-    const target = doc.group ? `group_${doc.group}` : doc.receiver.toString();
-    ioInstance.to(target).emit('receive_message', msgData);
+    const target = doc.group ? `group_${doc.group}` : (doc.receiver ? doc.receiver.toString() : null);
+    if (target) {
+        ioInstance.to(target).emit('receive_message', msgData);
+    }
 });
 
 const groupSchema = new mongoose.Schema({

@@ -211,7 +211,11 @@ io.on('connection', (socket) => {
     socket.on('join_group', (groupId) => socket.join(`group_${groupId}`));
     socket.on('typing', (data) => {
         const target = data.group_id ? `group_${data.group_id}` : data.receiver_id;
-        socket.to(target).emit('display_typing', { chat_id: data.sender_id, sender_id: data.sender_id, is_group: !!data.group_id });
+        socket.to(target).emit('display_typing', { 
+            chat_id: data.group_id || data.sender_id, 
+            sender_id: data.sender_id, 
+            is_group: !!data.group_id 
+        });
     });
     socket.on('call_user', async (data) => {
         try {

@@ -346,7 +346,15 @@
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="group.time"></span>
                                 </div>
                                 <div class="flex justify-between items-center mt-1">
-                                    <p class="text-sm text-gray-500 truncate w-48" :class="group.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="group.lastMsg"></p>
+                                    <template x-if="group.isTyping">
+                                        <div class="flex items-center space-x-1">
+                                            <span class="text-xs font-bold text-blue-600 animate-pulse">Typing</span>
+                                            <div class="flex space-x-0.5"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!group.isTyping">
+                                        <p class="text-sm text-gray-500 truncate w-48" :class="group.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="group.lastMsg"></p>
+                                    </template>
                                     <template x-if="group.unread">
                                         <span class="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
                                     </template>
@@ -2803,6 +2811,16 @@
     <div x-show="isCreatingPost" x-cloak class="fixed inset-0 z-[500] flex flex-col lg:items-center lg:justify-center">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm hidden lg:block" @click="isCreatingPost = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
         <div class="bg-white dark:bg-gray-900 flex flex-col p-4 w-full h-full lg:w-[600px] lg:h-auto lg:rounded-3xl lg:shadow-2xl relative animate-slideUp" :style="`transform: translate(${createPostOffset.x}px, ${createPostOffset.y}px)`">
+        <!-- Real Progress Bar for Posts/Reels -->
+        <div x-show="isUploadingPost || isUploadingReel" class="absolute inset-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl">
+            <div class="w-64 h-3 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden relative border dark:border-gray-700">
+                <div class="h-full bg-blue-600 transition-all duration-200 ease-out" :style="`width: ${uploadProgress}%`"></div>
+            </div>
+            <p class="text-gray-900 dark:text-white text-sm font-black mt-4 uppercase tracking-widest">
+                <span x-text="isUploadingReel ? 'Publishing Reel' : 'Uploading Post'"></span>
+                <span class="ml-2 text-blue-600" x-text="uploadProgress + '%'"></span>
+            </p>
+        </div>
         <div class="flex justify-between items-center mb-6 lg:cursor-move"
              @mousedown="startCreatePostDrag($event)" @mousemove.window="handleCreatePostDrag($event)" @mouseup.window="stopCreatePostDrag()">
             <button @click="isCreatingPost = false" class="text-gray-500 font-bold p-2">Cancel</button>
