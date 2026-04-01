@@ -42,6 +42,18 @@ const initMaiga = () => {
         // Initialize State Variables
         darkMode: localStorage.getItem('darkMode') === 'true',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
+        isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
+
+        // Missing UI State Variables
+        connectionSearchQuery: '',
+        connectionList: [],
+        isCreatingStory: false,
+        isCreatingPost: false,
+        textStoryStyleIndex: 0,
+        storyFile: null,
+        storyMediaPreview: null,
+        storyMediaType: null,
+
         // Helper to prevent apiFetch crash if missing
         getMockData(url) {
             // Mocks removed to force backend connection for implemented features.
@@ -1559,6 +1571,11 @@ const initMaiga = () => {
                 } else {
                     document.documentElement.classList.remove('dark');
                 }
+            });
+
+            // Watch for sidebar changes
+            this.$watch('isLeftSidebarCollapsed', (value) => {
+                localStorage.setItem('maiga_sidebar_collapsed', value);
             });
 
             // Watch for chat search queries to filter messages

@@ -803,18 +803,26 @@ router.post('/add_comment', isAuthenticated, upload.single('media'), async (req,
 });
 
 router.get('/get_reels', isAuthenticated, async (req, res) => {
-    const query = { media_type: 'video' };
-    if (req.query.user_id) query.user = req.query.user_id;
-    const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 });
-    const userId = req.session.userId;
-    res.json(reels.map(r => ({
-        id: r._id, user_id: r.user._id, author: r.user.name, avatar: r.user.avatar,
-        media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0,
-        comments: r.comments_count || 0, // Ensure comments count is included
-        liked: r.likes.some(id => id.toString() === userId.toString()),
-        saved: r.saved_by.some(id => id.toString() === userId.toString()),
-        myReaction: r.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
-    })));
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+        const query = { media_type: 'video' };
+        if (req.query.user_id) query.user = req.query.user_id;
+
+        const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
+        const userId = req.session.userId;
+        res.json(reels.map(r => ({
+            id: r._id, user_id: r.user?._id, author: r.user?.name || 'Deleted User', avatar: r.user?.avatar,
+            media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0,
+            comments: r.comments_count || 0, // Ensure comments count is included
+            liked: r.likes.some(id => id.toString() === userId.toString()),
+            saved: r.saved_by.some(id => id.toString() === userId.toString()),
+            myReaction: r.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
+        })));
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
 });
 
 router.get('/get_group_info', isAuthenticated, async (req, res) => {
