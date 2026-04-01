@@ -13,7 +13,31 @@
     <link rel="manifest" href="manifest.json">
     <link rel="service-worker" href="sw.js">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
+    <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
+    <!-- Open Graph / Social Media Tags -->
+    <meta property="og:title" content="Maiga Social - Connect & Discover">
+    <meta property="og:description" content="Experience the future of connection with Maiga Social. E2EE messaging, reels, groups, and real-time campus trending.">
+    <meta property="og:image" content="https://maigasocial.com/img/logo.png">
+    <meta property="og:url" content="https://maigasocial.com">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Maiga Social">
+    <meta name="twitter:description" content="Connect, share, and discover on the platform built for innovation and excellence.">
+    <meta name="twitter:image" content="https://maigasocial.com/img/logo.png">
+
+    <!-- Search Bar Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "url": "https://maigasocial.com/",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://maigasocial.com/home?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
@@ -1915,7 +1939,7 @@
                 <div class="relative flex-1">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors" :class="isSearchFocused ? 'text-blue-600' : ''"></i>
                 <input x-ref="searchInput" type="text" x-model="homeSearchQuery" 
-                       @focus="isSearchFocused = true" @input="searchUsers()"
+                       @focus="isSearchFocused = true" @input.debounce.300ms="searchUsers()"
                        @blur="setTimeout(() => isSearchFocused = false, 200)"
                        :placeholder="'Search ' + (user.account_type === 'ysu' ? 'Ysu Social' : 'Maiga Social') + '...'" class="w-full bg-white dark:bg-gray-800 parallelogram-sm py-3 pl-12 pr-20 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
                 
@@ -1929,34 +1953,128 @@
                 </div>
                 
                 <!-- Search Suggestions -->
-                <div x-show="homeSearchQuery.length > 0 && searchResults.length > 0" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-40">
-                     <template x-for="user in searchResults" :key="user.id">
-                        <div @click="openUserProfile(user); homeSearchQuery = ''" class="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
-                            <img :src="user.avatar" class="w-10 h-10 parallelogram-sm object-cover mr-3">
-                            <div>
-                                <p class="text-sm font-bold text-gray-900 dark:text-white" x-text="user.name"></p>
-                                <p class="text-xs text-gray-500" x-text="user.dept || 'Student'"></p>
+                <div x-show="homeSearchQuery.length >= 2" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[200]">
+                    <!-- Instant Global Suggestions (Google-like) -->
+                    <div x-show="searchSuggestions.length > 0" class="p-2 border-b dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2 mb-1">Quick Matches</p>
+                        <template x-for="sug in searchSuggestions" :key="sug.id + sug.type">
+                            <div @click="if(sug.type === 'user') openUserProfile(sug); else if(sug.type === 'post') viewingPost = sug; else if(sug.type === 'reel') { selectedReel = sug; activeTab = 'reels'; }; homeSearchQuery = ''" 
+                                 class="flex items-center gap-2 p-2 hover:bg-white dark:hover:bg-gray-700 rounded-xl cursor-pointer transition-all group">
+                                <div class="w-6 h-6 flex items-center justify-center text-gray-400 group-hover:text-blue-600">
+                                    <i class="fa-solid" :class="sug.type === 'user' ? 'fa-user' : (sug.type === 'post' ? 'fa-file-lines' : 'fa-play-circle')"></i>
+                                </div>
+                                <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate" x-html="highlight(sug.name || (sug.content || sug.caption), homeSearchQuery)"></span>
                             </div>
-                        </div>
-                    </template>
+                        </template>
+                    </div>
+
+                    <div class="flex p-2 bg-gray-50 dark:bg-gray-800/50 border-b dark:border-gray-700">
+                        <button @click="setSearchTab('users')" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all" :class="homeSearchTab === 'users' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-400'">Users</button>
+                        <button @click="setSearchTab('posts')" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all" :class="homeSearchTab === 'posts' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-400'">Posts</button>
+                        <button @click="setSearchTab('reels')" class="flex-1 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all" :class="homeSearchTab === 'reels' ? 'bg-white dark:bg-gray-700 shadow-sm text-blue-600' : 'text-gray-400'">Reels</button>
+                    </div>
+                    
+                    <div class="max-h-80 overflow-y-auto">
+                        <!-- Users Results -->
+                        <template x-if="homeSearchTab === 'users'">
+                            <div class="divide-y dark:divide-gray-700">
+                                <template x-for="user in searchResults" :key="user.id">
+                                    <div @click="openUserProfile(user); homeSearchQuery = ''" class="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
+                                        <img :src="user.avatar" class="w-10 h-10 parallelogram-sm object-cover mr-3 border dark:border-gray-600">
+                                        <div>
+                                            <p class="text-sm font-bold text-gray-900 dark:text-white" x-html="highlight(user.name, homeSearchQuery)"></p>
+                                            <p class="text-[10px] text-gray-500 font-bold uppercase" x-text="user.dept || 'Student'"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Fallback Suggestion if no results -->
+                                <div x-show="searchResults.length === 0" class="p-6">
+                                    <p class="text-center text-gray-400 text-xs mb-4">No results found matching "<span x-text="homeSearchQuery"></span>".</p>
+                                    <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Try searching for:</p>
+                                    <div class="space-y-2">
+                                        <template x-for="rec in recommendedSearchTerms">
+                                            <button @click="homeSearchQuery = rec.term; searchUsers()" class="flex items-center gap-2 w-full p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors">
+                                                <i class="fa-solid" :class="rec.icon"></i>
+                                                <span x-text="rec.term"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Posts Results -->
+                        <template x-if="homeSearchTab === 'posts'">
+                            <div class="divide-y dark:divide-gray-700">
+                                <template x-for="post in searchPostsResults" :key="post.id">
+                                    <div @click="viewingPost = post; homeSearchQuery = ''" class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <img :src="post.avatar" class="w-5 h-5 rounded-full">
+                                            <span class="text-[10px] font-bold text-gray-500" x-text="post.author"></span>
+                                        </div>
+                                        <p class="text-xs text-gray-800 dark:text-gray-200 line-clamp-2" x-html="highlight(post.content, homeSearchQuery)"></p>
+                                    </div>
+                                </template>
+                                <div x-show="searchPostsResults.length === 0" class="p-6 text-center text-gray-400 text-xs">No posts found matching "<span x-text="homeSearchQuery"></span>".</div>
+                            </div>
+                        </template>
+
+                        <!-- Reels Results -->
+                        <template x-if="homeSearchTab === 'reels'">
+                            <div class="grid grid-cols-2 gap-2 p-2">
+                                <template x-for="reel in searchReelsResults" :key="reel.id">
+                                    <div @click="selectedReel = reel; activeTab = 'reels'; homeSearchQuery = ''" class="relative aspect-[9/16] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 group cursor-pointer">
+                                        <video :src="reel.media" class="w-full h-full object-cover"></video>
+                                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-2">
+                                            <p class="text-[10px] text-white font-bold truncate" x-html="highlight(reel.content, homeSearchQuery)"></p>
+                                            <p class="text-[8px] text-gray-300" x-text="'@' + reel.author"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                                <div x-show="searchReelsResults.length === 0" class="col-span-2 p-6 text-center text-gray-400 text-xs">No reels found matching "<span x-text="homeSearchQuery"></span>".</div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- Recent Searches -->
                 <div x-show="isSearchFocused && homeSearchQuery.length === 0" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-40">
+                    <div x-show="recentSearches.length > 0">
                     <div class="p-3 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent</span>
-                        <button @click="recentSearches = []" class="text-xs text-blue-600 font-bold hover:underline">Clear All</button>
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Recent Searches</span>
+                        <button @click="clearRecentSearches()" class="text-[10px] text-blue-600 font-black uppercase hover:underline">Clear All</button>
                     </div>
                     <template x-for="(term, index) in recentSearches" :key="index">
                         <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors group">
-                            <div @click="homeSearchQuery = term" class="flex items-center flex-1">
-                                <div class="w-8 h-8 parallelogram-sm bg-gray-100 dark:bg-gray-700 flex items-center justify-center mr-3 text-gray-500"><i class="fa-regular fa-clock"></i></div>
+                            <div @click="homeSearchQuery = term; searchUsers()" class="flex items-center flex-1">
+                                <div class="w-8 h-8 parallelogram-sm bg-gray-100 dark:bg-gray-700 flex items-center justify-center mr-3 text-gray-500 group-hover:text-blue-600 transition-colors"><i class="fa-regular fa-clock"></i></div>
                                 <span class="text-sm font-bold text-gray-900 dark:text-white" x-text="term"></span>
                             </div>
                             <button @click.stop="recentSearches.splice(index, 1)" class="text-gray-400 hover:text-red-500 p-2"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                     </template>
-                    <div x-show="recentSearches.length === 0" class="p-6 text-center text-gray-400 text-xs font-medium">No recent searches</div>
+                    </div>
+
+                    <!-- Trending Searches Section -->
+                    <div class="p-3 border-t border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Trending Now</span>
+                        <i class="fa-solid fa-fire text-orange-500 text-xs"></i>
+                    </div>
+                    <div class="p-2 space-y-1 max-h-64 overflow-y-auto no-scrollbar">
+                        <template x-for="trend in trendingTopics.slice(0, 5)" :key="trend.tag">
+                            <div @click="homeSearchQuery = trend.tag; homeSearchTab = 'posts'; searchUsers()" class="flex items-center p-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors rounded-xl group">
+                                <div class="w-8 h-8 parallelogram-sm bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mr-3 text-blue-600 group-hover:scale-110 transition-transform">
+                                    <i class="fa-solid fa-arrow-trend-up"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-bold text-gray-900 dark:text-white" x-text="'#' + trend.tag"></p>
+                                    <p class="text-[10px] text-gray-500 font-bold uppercase" x-text="trend.count + ' posts'"></p>
+                                </div>
+                                <i class="fa-solid fa-chevron-right text-gray-300 text-[10px] group-hover:translate-x-1 transition-transform"></i>
+                            </div>
+                        </template>
+                        <div x-show="trendingTopics.length === 0" class="p-6 text-center text-gray-400 text-xs font-medium italic">Discover what's happening on campus...</div>
+                    </div>
                 </div>
             </div>
             <button x-show="isSearchFocused" 
@@ -2236,9 +2354,35 @@
 
     <!-- MAIN VIEW: FRIENDS -->
     <main x-show="activeTab === 'friends'" class="p-4 space-y-4 animate-fadeIn">
-        <div class="relative">
+        <div class="relative" x-data="{ showSuggestions: false }">
             <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-            <input type="text" x-model="friendsSearchQuery" placeholder="Search friends or departments..." class="w-full bg-white dark:bg-gray-800 rounded-2xl py-3 pl-12 pr-4 shadow-sm border-none focus:ring-2 focus:ring-blue-500">
+            <input type="text" x-model="friendsSearchQuery" 
+                   @focus="showSuggestions = true"
+                   @click.away="showSuggestions = false"
+                   @input.debounce.300ms="showSuggestions = true"
+                   placeholder="Search friends or departments..." class="w-full bg-white dark:bg-gray-800 rounded-2xl py-3 pl-12 pr-4 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
+            
+            <!-- Search Suggestions Dropdown -->
+            <div x-show="showSuggestions && friendsSearchQuery.length >= 2 && filteredFriendsList.length > 0" 
+                 class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[60] animate-fadeIn" x-cloak>
+                <div class="p-2 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Suggestions</p>
+                </div>
+                <template x-for="friend in filteredFriendsList.slice(0, 5)" :key="friend.id">
+                    <div @click="friendsSearchQuery = friend.name; showSuggestions = false" 
+                         class="flex items-center p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors border-b last:border-0 dark:border-gray-700">
+                        <i class="fa-solid fa-magnifying-glass text-gray-300 mr-3 text-xs"></i>
+                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200" x-html="highlight(friend.name, friendsSearchQuery)"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- "Did you mean" Hint -->
+        <div x-show="didYouMeanFriend" x-transition x-cloak class="px-2 py-1">
+            <p class="text-xs text-gray-500 font-medium">
+                Did you mean: <button @click="friendsSearchQuery = didYouMeanFriend.name" class="text-blue-600 font-black italic hover:underline decoration-2" x-text="didYouMeanFriend.name"></button>?
+            </p>
         </div>
         
         <!-- Trending Section -->
@@ -3065,7 +3209,20 @@
             </div>
         </template>
     </div>
-
+    <!-- Socket Connection Status Alert -->
+    <div x-show="!isSocketConnected && !isOffline" 
+         x-transition:enter="transition ease-out duration-500"
+         x-transition:enter-start="-translate-y-full opacity-0"
+         x-transition:enter-end="translate-y-0 opacity-100"
+         x-transition:leave="transition ease-in duration-500"
+         x-transition:leave-start="translate-y-0 opacity-100"
+         x-transition:leave-end="-translate-y-full opacity-0"
+         class="fixed top-0 left-0 right-0 z-[2000] flex justify-center pt-6 px-4 pointer-events-none" x-cloak>
+        <div class="bg-blue-600/90 backdrop-blur-xl text-white px-6 py-3 rounded-full shadow-2xl flex items-center space-x-4 border border-white/10 pointer-events-auto">
+            <div class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-white"></span></div>
+            <div class="flex flex-col"><span class="text-sm font-bold">Connecting...</span><span class="text-[10px] text-blue-100">Establishing real-time connection</span></div>
+        </div>
+    </div>
     <!-- Offline Status Alert -->
     <div x-show="isOffline" 
          x-transition:enter="transition ease-out duration-500"

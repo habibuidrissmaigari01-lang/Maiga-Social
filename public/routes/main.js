@@ -887,14 +887,50 @@ router.post('/toggle_story_reaction', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/subscribe', isAuthenticated, async (req, res) => {
-    await User.findByIdAndUpdate(req.session.userId, { push_subscription: req.body });
-    res.status(201).json({});
+router.get('/search_posts', isAuthenticated, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.json([]);
+        const posts = await Post.find({ 
+            content: { $regex: q, $options: 'i' },
+            media_type: { $ne: 'video' } 
+        })
+        .populate('user', 'name first_name surname avatar is_verified')
+        .limit(10);
+        
+        res.json(posts.map(p => ({ 
+            id: p._id, content: p.content, media: p.media, 
+            author: p.user?.full_name || p.user?.name, avatar: p.user?.avatar, time: formatTime(p.createdAt) 
+        })));
+    } catch (err) { res.status(500).json([]); }
+});
+
+router.get('/search_reels', isAuthenticated, async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) return res.json([]);
+        const reels = await Post.find({ 
+            content: { $regex: q, $options: 'i' },
+            media_type: 'video' 
+        })
+        .populate('user', 'name first_name surname avatar')
+        .limit(10);
+        
+        res.json(reels.map(r => ({ 
+            id: r._id, content: r.content, media: r.media, 
+            author: r.user?.full_name || r.user?.name, avatar: r.user?.avatar 
+        })));
+    } catch (err) { res.status(500).json([]); }
 });
 
 router.get('/search_users', isAuthenticated, async (req, res) => {
     const users = await User.find({ name: { $regex: req.query.q, $options: 'i' } }).limit(10);
     res.json(users.map(u => ({ id: u._id, name: u.name, avatar: u.avatar, dept: u.dept })));
+});
+
+router.post('/subscribe', isAuthenticated, async (req, res) => {
+    await User.findByIdAndUpdate(req.session.userId, { push_subscription: req.body });
+    res.status(201).json({});
 });
 
 router.post('/create_story', isAuthenticated, upload.single('media'), async (req, res) => {

@@ -45,6 +45,7 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
 
         // Missing UI State Variables
+        homeSearchTab: 'users',
         connectionSearchQuery: '',
         connectionList: [],
         isCreatingStory: false,
@@ -261,6 +262,21 @@ const initMaiga = () => {
         get unreadBadgeDisplay() {
            const count = this.totalUnreadChats || 0;
             return count > 9 ? '9+' : count;
+         },
+        get didYouMeanFriend() {
+            if (!this.friendsSearchQuery?.trim() || this.filteredFriendsList.length > 0) return null;
+            const q = this.friendsSearchQuery.toLowerCase();
+            return (this.friends || []).find(f => 
+                this.fuzzyMatch(q, f.name || '') || 
+                this.fuzzyMatch(q, f.username || '')
+            );
+        },
+        highlight(text, query) {
+            if (!query || !text) return text || '';
+            let sanitized = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return sanitized.replace(regex, '<span class="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-0.5 rounded-sm font-bold">$1</span>');
+
         },
         get unreadNotificationsDisplay() {
             const count = this.unreadNotificationsCount || 0;
@@ -1027,6 +1043,10 @@ const initMaiga = () => {
         createPostOffset: { x: 0, y: 0 },
         createPostStart: { x: 0, y: 0 },
         isCreatePostDragging: false,
+        posts: [],
+        reels: [],
+        groups: [],
+        chats: [],
         mutedChats: [],
         mediaPreviewUrl: null,
         mediaPreviewFile: null,
@@ -1034,19 +1054,22 @@ const initMaiga = () => {
         incomingCall: null,
         peerConnection: null,
         currentCallId: null,
-        pinnedChats: [],
         archivedChats: [],
         activeHashtag: null,
         page: 1,
         isLoadingMore: false,
         searchResults: [],
+        searchPostsResults: [],
+        searchReelsResults: [],
         toasts: [],
-        isReporting: false,
+        searchSuggestions: [],
+        recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
         reportForm: { title: '', description: '', screenshot: null, preview: null, targetType: '', targetId: null, targetUserId: null },
         // Pull to Refresh
         pullStartY: 0,
         pullDistance: 0,
         isOffline: !navigator.onLine,
+        isSocketConnected: false,
         isRefreshing: false,
         handlePullStart(e) {
             if (this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
@@ -1166,11 +1189,6 @@ const initMaiga = () => {
         },
         passwordForm: { current: '', new: '', confirm: '' },
         editUser: {},
-        posts: [],
-        friends: [], // Will be populated from API
-        groups: [],
-        trendingTopics: [],
-        savedPostList: [], // Store saved posts here
         forumTopics: [], // Will fetch from backend
         notifications: [],
         reports: [],
@@ -1328,12 +1346,14 @@ const initMaiga = () => {
             // --- RESILIENT SOCKET.IO INITIALIZATION ---
             if (typeof io !== 'undefined') {
                 this.socket = io(API_BASE_URL);
+                this.isSocketConnected = this.socket.connected;
             } else {
                 this.socket = { on: () => {}, emit: () => {}, connected: false };
             }
 
             // 2. Join a room based on the user's ID once connected and user is loaded
             this.socket.on('connect', () => {
+                this.isSocketConnected = true;
                 if (this.user && this.user.id) {
                     this.socket.emit('join_room', this.user.id); // This should be the user's actual ID from the backend
                     // Join group rooms for real-time updates
@@ -1342,6 +1362,9 @@ const initMaiga = () => {
                     });
                 }
             });
+
+            this.socket.on('disconnect', () => { this.isSocketConnected = false; });
+            this.socket.on('connect_error', () => { this.isSocketConnected = false; });
 
             // 3. Listen for incoming messages
             this.socket.on('receive_message', async (data) => {
@@ -2973,14 +2996,58 @@ const initMaiga = () => {
             });
         },
         searchUsers() {
+            this.searchResults = [];
+            this.searchPostsResults = [];
+            this.searchReelsResults = [];
+            this.searchSuggestions = [];
             if (this.homeSearchQuery.length < 2) {
-                this.searchResults = [];
                 return;
             }
+            this.addToRecent(this.homeSearchQuery);
+            this.fetchGlobalSuggestions();
+              
+            if (this.homeSearchTab === 'users') {
                 this.apiFetch(`/api/search_users?q=${encodeURIComponent(this.homeSearchQuery)}`)
-                .then(data => {
-                    if (data) this.searchResults = data;
-                });
+                    .then(data => { if (data) this.searchResults = data; });
+            } else if (this.homeSearchTab === 'posts') {
+                this.apiFetch(`/api/search_posts?q=${encodeURIComponent(this.homeSearchQuery)}`)
+                    .then(data => { if (data) this.searchPostsResults = data; });
+            } else if (this.homeSearchTab === 'reels') {
+                this.apiFetch(`/api/search_reels?q=${encodeURIComponent(this.homeSearchQuery)}`)
+                    .then(data => { if (data) this.searchReelsResults = data; });
+            }
+        },
+        setSearchTab(tab) {
+            this.homeSearchTab = tab;
+            if (this.homeSearchQuery.length >= 2) {
+                this.searchUsers();
+            }
+        },
+        async fetchGlobalSuggestions() {
+            const q = encodeURIComponent(this.homeSearchQuery);
+            const [u, p, r] = await Promise.all([
+                this.apiFetch(`/api/search_users?q=${q}`).then(res => (res || []).slice(0, 2).map(i => ({...i, type: 'user'}))),
+                this.apiFetch(`/api/search_posts?q=${q}`).then(res => (res || []).slice(0, 2).map(i => ({...i, type: 'post'}))),
+                this.apiFetch(`/api/search_reels?q=${q}`).then(res => (res || []).slice(0, 2).map(i => ({...i, type: 'reel'})))
+            ]);
+            this.searchSuggestions = [...u, ...p, ...r];
+        },
+        get recommendedSearchTerms() {
+            // Fallback suggestions when no results are found
+            return [
+                { term: 'Campus News', icon: 'fa-newspaper' },
+                { term: 'Exam Schedule', icon: 'fa-calendar-days' },
+                { term: 'Sports Club', icon: 'fa-trophy' }
+            ];
+        },
+        clearRecentSearches() {
+            this.recentSearches = [];
+            localStorage.removeItem('maiga_recent_searches');
+        },
+        addToRecent(term) {
+            if (!term || term.trim() === "" || term.length < 3) return;
+            this.recentSearches = [term, ...this.recentSearches.filter(t => t !== term)].slice(0, 5);
+            localStorage.setItem('maiga_recent_searches', JSON.stringify(this.recentSearches));
         },
         openUserProfileByName(name) {
             // Search by username

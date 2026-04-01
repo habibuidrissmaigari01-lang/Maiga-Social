@@ -119,11 +119,12 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const isNavigate = event.request.mode === 'navigate';
+  const isApi = event.request.url.includes('/api/');
   // Fix: Explicitly ignore Tailwind CDN to avoid CORS fetch errors in SW
   if (event.request.url.includes('cdn.tailwindcss.com')) return;
 
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
-                       event.request.url.startsWith('https://cdnjs.cloudflare.com') ||
+                       (event.request.url.startsWith('https://cdnjs.cloudflare.com') && !isApi) ||
                        event.request.url.startsWith('https://fonts.googleapis.com');
 
   if (isNavigate) {
@@ -134,7 +135,10 @@ self.addEventListener('fetch', (event) => {
         });
       })
     );
-  } else if (isLocalAsset) {
+  } else if (isApi) {
+    // API calls: Network Only (to ensure fresh data on refresh)
+    return; 
+  } else if (isLocalAsset && !isApi) {
     event.respondWith(
       caches.match(event.request).then((response) => {
         if (response) {
