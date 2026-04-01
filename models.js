@@ -231,7 +231,6 @@ messageSchema.index({ starred_by: 1, createdAt: -1 });
 messageSchema.index({ group: 1, deleted_for: 1, createdAt: 1 });
 messageSchema.index({ sender: 1, receiver: 1, deleted_for: 1, createdAt: 1 });
 messageSchema.index({ receiver: 1, sender: 1, deleted_for: 1, createdAt: 1 });
-messageSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual to count readers in a group chat
 messageSchema.virtual('read_count').get(function() {
