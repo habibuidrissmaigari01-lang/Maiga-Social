@@ -161,21 +161,28 @@ postSchema.post('updateOne', async function() {
     const update = this.getUpdate();
     // Check if the update operation was adding a like ($addToSet)
     if (update.$addToSet && update.$addToSet.likes) {
-        const PostModel = mongoose.model('Post');
-        const post = await PostModel.findOne(this.getQuery());
+        const Post = mongoose.model('Post');
+        const Notification = mongoose.model('Notification');
+        const post = await Post.findOne(this.getQuery());
         if (!post) return;
 
         const triggerUserId = update.$addToSet.likes;
         // Don't send a notification if the user likes their own post
         if (post.user.toString() === triggerUserId.toString()) return;
 
-        const NotificationModel = mongoose.model('Notification');
-        await NotificationModel.create({
+        // Attempt to find an existing unread 'like' notification for this post
+        const existingNotif = await Notification.findOne({
+            user: post.user,
+            post: post._id,
             type: 'like',
-            user: post.user, // Author of the post
-            trigger_user: triggerUserId, // Person who liked
-            post: post._id
+            is_read: false
         });
+
+        if (existingNotif) {
+            await Notification.updateOne({ _id: existingNotif._id }, { $set: { trigger_user: triggerUserId }, $inc: { others_count: 1 } });
+        } else {
+            await Notification.create({ type: 'like', user: post.user, trigger_user: triggerUserId, post: post._id, others_count: 0 });
+        }
     }
 });
 
@@ -255,11 +262,16 @@ messageSchema.pre('deleteOne', { document: false, query: true }, async function(
 messageSchema.post('save', async function(doc) {
     if (!ioInstance) return;
 
-    const populatedMsg = await doc.populate('sender', 'name first_name surname avatar');
+    const populatedMsg = await doc.populate([
+        { path: 'sender', select: 'name first_name surname avatar' },
+        { path: 'group', select: 'name avatar' }
+    ]);
     const msgData = {
         id: doc._id,
         sender_id: doc.sender._id,
         group_id: doc.group,
+        group_name: populatedMsg.group?.name,
+        group_avatar: populatedMsg.group?.avatar,
         content: doc.content,
         media_type: doc.media_type,
         author: populatedMsg.sender.full_name, // Using the virtual here!
@@ -355,6 +367,19 @@ const Notification = mongoose.model('Notification', baseNotificationSchema);
 // Discriminator for 'Like' notifications
 Notification.discriminator('like', new mongoose.Schema({
     post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
+    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    others_count: { type: Number, default: 0 }
+}));
+
+// Discriminator for 'Follow' notifications
+Notification.discriminator('follow', new mongoose.Schema({
+    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+}));
+
+// Discriminator for 'Post' notifications (for new posts/stories)
+Notification.discriminator('post', new mongoose.Schema({
+    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
+    story: { type: mongoose.Schema.Types.ObjectId, ref: 'Story' },
     trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }));
 

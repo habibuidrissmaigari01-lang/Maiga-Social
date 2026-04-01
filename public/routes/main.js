@@ -131,6 +131,16 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
     });
     await post.save();
     const populatedPost = await post.populate('user', 'name first_name surname avatar is_verified');
+
+    // Notify followers
+    const author = await User.findById(req.session.userId);
+    const notifications = author.followers.map(followerId => ({
+        user: followerId,
+        type: 'post',
+        post: post._id,
+        trigger_user: req.session.userId
+    }));
+    if (notifications.length > 0) await Notification.insertMany(notifications);
     
     // Return a fully formatted post object for optimistic UI update
     res.json({ success: true, post: {
@@ -222,6 +232,13 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
     const messages = await Message.find({ $or: [{ sender: userId }, { receiver: userId }] })
         .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online');
     
+    // Get unread counts per sender
+    const unreadAggregate = await Message.aggregate([
+        { $match: { receiver: userId, is_read: false, deleted_for: { $ne: userId } } },
+        { $group: { _id: "$sender", count: { $sum: 1 } } }
+    ]);
+    const unreadMap = new Map(unreadAggregate.map(item => [item._id.toString(), item.count]));
+
     const user = await User.findById(userId);
     const archivedIds = user.archived_chats.map(c => c.chat_id.toString());
 
@@ -233,13 +250,13 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
         const otherId = other._id.toString();
         
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
-            const isUnread = m.receiver?._id?.toString() === userId.toString() && !m.read_by.some(r => r.user.toString() === userId.toString());
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
                 lastMsg: m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`, 
                 time: formatTime(m.createdAt),
-                unread: isUnread
+                unread: unreadMap.has(otherId),
+                unreadCount: unreadMap.get(otherId) || 0
             });
         }
     });
@@ -252,6 +269,13 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
         const archivedIds = user.archived_chats.map(c => c.chat_id.toString());
 
         const groups = await Group.find({ 'members.user': req.session.userId, _id: { $nin: archivedIds } });
+
+        // Get unread counts per group
+        const groupUnreadAggregate = await Message.aggregate([
+            { $match: { group: { $in: groups.map(g => g._id) }, "read_by.user": { $ne: req.session.userId }, deleted_for: { $ne: req.session.userId } } },
+            { $group: { _id: "$group", count: { $sum: 1 } } }
+        ]);
+        const groupUnreadMap = new Map(groupUnreadAggregate.map(item => [item._id.toString(), item.count]));
         
         const groupData = await Promise.all(groups.map(async g => {
             // Fetch the actual last message for this group to persist it after refresh
@@ -264,7 +288,8 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
                 type: 'group',
                 lastMsg: lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `Sent a ${lastMessage.media_type}`) : 'No messages yet',
                 time: lastMessage ? formatTime(lastMessage.createdAt) : '',
-                unread: lastMessage ? !lastMessage.read_by.some(r => r.user.toString() === req.session.userId) : false
+                unread: groupUnreadMap.has(g._id.toString()),
+                unreadCount: groupUnreadMap.get(g._id.toString()) || 0
             };
         }));
         res.json(groupData);
@@ -760,6 +785,13 @@ router.post('/toggle_follow', isAuthenticated, async (req, res) => {
         } else {
             await User.findByIdAndUpdate(myId, { $addToSet: { following: targetId } });
             await User.findByIdAndUpdate(targetId, { $addToSet: { followers: myId } });
+
+            // Create Follow Notification
+            await Notification.create({
+                user: targetId,
+                type: 'follow',
+                trigger_user: myId
+            });
         }
         res.json({ success: true });
     } catch (error) { res.status(500).json({ error: 'Action failed' }); }
@@ -950,6 +982,19 @@ router.post('/create_story', isAuthenticated, upload.single('media'), async (req
         });
 
         await story.save();
+
+        // Notify followers (if public)
+        if (audience === 'public') {
+            const author = await User.findById(req.session.userId);
+            const notifications = author.followers.map(followerId => ({
+                user: followerId,
+                type: 'post',
+                story: story._id,
+                trigger_user: req.session.userId
+            }));
+            if (notifications.length > 0) await Notification.insertMany(notifications);
+        }
+
         res.json({ success: true, story: await story.populate('user', 'name avatar') });
     } catch (error) {
         res.status(500).json({ error: 'Failed to create story' });
@@ -1020,7 +1065,8 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
             has_music: s.has_music,
             music_track: s.music_track,
             audience: s.audience,
-            created_at: s.createdAt
+            created_at: s.createdAt,
+            seen: s.views.some(id => id.toString() === userId)
         })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch stories' });
@@ -1261,8 +1307,40 @@ router.get('/get_blocked_users', isAuthenticated, async (req, res) => {
 
 router.get('/get_notifications', isAuthenticated, async (req, res) => {
     const notifications = await Notification.find({ user: req.session.userId })
+        .populate('trigger_user', 'name first_name surname avatar')
         .sort({ created_at: -1 }).limit(20);
-    res.json(notifications);
+
+    // Get unread counts broken down by category
+    const categoryCounts = await Notification.aggregate([
+        { $match: { user: new mongoose.Types.ObjectId(req.session.userId), is_read: false } },
+        { $group: { _id: "$type", count: { $sum: 1 } } }
+    ]);
+
+    const unreadByCategory = {
+        like: 0,
+        follow: 0,
+        post: 0,
+        mention: 0,
+        system: 0
+    };
+    categoryCounts.forEach(item => { if (unreadByCategory[item._id] !== undefined) unreadByCategory[item._id] = item.count; });
+
+    const formatted = notifications.map(n => {
+        let content = n.content;
+        if (n.type === 'like' && n.trigger_user) {
+            const name = n.trigger_user.first_name || n.trigger_user.name;
+            content = n.others_count > 0 
+                ? `${name} and ${n.others_count} others liked your post` 
+                : `${name} liked your post`;
+        }
+        const obj = n.toObject();
+        obj.content = content; // Override content with grouped text
+        obj.trigger_user_id = n.trigger_user?._id || n.trigger_user;
+        return obj;
+    });
+
+    const unreadCount = await Notification.countDocuments({ user: req.session.userId, is_read: false });
+    res.json({ notifications: formatted, unreadCount, unreadByCategory });
 });
 
 router.post('/mark_notifications_read', isAuthenticated, async (req, res) => {

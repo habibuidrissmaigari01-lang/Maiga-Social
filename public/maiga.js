@@ -137,7 +137,7 @@ const initMaiga = () => {
         callHistory: [],
         starredMessages: [],
         get unreadNotificationsCount() {
-            return (this.notifications || []).filter(n => !n.is_read).length;
+            return this.totalUnreadNotifications || 0;
         },
         get didYouMeanFriend() {
             if (!this.friendsSearchQuery?.trim() || (this.filteredFriendsList || []).length > 0) return { name: '' }; 
@@ -275,8 +275,7 @@ const initMaiga = () => {
             { background: 'linear-gradient(to bottom, #f97316, #fde047)', color: '#ffffff' },
         ],
         get unreadBadgeDisplay() {
-           const count = this.totalUnreadChats || 0;
-            return count > 9 ? '9+' : count;
+            return (this.totalUnreadChats || 0).toString();
         },
         highlight(text, query) {
             if (!query || !text) return text || '';
@@ -1027,6 +1026,14 @@ const initMaiga = () => {
         isScreenSharing: false,
         localStream: null,
         callStatus: '',
+        totalUnreadNotifications: 0,
+        unreadByCategory: {
+            like: 0,
+            follow: 0,
+            post: 0,
+            mention: 0,
+            system: 0
+        },
         followLoading: [],
         isMicMuted: false,
         isCameraOff: false,
@@ -1378,7 +1385,7 @@ const initMaiga = () => {
 
             // 3. Listen for incoming messages
             this.socket.on('receive_message', async (data) => {
-                document.getElementById('receive-sound').play().catch(()=>{}); // Play notification sound
+                document.getElementById('receive-sound')?.play().catch(()=>{}); // Play notification sound
 
                 // Make sure it's not our own message coming back
                 if (data.sender_id == this.user.id) return;
@@ -1386,8 +1393,10 @@ const initMaiga = () => {
                 // Acknowledge delivery to the server
                 this.socket.emit('message_received', { message_id: data.id });
 
+                const chatId = data.group_id || data.sender_id;
+
                 // If we are currently looking at this chat, mark incoming message as read
-                if (this.activeChat && this.activeChat.id == data.sender_id) {
+                if (this.activeChat && this.activeChat.id == chatId) {
                     this.markAsRead(this.activeChat);
                 }
 
@@ -1411,7 +1420,6 @@ const initMaiga = () => {
                     time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
 
-                const chatId = data.group_id || data.sender_id;
                 if (!this.chatMessages[chatId]) {
                     this.chatMessages[chatId] = [];
                 }
@@ -1423,18 +1431,25 @@ const initMaiga = () => {
                 if (chatInList) {
                     chatInList.lastMsg = data.content;
                     chatInList.time = 'Just now';
-                    if (this.activeChat?.id != chatId) chatInList.unread = true;
-                } else if (!data.group_id) {
-                    // Create the chat entry for the receiver if it doesn't exist yet
-                    this.chats.unshift({
-                        id: data.sender_id,
-                        name: data.author,
-                        avatar: data.avatar,
+                    if (this.activeChat?.id != chatId) {
+                        chatInList.unread = true;
+                        chatInList.unreadCount = (chatInList.unreadCount || 0) + 1;
+                    }
+                } else {
+                    // Create the chat or group entry if it doesn't exist yet
+                    const newEntry = {
+                        id: chatId,
+                        name: data.group_id ? data.group_name : data.author,
+                        avatar: data.group_id ? data.group_avatar : data.avatar,
                         lastMsg: data.content,
                         time: 'Just now',
                         unread: true,
+                        unreadCount: 1,
+                        type: data.group_id ? 'group' : 'user',
                         status: 'online'
-                    });
+                    };
+                    if (data.group_id) this.groups.unshift(newEntry);
+                    else this.chats.unshift(newEntry);
                 }
             });
 
@@ -1449,7 +1464,7 @@ const initMaiga = () => {
                     type: data.type,
                     sdp: data.signal // Keep original object
                 };
-                document.getElementById('ringing-sound').play().catch(()=>{});
+                document.getElementById('ringing-sound')?.play().catch(()=>{});
             });
 
             this.socket.on('call_accepted', (signal) => {
@@ -1521,11 +1536,13 @@ const initMaiga = () => {
             // --- Notification Listener ---
             this.socket.on('new_notification', (data) => {
                 this.notifications.unshift(data);
+                this.totalUnreadNotifications++;
+                if (this.unreadByCategory[data.type] !== undefined) this.unreadByCategory[data.type]++;
                 
                 if (data.type === 'system') {
-                    document.getElementById('system-warning-sound').play().catch(()=>{});
+                    document.getElementById('system-warning-sound')?.play().catch(()=>{});
                 } else {
-                    document.getElementById('notification-sound').play().catch(()=>{});
+                    document.getElementById('notification-sound')?.play().catch(()=>{});
                 }
                 
                 let toastType = data.type === 'system' ? 'error' : 'info';
@@ -1722,7 +1739,11 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_stickers').then(d => { if(d) { this.editorStickers = d.editor || []; this.storyStickers = d.story || []; } });
                 this.apiFetch('/api/get_trending').then(d => { this.trendingTopics = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_stories').then(d => this.processStories(Array.isArray(d) ? d : []));
-                this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_notifications').then(d => {
+                    this.notifications = d?.notifications || [];
+                    this.totalUnreadNotifications = d?.unreadCount || 0;
+                    this.unreadByCategory = d?.unreadByCategory || this.unreadByCategory;
+                });
                 this.apiFetch('/api/friends/suggestions').then(data => { 
                     if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } 
                 });
@@ -1892,7 +1913,8 @@ const initMaiga = () => {
                     viewCount: story.view_count || 0,
                     hasMusic: !!story.has_music,
                     audience: story.audience,
-                    musicTrack: story.music_track
+                    musicTrack: story.music_track,
+                    seen: !!story.seen
                 };
 
                 // Check if story belongs to current user
@@ -1916,6 +1938,43 @@ const initMaiga = () => {
             this.myStories = fetchedMyStories;
             // Convert Map to Array for Alpine x-for
             this.following = Array.from(storiesByUser.values());
+        },
+        getStoryRingClass(userId) {
+            if (!userId) return '';
+            const id = typeof userId === 'object' ? (userId.id || userId._id) : userId;
+            
+            let stories = [];
+            if (id == this.user.id) {
+                stories = this.myStories;
+            } else {
+                const creator = this.following.find(f => f.id == id);
+                if (creator) stories = creator.stories;
+            }
+
+            const unviewed = stories.filter(s => !s.seen);
+            if (unviewed.length === 0) return '';
+
+            // Priority: Green for Close Friends
+            if (unviewed.some(s => s.audience === 'close_friends')) {
+                return 'p-[2px] bg-green-500 parallelogram-sm';
+            }
+            // Regular gradient
+            return 'p-[2px] bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 parallelogram-sm';
+        },
+        openUserStory(userId) {
+            if (!userId) return;
+            const id = typeof userId === 'object' ? (userId.id || userId._id) : userId;
+            
+            let stories = [];
+            let userObj = null;
+            if (id == this.user.id) {
+                stories = this.myStories;
+                userObj = this.user;
+            } else {
+                const creator = this.following.find(f => f.id == id);
+                if (creator) { stories = creator.stories; userObj = creator; }
+            }
+            if (stories.length > 0) this.viewStory(stories, userObj);
         },
         get userMediaPosts() {
             return this.myReels;
@@ -2281,7 +2340,7 @@ const initMaiga = () => {
                     headers: { 'X-CSRF-Token': CSRF_TOKEN }
                 }).then(data => {
                     if (data && data.success) {
-                        document.getElementById('sent-sound').play().catch(()=>{});
+                        document.getElementById('sent-sound')?.play().catch(()=>{});
                     } else {
                         this.showToast('Error', 'Message failed to send.', 'error');
                     }
@@ -2431,6 +2490,7 @@ const initMaiga = () => {
             });
             // Local update handled by polling or optimistic update if needed
             chat.unread = false;
+            chat.unreadCount = 0;
         },
         markAsUnread(chat) {
             if (!chat) return;
@@ -2447,6 +2507,7 @@ const initMaiga = () => {
                 body: JSON.stringify({ chat_id: chat.id })
             });
             chat.unread = true; // Optimistic update
+            chat.unreadCount = 1;
         },
         sendSticker(sticker) {
             this.recordStickerUse(sticker);
@@ -2997,10 +3058,38 @@ const initMaiga = () => {
                 reel.likes--;
             });
         },
+        async handleNotificationClick(notif) {
+            // Mark as read locally
+            if (!notif.is_read) {
+                notif.is_read = true;
+                this.totalUnreadNotifications = Math.max(0, this.totalUnreadNotifications - 1);
+                if (this.unreadByCategory[notif.type] > 0) this.unreadByCategory[notif.type]--;
+                
+                // Persist to server (You could create a specific endpoint for one notification)
+                // For now, we assume the user might view the whole list
+            }
+
+            // Action based on type
+            if ((notif.type === 'like' || notif.type === 'post') && notif.post) {
+                // If the post is in our home feed, use it, otherwise fetch it
+                const existing = this.posts.find(p => p.id === notif.post);
+                if (existing) {
+                    this.viewingPost = existing;
+                } else {
+                    this.apiFetch(`/api/get_posts?post_id=${notif.post}`).then(data => {
+                        if (data && data.length > 0) this.viewingPost = data[0];
+                    });
+                }
+            } else if (notif.type === 'follow' && notif.trigger_user) {
+                this.openUserProfile(notif.trigger_user.id || notif.trigger_user);
+            }
+        },
 
         async markNotificationsRead() {
-            if (this.unreadNotificationsCount === 0) return;
+            if (this.totalUnreadNotifications === 0) return;
             this.notifications.forEach(n => n.is_read = true);
+            this.totalUnreadNotifications = 0;
+            Object.keys(this.unreadByCategory).forEach(k => this.unreadByCategory[k] = 0);
             await this.apiFetch('/api/mark_notifications_read', {
                 method: 'POST'
             });
@@ -3010,7 +3099,9 @@ const initMaiga = () => {
             return this.posts;
         },
         get totalUnreadChats() {
-            return (this.chats || []).filter(c => c?.unread).length + (this.groups || []).filter(g => g?.unread).length;
+            const chatUnread = (this.chats || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+            const groupUnread = (this.groups || []).reduce((sum, g) => sum + (g.unreadCount || 0), 0);
+            return chatUnread + groupUnread;
         },
         get sortedChats() {
             const all = [...(this.chats || []), ...(this.groups || [])].filter(Boolean);
@@ -3791,6 +3882,7 @@ const initMaiga = () => {
             this.viewingStory = { list: stories, index: 0, user: user || this.user };
             if (this.viewingStory.user.id !== this.user.id) {
                 const currentStory = this.viewingStory.list[this.viewingStory.index];
+                currentStory.seen = true;
                 if (!currentStory.seenBy) {
                     currentStory.seenBy = [];
                 }
@@ -3830,6 +3922,7 @@ const initMaiga = () => {
                     if (this.viewingStory.index < this.viewingStory.list.length - 1) {
                         this.viewingStory.index++;
                         this.storyProgress = 0;
+                    this.viewingStory.list[this.viewingStory.index].seen = true;
                         this.handleStoryMusic();
                     } else {
                         this.nextUserStory();
@@ -4985,7 +5078,7 @@ const initMaiga = () => {
             this.isPoorConnection = false;
             this.isReconnecting = false;
             this.isScreenSharing = false;
-            document.getElementById('ringing-sound').play().catch(()=>{});
+            document.getElementById('ringing-sound')?.play().catch(()=>{});
 
             navigator.mediaDevices.getUserMedia({
                 video: type === 'video' ? { facingMode: this.facingMode } : false,
@@ -5081,7 +5174,7 @@ const initMaiga = () => {
         acceptCall() {
             const callData = this.incomingCall;
             this.incomingCall = null;
-            document.getElementById('ringing-sound').pause();
+            document.getElementById('ringing-sound')?.pause();
 
             // Setup UI
             let caller = this.friends.find(f => f.id == callData.caller_id) || { id: callData.caller_id, name: callData.name, avatar: callData.avatar };
@@ -5117,7 +5210,7 @@ const initMaiga = () => {
             if (!this.incomingCall) return;
             this.socket.emit('reject_call', { callId: this.incomingCall.id, to: this.incomingCall.caller_id });
             this.incomingCall = null;
-            document.getElementById('ringing-sound').pause();
+            document.getElementById('ringing-sound')?.pause();
         },
         endCall() {
             if (this.isCallRecording && this.callRecorder && this.callRecorder.state !== 'inactive') {
@@ -5141,8 +5234,11 @@ const initMaiga = () => {
             clearInterval(this.connectionInterval);
             this.isPoorConnection = false;
             this.isReconnecting = false;
-            document.getElementById('ringing-sound').pause();
-            document.getElementById('ringing-sound').currentTime = 0;
+            const ringingSound = document.getElementById('ringing-sound');
+            if (ringingSound) {
+                ringingSound.pause();
+                ringingSound.currentTime = 0;
+            }
             this.localStream?.getTracks().forEach(track => track.stop());
             this.localStream = null;
             if (this.peerConnection) this.peerConnection.close();

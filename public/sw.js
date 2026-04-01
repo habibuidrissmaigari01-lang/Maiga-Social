@@ -168,7 +168,9 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: data.icon || (APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png'),
     badge: APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png', // Small icon for status bar
-    vibrate: [100, 50, 100],
+    vibrate: [200, 100, 200], // Stronger haptic feedback
+    tag: data.tag || 'maiga-notification', // Groups similar notifications
+    renotify: true, // Buzz the phone even if a notification with this tag is already visible
     data: {
       url: data.url || '/'
     }

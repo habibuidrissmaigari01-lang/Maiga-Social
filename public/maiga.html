@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Maiga Social</title>
     <script src="https://cdn.tailwindcss.com"></script>
+     <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -351,8 +352,8 @@
                                     <template x-if="!chat.isTyping">
                                         <p class="text-sm text-gray-500 truncate w-48" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
                                     </template>
-                                    <template x-if="chat.unread">
-                                        <span class="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
+                                    <template x-if="chat.unreadCount > 0">
+                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="chat.unreadCount"></span>
                                     </template>
                                 </div>
                             </div>
@@ -379,8 +380,8 @@
                                     <template x-if="!group.isTyping">
                                         <p class="text-sm text-gray-500 truncate w-48" :class="group.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="group.lastMsg"></p>
                                     </template>
-                                    <template x-if="group.unread">
-                                        <span class="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
+                                    <template x-if="group.unreadCount > 0">
+                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="group.unreadCount"></span>
                                     </template>
                                 </div>
                             </div>
@@ -2498,9 +2499,9 @@
         </div>
         <div class="divide-y dark:divide-gray-800">
             <template x-for="notif in notifications" :key="notif.id">
-                <div @click="notif.is_read = 1" class="p-4 flex items-center space-x-4 active:bg-gray-50 dark:active:bg-gray-800 transition-colors cursor-pointer" :class="notif.is_read == 0 ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900'">
-                    <div class="relative">
-                        <img @click.stop="if(notif.trigger_user_id) openUserProfile(notif.trigger_user_id)" :src="notif.avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=System'" class="w-12 h-12 parallelogram-sm shadow-sm cursor-pointer">
+                <div @click="handleNotificationClick(notif)" class="p-4 flex items-center space-x-4 active:bg-gray-50 dark:active:bg-gray-800 transition-colors cursor-pointer" :class="!notif.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : 'bg-white dark:bg-gray-900'">
+                <div @click.stop="openUserStory(notif.trigger_user_id)" class="relative flex-shrink-0 cursor-pointer" :class="getStoryRingClass(notif.trigger_user_id)">
+                    <img @click.stop="if(notif.trigger_user_id) openUserProfile(notif.trigger_user_id)" :src="notif.avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=System'" class="w-12 h-12 parallelogram-sm shadow-sm cursor-pointer" :class="hasUnviewedStory(notif.trigger_user_id) ? 'border-2 border-white dark:border-gray-900' : ''">
                         <div class="absolute -bottom-1 -right-1 w-6 h-6 parallelogram-sm flex items-center justify-center border-2 border-white dark:border-gray-900" 
                              :class="{ 'bg-rose-500': notif.type === 'like', 'bg-blue-500': notif.type === 'follow', 'bg-green-500': notif.type === 'mention', 'bg-purple-500': notif.type === 'broadcast', 'bg-orange-500': notif.type === 'system' }">
                             <i class="fa-solid text-[10px] text-white" :class="{ 'fa-heart': notif.type === 'like', 'fa-user-plus': notif.type === 'follow', 'fa-at': notif.type === 'mention', 'fa-bullhorn': notif.type === 'broadcast', 'fa-triangle-exclamation': notif.type === 'system' }"></i>
@@ -3257,18 +3258,18 @@
         <div class="flex-1 overflow-y-auto">
             <div x-show="isRightSidebarCollapsed" class="flex flex-col items-center space-y-4 py-4" x-transition>
                 <template x-for="chat in sortedChats" :key="chat.id">
-                    <img @click="activeChat = chat; isMessaging = true" :src="chat.avatar" class="w-12 h-12 rounded-full border-2 dark:border-gray-700 cursor-pointer hover:border-blue-500 transition-colors">
+                    <div @click.stop="openUserStory(chat.id)" class="cursor-pointer" :class="getStoryRingClass(chat.id)"><img @click.stop="activeChat = chat; isMessaging = true" :src="chat.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700 cursor-pointer hover:border-blue-500 transition-colors" :class="getStoryRingClass(chat.id) ? 'border-white dark:border-gray-900' : ''"></div>
                 </template>
             </div>
             <template x-for="chat in sortedChats" :key="chat.id">
-                <div @click="activeChat = chat; isMessaging = true" class="flex items-center p-3 space-x-3 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer" x-show="!isRightSidebarCollapsed" x-transition>
-                    <div class="relative">
-                        <img :src="chat.avatar" class="w-12 h-12 rounded-full border dark:border-gray-700">
+                <div class="flex items-center p-3 space-x-3 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer" x-show="!isRightSidebarCollapsed" x-transition>
+                    <div class="relative flex-shrink-0 cursor-pointer" :class="getStoryRingClass(chat.id)" @click.stop="openUserStory(chat.id)">
+                        <img :src="chat.avatar" class="w-12 h-12 parallelogram-sm border dark:border-gray-700" :class="getStoryRingClass(chat.id) ? 'border-2 border-white dark:border-gray-900' : ''">
                         <template x-if="chat.status === 'online'">
                             <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                         </template>
                     </div>
-                    <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed">
+                    <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed" @click="activeChat = chat; isMessaging = true">
                         <div class="flex justify-between items-center">
                             <span class="font-bold text-sm truncate" x-text="chat.name"></span>
                             <template x-if="isPinned(chat.id, chat.type || 'user')">
@@ -3278,8 +3279,8 @@
                         </div>
                         <div class="flex justify-between items-center mt-1">
                             <p class="text-xs text-gray-500 truncate" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
-                            <template x-if="chat.unread">
-                                <span class="w-2 h-2 bg-blue-600 rounded-full"></span>
+                            <template x-if="chat.unreadCount > 0">
+                                <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount"></span>
                             </template>
                         </div>
                     </div>

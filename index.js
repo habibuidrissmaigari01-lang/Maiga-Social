@@ -12,11 +12,6 @@ export default {
         const url = new URL(request.url);
         let path = url.pathname;
 
-        // Handle favicon to prevent 404 console errors
-        if (path === '/favicon.ico') {
-            return new Response(null, { status: 204 });
-        }
-        
         // Handle WebSocket Proxying and Socket.io long-polling
         if (path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket') {
             if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
