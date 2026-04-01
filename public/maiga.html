@@ -262,11 +262,11 @@
         <div class="flex items-center space-x-3">
             <button @click="activeTab = 'notifications'" class="relative p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm transition-transform active:scale-90">
                 <i class="fa-solid fa-bell dark:text-white"></i>
-                <span x-show="notifications.filter(n => n.unread).length > 0" x-text="notifications.filter(n => n.unread).length" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
+                <span x-show="unreadNotificationsCount > 0" x-text="unreadNotificationsDisplay" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
             </button>
             <button @click="isMessaging = true" class="relative p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm transition-transform active:scale-90">
                 <i class="fa-solid fa-paper-plane dark:text-white"></i>
-                <span x-show="totalUnreadChats > 0" x-text="totalUnreadChats" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
+                <span x-show="totalUnreadChats > 0" x-text="unreadBadgeDisplay" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
             </button>
         </div>
     </header>
@@ -1756,8 +1756,10 @@
     <!-- Call Overlay UI -->
     <!-- Audio elements for calls -->
     <audio id="ringing-sound" src="https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg" loop></audio>
-    <audio id="sent-sound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
-    <audio id="receive-sound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
+    <audio id="message-sound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
+    <audio id="notification-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
+    <audio id="post-success-sound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
+    <audio id="system-warning-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
     <audio x-ref="remoteAudio" autoplay></audio>
 
     <div x-show="isCalling && !isCallMinimized" x-cloak class="fixed inset-0 z-[999] bg-gray-900 flex flex-col items-center justify-between py-12 animate-fadeIn">

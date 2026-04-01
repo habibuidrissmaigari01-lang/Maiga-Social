@@ -233,7 +233,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
         const otherId = other._id.toString();
         
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
-            const isUnread = m.receiver?._id?.toString() === userId.toString() && !m.is_read;
+            const isUnread = m.receiver?._id?.toString() === userId.toString() && !m.read_by.some(r => r.user.toString() === userId.toString());
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',

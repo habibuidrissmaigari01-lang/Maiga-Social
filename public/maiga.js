@@ -279,9 +279,9 @@ const initMaiga = () => {
             if (!this.friendsSearchQuery?.trim()) return this.followingList || [];
             const q = this.friendsSearchQuery.toLowerCase();
             return (this.followingList || []).filter(f =>
-                (f.name && f.name.toLowerCase().includes(q)) ||
-                (f.username && f.username.toLowerCase().includes(q)) ||
-                (f.dept && f.dept.toLowerCase().includes(q))
+                (f.name?.toLowerCase().includes(q)) ||
+                (f.username?.toLowerCase().includes(q)) ||
+                (f.dept?.toLowerCase().includes(q))
             );
         },
         get potentialGroupMembers() {
@@ -1489,6 +1489,12 @@ const initMaiga = () => {
             this.socket.on('new_notification', (data) => {
                 this.notifications.unshift(data);
                 
+                if (data.type === 'system') {
+                    document.getElementById('system-warning-sound').play().catch(()=>{});
+                } else {
+                    document.getElementById('notification-sound').play().catch(()=>{});
+                }
+                
                 let toastType = data.type === 'system' ? 'error' : 'info';
                 this.showToast(data.type === 'system' ? 'System Warning' : 'New Notification', data.content, toastType);
                 
@@ -1803,8 +1809,9 @@ const initMaiga = () => {
         sendTypingSignal: Alpine.throttle(function() { 
             if (!this.activeChat) return;
             this.socket.emit('typing', { 
-                chat_id: this.activeChat.id, 
-                is_group: this.activeChat.type === 'group',
+                 group_id: this.activeChat.type === 'group' ? this.activeChat.id : null,
+                receiver_id: this.activeChat.type !== 'group' ? this.activeChat.id : null,
+                is_group: this.activeChat.type === 'group',                is_group: this.activeChat.type === 'group',
                 sender_id: this.user.id
             });
         }, 2000),
