@@ -1027,6 +1027,7 @@ const initMaiga = () => {
         isScreenSharing: false,
         localStream: null,
         callStatus: '',
+        followLoading: [],
         isMicMuted: false,
         isCameraOff: false,
         isSpeakerOn: false,
