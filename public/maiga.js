@@ -73,38 +73,51 @@ const initMaiga = () => {
             // Prepend Server URL if the url is relative (starts with /)
             const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
 
-            try {
-                const response = await fetch(fullUrl, options);
-                
-                if (response.status === 401) {
-                    window.location.href = '/';
-                    return null;
-                }
+            const maxRetries = options.retries ?? 2;
+            const timeout = options.timeout ?? 10000; // 10s default per request
 
-                const contentType = response.headers.get('content-type');
+            for (let i = 0; i <= maxRetries; i++) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+                    
+                    const response = await fetch(fullUrl, { ...options, signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    
+                    if (response.status === 401) {
+                        window.location.href = '/';
+                        return null;
+                    }
 
-                if (contentType && contentType.includes('application/json')) {
-                    return await response.json();
-                } else if (!response.ok) {
-                    // Handle 502, 404, or 500 HTML error pages
-                    const msg = `Server Error: ${response.status}. Please check backend logs.`;
-                    this.showToast('Server Error', msg, 'error');
-                    return null;
-                } else {
-                    // If server returns 404 (e.g. endpoint not found), try mock data
-                    const mock = this.getMockData(url);
-                    if (mock) return mock;
-                    return null; 
+                    if (response.ok) {
+                        const contentType = response.headers.get('content-type');
+                        return (contentType && contentType.includes('application/json')) ? await response.json() : null;
+                    }
+
+                    // Only retry on server-side errors (500+) or timeouts
+                    if (response.status < 500) break;
+                    
+                    if (i < maxRetries) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+
+                } catch (error) {
+                    const isTimeout = error.name === 'AbortError';
+                    
+                    if (i === maxRetries) {
+                        const mock = this.getMockData(url);
+                        if (mock) return mock;
+
+                        const msg = isTimeout ? 'Request timed out.' : 'Could not connect to server.';
+                        this.showToast(isTimeout ? 'Timeout' : 'Network Error', msg, 'error');
+                        return null;
+                    }
+                    
+                    // Exponential backoff for retries
+                    await new Promise(r => setTimeout(r, 1000 * (i + 1)));
                 }
-            } catch (error) {
-                // Fallback to mock data if connection fails (server down)
-                const mock = this.getMockData(url);
-                if (mock) return mock;
-                
-                this.showToast('Network Error', 'Could not connect to the server.', 'error');
-                return null;
             }
+            return null;
         },
+
         activeTab: localStorage.getItem('maiga_active_tab') || 'home',
         
         // --- CHAT & CALL STATE (Consolidated) ---
@@ -1611,91 +1624,60 @@ const initMaiga = () => {
             });
             this.editUser = { ...this.user };
             
-            // Consolidate initial data fetching
-            const initialDataPromises = [
-                // 1. Get User Data
-                this.apiFetch('/api/get_user').then(data => {
-                    if(data) {
-                        this.user = { ...this.user, ...data };
-                        this.editUser = { ...this.user };
-                    }
-                }),
-                // 2. Get Posts
-                this.apiFetch('/api/get_posts?page=1').then(data => {
-                    this.posts = Array.isArray(data) ? data : [];
-                }),
-                // 3. Get Chats
-                this.apiFetch('/api/get_chats').then(data => {
-                    this.chats = Array.isArray(data) ? data : [];
-                }),
-                // 4. Get Connections (for group creation etc)
-                this.apiFetch('/api/get_connections?type=following').then(data => {
-                    this.followingList = Array.isArray(data) ? data : [];
-                })
-            ];
+            try {
+                // Batch critical initial data fetches for performance and reliability
+                const criticalDataFetch = Promise.all([
+                    this.apiFetch('/api/get_user'),
+                    this.apiFetch('/api/get_posts?page=1'),
+                    this.apiFetch('/api/get_chats'),
+                    this.apiFetch('/api/get_groups'),
+                    this.apiFetch('/api/get_connections?type=following')
+                ]);
 
-            // Fetch newly implemented features
-            this.apiFetch('/api/get_forum_topics').then(data => { if(Array.isArray(data)) this.forumTopics = data; });
-            this.apiFetch('/api/get_music_tracks').then(data => { if(Array.isArray(data)) this.musicTracks = data; });
-            this.apiFetch('/api/get_stickers').then(data => { 
-                if(data) { this.editorStickers = data.editor || []; this.storyStickers = data.story || []; }
-            });
+                // Fail-safe: If critical data takes > 15s, proceed with what we have to unfreeze the UI
+                const syncTimeout = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Sync Timeout')), 15000)
+                );
 
-            // Non-blocking fetches (can load after UI is ready)
-            this.apiFetch('/api/get_trending').then(data => {
-                this.trendingTopics = Array.isArray(data) ? data : [];
-            });
+                const [userData, postsData, chatsData, groupsData, connectionsData] = await Promise.race([criticalDataFetch, syncTimeout]);
 
-            // Fetch Groups
-            this.apiFetch('/api/get_groups').then(data => {
-                    this.groups = Array.isArray(data) ? data : [];
-                    if(this.socket && this.socket.connected) {
-                        this.groups.forEach(g => this.socket.emit('join_group', g.id));
-                    }
-            });
+                if (userData) {
+                    this.user = { ...this.user, ...userData };
+                    this.editUser = { ...this.user };
+                }
+                this.posts = Array.isArray(postsData) ? postsData : [];
+                this.chats = Array.isArray(chatsData) ? chatsData : [];
+                this.groups = Array.isArray(groupsData) ? groupsData : [];
+                this.followingList = Array.isArray(connectionsData) ? connectionsData : [];
 
-            // Fetch Reports (for in-app admin view)
-            if (this.user.is_admin) { // Only fetch if user is admin
-                this.apiFetch('/api/admin/get_reports').then(data => {
-                    if (Array.isArray(data)) this.reports = data;
-                });
+                // Join group rooms for real-time updates after data is loaded
+                if (this.socket && this.socket.connected) {
+                    this.groups.forEach(g => this.socket.emit('join_group', g.id));
+                }
+
+                // Parallel non-critical fetches (Don't block the core UI load)
+                this.apiFetch('/api/get_forum_topics').then(d => { if(Array.isArray(d)) this.forumTopics = d; });
+                this.apiFetch('/api/get_music_tracks').then(d => { if(Array.isArray(d)) this.musicTracks = d; });
+                this.apiFetch('/api/get_stickers').then(d => { if(d) { this.editorStickers = d.editor || []; this.storyStickers = d.story || []; } });
+                this.apiFetch('/api/get_trending').then(d => { this.trendingTopics = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_stories').then(d => this.processStories(Array.isArray(d) ? d : []));
+                this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_muted_chats').then(d => { this.mutedChats = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_pinned_chats').then(d => { this.pinnedChats = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { this.reels = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_starred_messages').then(d => { if (Array.isArray(d)) this.starredMessages = d; });
+                this.apiFetch('/api/get_blocked_users').then(d => { this.blockedUsers = Array.isArray(d) ? d : []; });
+
+                if (this.user.is_admin) {
+                    this.apiFetch('/api/admin/get_reports').then(d => { if (Array.isArray(d)) this.reports = d; });
+                }
+            } catch (err) {
+                console.error("Critical data load failed", err);
+            } finally {
+                // Set loading states to false regardless of success/failure
+                this.isLoading = false;
+                this.showSkeletons = false;
             }
-
-            // Fetch Blocked Users
-            this.apiFetch('/api/get_blocked_users')
-                .then(data => {
-            
-                    this.blockedUsers = Array.isArray(data) ? data : [];
-                }).catch(() => { this.blockedUsers = []; });
-
-            // Fetch Notifications
-            this.apiFetch('/api/get_notifications')
-                .then(data => {
-                    this.notifications = Array.isArray(data) ? data : [];
-                }).catch(() => { this.notifications = []; });
-
-            // Fetch Muted Chats
-            this.apiFetch('/api/get_muted_chats')
-                    .then(data => {
-                    this.mutedChats = Array.isArray(data) ? data : [];
-                }).catch(() => { this.mutedChats = []; });
-
-            // Fetch Pinned Chats
-            this.apiFetch('/api/get_pinned_chats')
-                .then(data => {
-                    this.pinnedChats = data;
-                    this.pinnedChats = Array.isArray(data) ? data : [];
-                })
-                .catch(err => { });
-
-            // Fetch Reels
-            this.apiFetch('/api/get_reels?page=1&limit=5')
-                .then(data => {
-                    this.reels = Array.isArray(data) ? data : [];
-                }).catch(() => { this.reels = []; });
-
-            // Fetch Starred Messages
-            this.apiFetch('/api/get_starred_messages').then(data => { if (Array.isArray(data)) this.starredMessages = data; });
 
             this.$watch('isPaused', val => {
                 const video = document.querySelector('.story-video');
