@@ -89,25 +89,29 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
 });
 
 router.get('/get_posts', isAuthenticated, async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = 10;
-    const skip = (page - 1) * limit;
-    const query = req.query.user_id ? { user: req.query.user_id, media_type: { $ne: 'video' } } : { media_type: { $ne: 'video' } };
-    
-    // Populate 'user' and include fields needed for the 'full_name' virtual
-    const posts = await Post.find(query)
-        .populate('user', 'name first_name surname avatar is_verified')
-        .sort({ createdAt: -1 }).skip(skip).limit(limit);
-    
-    res.json(posts.map(p => ({
-        id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
-        content: p.content, media: p.media, media_type: p.media_type,
-        time: formatTime(p.createdAt), likes: p.likes.length,
-        comments: p.comments_count || 0, // Ensure comments count is included
-        views: p.views || 0, // Ensure views count is included
-        saved: p.saved_by.some(id => id.toString() === req.session.userId),
-        myReaction: p.likes.some(id => id.toString() === req.session.userId) ? 'like' : null
-    })));
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = 10;
+        const skip = (page - 1) * limit;
+        const query = req.query.user_id ? { user: req.query.user_id, media_type: { $ne: 'video' } } : { media_type: { $ne: 'video' } };
+        
+        // Populate 'user' and include fields needed for the 'full_name' virtual
+        const posts = await Post.find(query)
+            .populate('user', 'name first_name surname avatar is_verified')
+            .sort({ createdAt: -1 }).skip(skip).limit(limit);
+        
+        res.json(posts.map(p => ({
+            id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'User', avatar: p.user?.avatar,
+            content: p.content, media: p.media, media_type: p.media_type,
+            time: formatTime(p.createdAt), likes: p.likes.length,
+            comments: p.comments_count || 0,
+            views: p.views || 0,
+            saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
+            myReaction: p.likes.some(id => id.toString() === req.session.userId?.toString()) ? 'like' : null
+        })));
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 });
 
 router.post('/create_post', isAuthenticated, upload.single('media'), async (req, res) => {
@@ -337,45 +341,42 @@ router.get('/get_most_active_users', isAuthenticated, async (req, res) => {
 });
 
 router.get('/get_messages', isAuthenticated, async (req, res) => {
-    const { chat_id, type } = req.query;
-    const userId = req.session.userId;
-    
-    const query = {
-        ...(type === 'group' ? { group: chat_id } : { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] }),
-        deleted_for: { $ne: userId }
-    };
-    
-    // Add content search filter if query is provided
-    if (req.query.search) {
-        query.content = { $regex: req.query.search, $options: 'i' };
+    try {
+        const { chat_id, type } = req.query;
+        const userId = req.session.userId;
+        
+        const query = {
+            ...(type === 'group' ? { group: chat_id } : { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] }),
+            deleted_for: { $ne: userId }
+        };
+        
+        if (req.query.search) query.content = { $regex: req.query.search, $options: 'i' };
+        if (req.query.starred === 'true') query.starred_by = userId;
+
+        const messages = await Message.find(query)
+            .sort({ createdAt: 1 })
+            .populate('sender', 'name first_name surname avatar')
+            .populate('reply_to');
+
+        res.json(messages.map(m => ({
+            id: m._id, sender_id: m.sender?._id, content: m.content,
+            media: m.media, media_type: m.media_type, created_at: m.createdAt,
+            delivered: m.is_delivered,
+            is_read: m.is_read, avatar: m.sender?.avatar, 
+            pinned: m.is_pinned,
+            is_edited: m.is_edited,
+            read_by: m.read_by,
+            poll_id: m.poll?._id,
+            question: m.poll?.question,
+            options: m.poll?.options,
+            starred: m.starred_by.some(id => id.toString() === userId?.toString()),
+            replyTo: m.reply_to ? { author: 'User', content: m.reply_to.content } : null,
+            first_name: m.sender?.first_name || m.sender?.name?.split(' ')[0] || 'User',
+            surname: m.sender?.surname || ''
+        })));
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    // Add Star filter
-    if (req.query.starred === 'true') {
-        query.starred_by = userId;
-    }
-
-    const messages = await Message.find(query)
-        .sort({ createdAt: 1 })
-        .populate('sender', 'name first_name surname avatar')
-        .populate('reply_to');
-
-    res.json(messages.map(m => ({
-        id: m._id, sender_id: m.sender._id, content: m.content,
-        media: m.media, media_type: m.media_type, created_at: m.createdAt,
-        delivered: m.is_delivered,
-        is_read: m.is_read, avatar: m.sender.avatar, 
-        pinned: m.is_pinned,
-        is_edited: m.is_edited,
-        read_by: m.read_by,
-        poll_id: m.poll?._id,
-        question: m.poll?.question,
-        options: m.poll?.options,
-        starred: m.starred_by.some(id => id.toString() === userId.toString()),
-        replyTo: m.reply_to ? { author: 'User', content: m.reply_to.content } : null,
-        first_name: m.sender.first_name || m.sender.name?.split(' ')[0] || 'User',
-        surname: m.sender.surname || ''
-    })));
 });
 
 router.post('/mark_messages_read', isAuthenticated, async (req, res) => {
@@ -813,12 +814,12 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
         const userId = req.session.userId;
         res.json(reels.map(r => ({
-            id: r._id, user_id: r.user?._id, author: r.user?.name || 'Deleted User', avatar: r.user?.avatar,
+            id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
             media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0,
             comments: r.comments_count || 0, // Ensure comments count is included
-            liked: r.likes.some(id => id.toString() === userId.toString()),
-            saved: r.saved_by.some(id => id.toString() === userId.toString()),
-            myReaction: r.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
+            liked: r.likes.some(id => id && id.toString() === userId?.toString()),
+            saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
+            myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null
         })));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });

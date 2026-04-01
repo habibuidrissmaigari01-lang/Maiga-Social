@@ -170,11 +170,11 @@ mongoConnection.then(() => {
     setInterval(runAllCleanups, 60 * 60 * 1000);
 }).catch(err => { });
 
-server.listen(PORT, '0.0.0.0');
-
 // --- Routes ---
 app.use('/api', authRoutes);
 app.use('/api', mainRoutes);
+
+server.listen(PORT, '0.0.0.0');
 
 // --- Health Check Endpoint ---
 app.get('/api/health', async (req, res) => {
