@@ -45,7 +45,7 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
 
         // Missing UI State Variables
-        friends: [], // Initialize friends
+        friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         trendingTopics: [], // Initialize trendingTopics
         savedPostList: [], // Initialize savedPostList for savedPosts getter
         isReporting: false, // Initialize isReporting
@@ -57,6 +57,7 @@ const initMaiga = () => {
         showStoryStickerPicker: false,
         connectionSearchQuery: '',
         connectionList: [],
+        followingList: [],
         isCreatingStory: false,
         isCreatingPost: false,
         textStoryStyleIndex: 0,
@@ -1129,7 +1130,9 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_chats').then(data => { if (Array.isArray(data)) this.chats = data; }),
                 this.apiFetch('/api/get_groups').then(data => { if (Array.isArray(data)) this.groups = data; }),
                 this.apiFetch('/api/get_stories').then(data => this.processStories(Array.isArray(data) ? data : [])),
-                this.apiFetch('/api/friends/suggestions').then(data => { if (Array.isArray(data)) this.friends = data; }),
+                this.apiFetch('/api/friends/suggestions').then(data => { 
+                    if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } 
+                }),
                 this.apiFetch('/api/get_trending').then(data => { if (Array.isArray(data)) this.trendingTopics = data; })
         
             ];
@@ -1646,14 +1649,28 @@ const initMaiga = () => {
                 if (this.activeChat) this.fetchMessages(this.activeChat, false);
             });
             
-            // Automatically mark as read when switching chats
+            // Automatically mark as read and fetch messages when switching chats
             this.$watch('activeChat', (newChat) => {
-                if (newChat) this.markAsRead(newChat);
+                if (newChat) {
+                    this.markAsRead(newChat);
+                    this.fetchMessages(newChat, false);
+                }
             });
 
             // Re-join room if user data loads after socket connects
             this.$watch('user.id', (newId) => {
                 if (newId && this.socket && this.socket.connected) this.socket.emit('join_room', newId);
+            });
+            
+            // Load tab-specific data when switching tabs
+            this.$watch('activeTab', (newTab) => {
+                if (newTab === 'saved' && this.savedPostList.length === 0) {
+                    this.fetchSavedPosts();
+                }
+                if (newTab === 'profile' && this.myReels.length === 0) {
+                    this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (d) this.myReels = d; });
+                }
+                // Add other tab-specific loading here if needed
             });
             
             // If full screen was active on last visit, try to restore it
@@ -1705,6 +1722,9 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_trending').then(d => { this.trendingTopics = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_stories').then(d => this.processStories(Array.isArray(d) ? d : []));
                 this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/friends/suggestions').then(data => { 
+                    if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } 
+                });
                 this.apiFetch('/api/get_muted_chats').then(d => { this.mutedChats = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_pinned_chats').then(d => { this.pinnedChats = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { this.reels = Array.isArray(d) ? d : []; });
