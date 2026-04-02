@@ -957,7 +957,13 @@ const initMaiga = () => {
         isSchedulingMessage: false,
         scheduledTime: '',
         scheduledMessages: [],
-        isReelsMuted: false,
+        isReelsMuted: true,
+        hasInteractedWithVolume: false,
+        reelVolume: 1,
+        showVolumeSlider: false,
+        showSwipeHint: false,
+        reelHintTimer: null,
+        volumeLongPressTimer: null,
         reelClickTimer: null,
         selectedMedia: null,
         mediaType: null,
@@ -1627,6 +1633,10 @@ const initMaiga = () => {
                 localStorage.setItem('maiga_sidebar_collapsed', value);
             });
 
+            this.$watch('reels', () => {
+                this.$nextTick(() => this.setupReelsObserver());
+            });
+
             // Watch for chat search queries to filter messages
             this.$watch('chatSearchQuery', (val) => {
                 if (this.activeChat) this.fetchMessages(this.activeChat, false);
@@ -1714,7 +1724,10 @@ const initMaiga = () => {
                 });
                 this.apiFetch('/api/get_muted_chats').then(d => { this.mutedChats = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_pinned_chats').then(d => { this.pinnedChats = Array.isArray(d) ? d : []; });
-                this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { this.reels = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { 
+                    this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked}));
+                    this.$nextTick(() => this.setupReelsObserver());
+                });
                 this.apiFetch('/api/get_starred_messages').then(d => { if (Array.isArray(d)) this.starredMessages = d; });
                 this.apiFetch('/api/get_blocked_users').then(d => { this.blockedUsers = Array.isArray(d) ? d : []; });
 
@@ -1878,7 +1891,8 @@ const initMaiga = () => {
                     viewCount: story.view_count || 0,
                     hasMusic: !!story.has_music,
                     audience: story.audience,
-                    musicTrack: story.music_track
+                    musicTrack: story.music_track,
+                    seen: !!story.seen
                 };
 
                 // Check if story belongs to current user
@@ -2901,9 +2915,6 @@ const initMaiga = () => {
                 // Double (or multi) tap detected
                 clearTimeout(this.reelClickTimer);
 
-                // Trigger haptic feedback (vibration)
-                if (navigator.vibrate) navigator.vibrate(40);
-
                 // 1. Capture exact tap coordinates relative to the video container
                 const rect = event.currentTarget.getBoundingClientRect();
                 reel.heartX = event.clientX - rect.left;
@@ -2932,10 +2943,37 @@ const initMaiga = () => {
             this.lastReelClick = now;
         },
 
+        startVolumeLongPress() {
+            this.volumeLongPressTimer = setTimeout(() => {
+                this.showVolumeSlider = true;
+                if (navigator.vibrate) navigator.vibrate(50);
+            }, 600);
+        },
+        openUserStory(userId) {
+            if (!userId) return;
+            if (userId == this.user.id && this.myStories.length > 0) return this.viewStory(this.myStories);
+            
+            const creator = this.following.find(f => f.id == userId);
+            if (creator && creator.stories.length > 0) {
+                this.viewStory(creator.stories, creator);
+            }
+        },
+        endVolumeLongPress() {
+            clearTimeout(this.volumeLongPressTimer);
+        },
+        updateReelVolume() {
+            if (this.reelVolume > 0) {
+                this.isReelsMuted = false;
+                this.hasInteractedWithVolume = true;
+            }
+        },
         // Specifically for double-tap (Add only)
         likeReel(reel) {
             if (reel.liked) return;
             
+            // Trigger haptic feedback (Success vibration)
+            if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+
             reel.liked = true;
             reel.likes++;
 
@@ -5267,6 +5305,13 @@ const initMaiga = () => {
                     if (entry.isIntersecting) {
                         video.play().catch(e => {});
 
+                        // Swipe Hint Logic
+                        clearTimeout(this.reelHintTimer);
+                        this.showSwipeHint = false;
+                        this.reelHintTimer = setTimeout(() => {
+                            if (this.activeTab === 'reels') this.showSwipeHint = true;
+                        }, 15000); // Show hint after 15 seconds
+
                         // Increment view count
                         if (reel && !this.viewedReels.has(reel.id)) {
                             this.viewedReels.add(reel.id);
@@ -5351,7 +5396,8 @@ const initMaiga = () => {
             this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
-                        this.reels = [...this.reels, ...data];
+                        const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked}));
+                        this.reels = [...this.reels, ...mapped];
                     }
                     this.isLoadingMoreReels = false;
                 }).catch(() => {
