@@ -95,8 +95,11 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const limit = 10;
         const skip = (page - 1) * limit;
         
-        // Ensure we get images AND text-only posts (media_type null), but exclude videos (Reels)
         const baseQuery = { media_type: { $ne: 'video' } };
+        if (req.query.hashtag) {
+            baseQuery.content = { $regex: new RegExp('#' + req.query.hashtag, 'i') };
+        }
+        
         const query = req.query.user_id ? { user: req.query.user_id, ...baseQuery } : baseQuery;
         
         // Populate 'user' and include fields needed for the 'full_name' virtual
@@ -113,6 +116,26 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
             saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
             myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null
         })));
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+router.get('/get_post', isAuthenticated, async (req, res) => {
+    try {
+        const post = await Post.findById(req.query.post_id)
+            .populate('user', 'name first_name surname avatar is_verified');
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+        
+        res.json({
+            id: post._id, user_id: post.user?._id, author: post.user?.full_name || 'User', avatar: post.user?.avatar,
+            content: post.content, media: post.media, media_type: post.media_type,
+            time: formatTime(post.createdAt), likes: post.likes.length,
+            comments: post.comments_count || 0,
+            views: post.views || 0,
+            saved: post.saved_by.some(id => id.toString() === req.session.userId?.toString()),
+            myReaction: post.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null
+        });
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' });
     }
@@ -1346,7 +1369,15 @@ router.get('/get_notifications', isAuthenticated, async (req, res) => {
 
 router.post('/mark_notifications_read', isAuthenticated, async (req, res) => {
     try {
-        await Notification.updateMany({ user: req.session.userId, is_read: false }, { $set: { is_read: true } });
+        const { notification_ids } = req.body;
+        let filter = { user: req.session.userId, is_read: false };
+        
+        // If specific IDs are provided, only mark those as read
+        if (notification_ids && Array.isArray(notification_ids)) {
+            filter._id = { $in: notification_ids };
+        }
+
+        await Notification.updateMany(filter, { $set: { is_read: true } });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to clear notifications' });
@@ -1396,8 +1427,24 @@ router.post('/toggle_disappearing_mode', isAuthenticated, async (req, res) => {
     } catch (error) { res.status(500).json({ error: 'Failed' }); }
 });
 router.get('/get_post_likes', isAuthenticated, async (req, res) => {
-    const post = await Post.findById(req.query.post_id).populate('likes', 'name avatar');
-    res.json(post?.likes || []);
+    try {
+        const post = await Post.findById(req.query.post_id);
+        if (!post) return res.json([]);
+
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        // Using User.find is more efficient for pagination than populating a potentially huge array
+        const likers = await User.find({ _id: { $in: post.likes } })
+            .select('name first_name surname avatar username online dept')
+            .skip(skip)
+            .limit(limit);
+
+        res.json(likers);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch likers' });
+    }
 });
 
 router.get('/get_music_tracks', isAuthenticated, async (req, res) => {
@@ -1416,6 +1463,65 @@ router.get('/get_stickers', isAuthenticated, (req, res) => {
             { name: 'Verified', url: '/img/stickers/check.svg' }
         ]
     });
+});
+
+router.post('/update_group_info', isAuthenticated, upload.single('avatar'), async (req, res) => {
+    try {
+        const { group_id, name, description, permissions, approve_members } = req.body;
+        const group = await Group.findById(group_id);
+        if (!group) return res.status(404).json({ error: 'Group not found' });
+
+        const member = group.members.find(m => m.user.equals(req.session.userId));
+        if (!member || (member.role !== 'admin' && !group.permissions.can_edit_settings)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const updates = { name, description, approve_members: approve_members === '1' };
+        if (permissions) updates.permissions = JSON.parse(permissions);
+        if (req.file) updates.avatar = await uploadToR2(req.file, 'groups');
+
+        await Group.findByIdAndUpdate(group_id, { $set: updates });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/add_group_members', isAuthenticated, async (req, res) => {
+    try {
+        const { group_id, members } = req.body;
+        const group = await Group.findById(group_id);
+        if (!group) return res.status(404).json({ error: 'Group not found' });
+
+        const member = group.members.find(m => m.user.equals(req.session.userId));
+        if (!member || (member.role !== 'admin' && !group.permissions.can_add_members)) {
+            return res.status(403).json({ error: 'Unauthorized' });
+        }
+
+        const newMembers = members.map(id => ({ user: id, role: 'member' }));
+        await Group.findByIdAndUpdate(group_id, { $addToSet: { members: { $each: newMembers } } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/revoke_group_invite_link', isAuthenticated, async (req, res) => {
+    try {
+        const { group_id } = req.body;
+        const group = await Group.findById(group_id);
+        if (!group) return res.status(404).json({ error: 'Group not found' });
+
+        const member = group.members.find(m => m.user.equals(req.session.userId));
+        if (!member || member.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+
+        const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        group.invite_link_code = newCode;
+        await group.save();
+        res.json({ success: true, new_code: newCode });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 // Admin Routes
@@ -1591,6 +1697,29 @@ router.get('/admin/search_blocked_users', isAuthenticated, async (req, res) => {
         })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to search blocked users' });
+    }
+});
+
+router.get('/admin/group_activity_report', isAuthenticated, async (req, res) => {
+    try {
+        const adminUser = await User.findById(req.session.userId);
+        if (!adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
+
+        const { group_id } = req.query;
+        const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        const activity = await Message.aggregate([
+            { $match: { group: new mongoose.Types.ObjectId(group_id), createdAt: { $gte: last7Days } } },
+            { $group: {
+                _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                count: { $sum: 1 }
+            }},
+            { $sort: { _id: 1 } }
+        ]);
+
+        res.json(activity);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch activity report' });
     }
 });
 

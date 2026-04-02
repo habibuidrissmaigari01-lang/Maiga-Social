@@ -15,9 +15,19 @@ const initMaiga = () => {
     window.formatContent = (content) => {
         if (!content) return '';
         content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic sanitize
-        content = content.replace(/#(\w+)/g, '<a href="#" class="text-blue-500 hover:underline" onclick="openHashtag(\'$1\'); return false;">#$1</a>');
-        content = content.replace(/@(\w+)/g, '<a href="#" class="text-blue-500 hover:underline" onclick="openUserProfileByName(\'$1\'); return false;">@$1</a>');
+        content = content.replace(/#(\w+)/g, '<a href="#" class="text-blue-500 font-bold hover:underline" onclick="openHashtag(\'$1\'); return false;">#$1</a>');
+        content = content.replace(/@(\w+)/g, '<a href="#" class="text-blue-500 font-bold hover:underline" onclick="openUserProfileByName(\'$1\'); return false;">@$1</a>');
         return content;
+    };
+
+    // Shims for global onclick handlers used in dynamically injected HTML strings
+    window.openHashtag = (tag) => {
+        const el = document.querySelector('[x-data="appData"]');
+        if (el && window.Alpine) Alpine.$data(el).openHashtag(tag);
+    };
+    window.openUserProfileByName = (name) => {
+        const el = document.querySelector('[x-data="appData"]');
+        if (el && window.Alpine) Alpine.$data(el).openUserProfileByName(name);
     };
 
     isMaigaInitialized = true;
@@ -58,6 +68,10 @@ const initMaiga = () => {
         connectionSearchQuery: '',
         connectionList: [],
         followingList: [],
+        swipeOffset: 0,
+        showMusicPicker: false,
+        musicPickerSource: 'camera',
+        musicTracks: [],
         isCreatingStory: false,
         isCreatingPost: false,
         textStoryStyleIndex: 0,
@@ -276,6 +290,44 @@ const initMaiga = () => {
         ],
         get unreadBadgeDisplay() {
             return (this.totalUnreadChats || 0).toString();
+        },
+        hasUnviewedStory(userId) {
+            if (!userId) return false;
+            if (userId == this.user.id) return (this.myStories || []).some(s => !s.seen);
+            const creator = (this.following || []).find(f => f.id == userId);
+            return creator ? (creator.stories || []).some(s => !s.seen) : false;
+        },
+        getStoryRingClass(userId) {
+            if (!this.hasUnviewedStory(userId)) return '';
+            return userId == this.user.id 
+                ? 'p-0.5 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram-sm' 
+                : 'p-0.5 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram-sm';
+        },
+        shouldShow(msg, index) {
+            if (index === 0) return true;
+            const messages = this.chatMessages[this.activeChat?.id] || [];
+            const prevMsg = messages[index - 1];
+            return (prevMsg.sender_id !== msg.sender_id);
+        },
+        getUserColor(senderId) {
+            const colors = [
+                'text-blue-500', 'text-purple-500', 'text-pink-500', 'text-indigo-500',
+                'text-teal-500', 'text-emerald-500', 'text-orange-500', 'text-rose-500'
+            ];
+            const hash = String(senderId).split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            return colors[hash % colors.length];
+        },
+        async toggleStarMessage() {
+            const msg = this.selectedMessageForOptions;
+            if (!msg) return;
+            const data = await this.apiFetch('/api/toggle_star_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message_id: msg.id })
+            });
+            if (data?.success) {
+                msg.starred = !msg.starred;
+            }
         },
         highlight(text, query) {
             if (!query || !text) return text || '';
@@ -3088,6 +3140,54 @@ const initMaiga = () => {
                         }
                     });
             }
+        },
+        async clearCallHistory() {
+            if (!confirm('Clear all call logs?')) return;
+            const data = await this.apiFetch('/api/clear_call_history', { method: 'POST' });
+            if (data?.success) this.callHistory = [];
+        },
+        callback(call) {
+            const otherUser = call.caller._id == this.user.id ? call.receiver : call.caller;
+            this.activeChat = { id: otherUser._id, name: otherUser.name, avatar: otherUser.avatar };
+            this.startCall(call.type);
+        },
+        async deleteCallLog(callId) {
+            const data = await this.apiFetch('/api/delete_call_log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ call_id: callId })
+            });
+            if (data?.success) this.callHistory = this.callHistory.filter(c => c._id !== callId);
+        },
+        async handleNotificationClick(notif) {
+            this.apiFetch('/api/mark_notifications_read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notification_ids: [notif.id] })
+            });
+            notif.is_read = true;
+            
+            if (notif.type === 'like' || notif.type === 'mention') {
+                const post = await this.apiFetch(`/api/get_post?post_id=${notif.post_id || notif.related_id}`);
+                if (post) this.viewingPost = post;
+            } else if (notif.type === 'follow') {
+                this.openUserProfile(notif.trigger_user_id);
+            }
+        },
+        downloadEditedMedia() {
+            const a = document.createElement('a');
+            a.href = this.editorPreviewUrl;
+            a.download = `edited_maiga_${Date.now()}.jpg`;
+            a.click();
+        },
+        cancelCrop() { this.stopCrop(); },
+        openHashtag(tag) {
+            this.activeHashtag = tag;
+            this.activeTab = 'home';
+            this.homeSearchTab = 'posts';
+            this.homeSearchQuery = '#' + tag;
+            this.refreshHomeFeed(false);
+            this.showToast('Filtering', `Showing posts for #${tag}`, 'info');
         },
         formatRecordingTime(seconds) {
             const m = Math.floor(seconds / 60);
