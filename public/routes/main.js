@@ -191,7 +191,7 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
 router.post('/create_group', isAuthenticated, upload.single('avatar'), async (req, res) => {
     try {
         const { name, description, members, permissions, approve_members } = req.body;
-        let avatarUrl = 'img/default-group.png';
+        let avatarUrl = 'img/logo.png';
         if (req.file) avatarUrl = await uploadToR2(req.file, 'groups');
 
         // Creator must be added as an admin automatically

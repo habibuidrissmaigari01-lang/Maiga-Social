@@ -137,7 +137,7 @@ const initMaiga = () => {
         callHistory: [],
         starredMessages: [],
         get unreadNotificationsCount() {
-            return this.totalUnreadNotifications || 0;
+            return (this.notifications || []).filter(n => !n.is_read).length;
         },
         get didYouMeanFriend() {
             if (!this.friendsSearchQuery?.trim() || (this.filteredFriendsList || []).length > 0) return { name: '' }; 
@@ -1026,14 +1026,6 @@ const initMaiga = () => {
         isScreenSharing: false,
         localStream: null,
         callStatus: '',
-        totalUnreadNotifications: 0,
-        unreadByCategory: {
-            like: 0,
-            follow: 0,
-            post: 0,
-            mention: 0,
-            system: 0
-        },
         followLoading: [],
         isMicMuted: false,
         isCameraOff: false,
@@ -1393,25 +1385,6 @@ const initMaiga = () => {
                 // Acknowledge delivery to the server
                 this.socket.emit('message_received', { message_id: data.id });
 
-                const chatId = data.group_id || data.sender_id;
-
-                // If we are currently looking at this chat, mark incoming message as read
-                if (this.activeChat && this.activeChat.id == chatId) {
-                    this.markAsRead(this.activeChat);
-                }
-
-                // Decrypt E2EE messages
-                if (data.media_type === 'e2ee') {
-                    try {
-                        const privKey = await this.crypto.getPrivateKey();
-                        data.content = await this.crypto.decrypt(data.content, privKey);
-                        data.media_type = 'text'; 
-                    } catch (e) {
-                        data.content = '🔒 Encrypted Message';
-                        data.media_type = 'text';
-                    }
-                }
-
                 // Normalize message for Alpine templates (match fetchMessages format)
                 const formattedMsg = {
                     ...data,
@@ -1420,6 +1393,7 @@ const initMaiga = () => {
                     time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
 
+                const chatId = data.group_id || data.sender_id;
                 if (!this.chatMessages[chatId]) {
                     this.chatMessages[chatId] = [];
                 }
@@ -1435,21 +1409,18 @@ const initMaiga = () => {
                         chatInList.unread = true;
                         chatInList.unreadCount = (chatInList.unreadCount || 0) + 1;
                     }
-                } else {
-                    // Create the chat or group entry if it doesn't exist yet
-                    const newEntry = {
-                        id: chatId,
-                        name: data.group_id ? data.group_name : data.author,
-                        avatar: data.group_id ? data.group_avatar : data.avatar,
+                } else if (!data.group_id) {
+                    // Create the chat entry for the receiver if it doesn't exist yet
+                    this.chats.unshift({
+                        id: data.sender_id,
+                        name: data.author,
+                        avatar: data.avatar,
                         lastMsg: data.content,
                         time: 'Just now',
                         unread: true,
                         unreadCount: 1,
-                        type: data.group_id ? 'group' : 'user',
                         status: 'online'
-                    };
-                    if (data.group_id) this.groups.unshift(newEntry);
-                    else this.chats.unshift(newEntry);
+                    });
                 }
             });
 
@@ -1536,8 +1507,6 @@ const initMaiga = () => {
             // --- Notification Listener ---
             this.socket.on('new_notification', (data) => {
                 this.notifications.unshift(data);
-                this.totalUnreadNotifications++;
-                if (this.unreadByCategory[data.type] !== undefined) this.unreadByCategory[data.type]++;
                 
                 if (data.type === 'system') {
                     document.getElementById('system-warning-sound')?.play().catch(()=>{});
@@ -1739,11 +1708,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_stickers').then(d => { if(d) { this.editorStickers = d.editor || []; this.storyStickers = d.story || []; } });
                 this.apiFetch('/api/get_trending').then(d => { this.trendingTopics = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_stories').then(d => this.processStories(Array.isArray(d) ? d : []));
-                this.apiFetch('/api/get_notifications').then(d => {
-                    this.notifications = d?.notifications || [];
-                    this.totalUnreadNotifications = d?.unreadCount || 0;
-                    this.unreadByCategory = d?.unreadByCategory || this.unreadByCategory;
-                });
+                this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/friends/suggestions').then(data => { 
                     if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } 
                 });
@@ -1913,8 +1878,7 @@ const initMaiga = () => {
                     viewCount: story.view_count || 0,
                     hasMusic: !!story.has_music,
                     audience: story.audience,
-                    musicTrack: story.music_track,
-                    seen: !!story.seen
+                    musicTrack: story.music_track
                 };
 
                 // Check if story belongs to current user
@@ -1938,43 +1902,6 @@ const initMaiga = () => {
             this.myStories = fetchedMyStories;
             // Convert Map to Array for Alpine x-for
             this.following = Array.from(storiesByUser.values());
-        },
-        getStoryRingClass(userId) {
-            if (!userId) return '';
-            const id = typeof userId === 'object' ? (userId.id || userId._id) : userId;
-            
-            let stories = [];
-            if (id == this.user.id) {
-                stories = this.myStories;
-            } else {
-                const creator = this.following.find(f => f.id == id);
-                if (creator) stories = creator.stories;
-            }
-
-            const unviewed = stories.filter(s => !s.seen);
-            if (unviewed.length === 0) return '';
-
-            // Priority: Green for Close Friends
-            if (unviewed.some(s => s.audience === 'close_friends')) {
-                return 'p-[2px] bg-green-500 parallelogram-sm';
-            }
-            // Regular gradient
-            return 'p-[2px] bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 parallelogram-sm';
-        },
-        openUserStory(userId) {
-            if (!userId) return;
-            const id = typeof userId === 'object' ? (userId.id || userId._id) : userId;
-            
-            let stories = [];
-            let userObj = null;
-            if (id == this.user.id) {
-                stories = this.myStories;
-                userObj = this.user;
-            } else {
-                const creator = this.following.find(f => f.id == id);
-                if (creator) { stories = creator.stories; userObj = creator; }
-            }
-            if (stories.length > 0) this.viewStory(stories, userObj);
         },
         get userMediaPosts() {
             return this.myReels;
@@ -2214,7 +2141,7 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-                    this.groups.unshift({ ...data.group, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members, role: 'admin' });
+                    this.groups.unshift({ ...data.group, id: data.group._id, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members, role: 'admin' });
                     this.isCreatingGroup = false;
                     this.activeChat = this.groups[0];
                     this.showToast('Success', 'Group created successfully!');
@@ -2234,10 +2161,11 @@ const initMaiga = () => {
             
             // Handle Edit
             if (this.editingMessageId) {
-                // E2EE edit is complex, for now, we just edit unencrypted messages
-                // or re-encrypt, which reveals edit history.
-                // Simple implementation:
-                await this.crypto.editMessage(this.editingMessageId, content);
+                await this.apiFetch('/api/edit_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                    body: JSON.stringify({ message_id: this.editingMessageId, content: content, media_type: type })
+                });
                 this.fetchMessages(this.activeChat, false);
                 this.newMessage = '';
                 this.editingMessageId = null;
@@ -2249,31 +2177,8 @@ const initMaiga = () => {
             if (!content && type === 'text') return;
             
             const formData = new FormData();
-            let finalType = type;
-            
-            // E2EE for 1-on-1 text messages
-            if (type === 'text' && this.activeChat.type !== 'group' && this.activeChat.id) {
-                try {
-                    const theirPublicKey = await this.crypto.fetchPublicKey(this.activeChat.id);
-                    if (theirPublicKey) {
-                        const encryptedPayload = await this.crypto.encrypt(content, theirPublicKey);
-                        formData.append('content', JSON.stringify(encryptedPayload));
-                        formData.append('media_type', 'e2ee');
-                        finalType = 'e2ee';
-                    } else {
-    // Fallback to plain text if recipient has no public key
-                        formData.append('content', content);
-                        formData.append('media_type', type);
-                    }
-                } catch (e) {
-                    this.showToast('Error', 'Could not encrypt message.', 'error');
-                    formData.append('content', content);
-                    formData.append('media_type', type);
-                }
-            } else {
-                formData.append('content', (type === 'text' || type === 'sticker' || type === 'call_log') ? content : '');
-                formData.append('media_type', type);
-            }
+            formData.append('content', (type === 'text' || type === 'sticker' || type === 'call_log') ? content : '');
+            formData.append('media_type', type);
 
             if (this.replyingTo) {
                 formData.append('reply_to_id', this.replyingTo.id);
@@ -2312,7 +2217,7 @@ const initMaiga = () => {
                 author: this.user.name,
                 avatar: this.user.avatar,
                 sender: 'me',
-                type: finalType === 'e2ee' ? 'text' : finalType,
+                type: type,
                 pending: !navigator.onLine
             };
             if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
@@ -2427,17 +2332,6 @@ const initMaiga = () => {
                     const formattedMessages = await Promise.all(data.map(async m => {
                         let content = m.media || m.content;
                         let msgType = m.media_type || 'text';
-
-                        if (msgType === 'e2ee') {
-                            try {
-                                const privKey = await this.crypto.getPrivateKey();
-                                content = await this.crypto.decrypt(content, privKey);
-                                msgType = 'text';
-                            } catch (e) {
-                                content = '🔒 Encrypted Message';
-                                msgType = 'text';
-                            }
-                        }
 
                         return {
                         id: m.id,
@@ -3058,38 +2952,10 @@ const initMaiga = () => {
                 reel.likes--;
             });
         },
-        async handleNotificationClick(notif) {
-            // Mark as read locally
-            if (!notif.is_read) {
-                notif.is_read = true;
-                this.totalUnreadNotifications = Math.max(0, this.totalUnreadNotifications - 1);
-                if (this.unreadByCategory[notif.type] > 0) this.unreadByCategory[notif.type]--;
-                
-                // Persist to server (You could create a specific endpoint for one notification)
-                // For now, we assume the user might view the whole list
-            }
-
-            // Action based on type
-            if ((notif.type === 'like' || notif.type === 'post') && notif.post) {
-                // If the post is in our home feed, use it, otherwise fetch it
-                const existing = this.posts.find(p => p.id === notif.post);
-                if (existing) {
-                    this.viewingPost = existing;
-                } else {
-                    this.apiFetch(`/api/get_posts?post_id=${notif.post}`).then(data => {
-                        if (data && data.length > 0) this.viewingPost = data[0];
-                    });
-                }
-            } else if (notif.type === 'follow' && notif.trigger_user) {
-                this.openUserProfile(notif.trigger_user.id || notif.trigger_user);
-            }
-        },
 
         async markNotificationsRead() {
-            if (this.totalUnreadNotifications === 0) return;
+            if (this.unreadNotificationsCount === 0) return;
             this.notifications.forEach(n => n.is_read = true);
-            this.totalUnreadNotifications = 0;
-            Object.keys(this.unreadByCategory).forEach(k => this.unreadByCategory[k] = 0);
             await this.apiFetch('/api/mark_notifications_read', {
                 method: 'POST'
             });
@@ -3882,7 +3748,6 @@ const initMaiga = () => {
             this.viewingStory = { list: stories, index: 0, user: user || this.user };
             if (this.viewingStory.user.id !== this.user.id) {
                 const currentStory = this.viewingStory.list[this.viewingStory.index];
-                currentStory.seen = true;
                 if (!currentStory.seenBy) {
                     currentStory.seenBy = [];
                 }
@@ -3922,7 +3787,6 @@ const initMaiga = () => {
                     if (this.viewingStory.index < this.viewingStory.list.length - 1) {
                         this.viewingStory.index++;
                         this.storyProgress = 0;
-                    this.viewingStory.list[this.viewingStory.index].seen = true;
                         this.handleStoryMusic();
                     } else {
                         this.nextUserStory();
