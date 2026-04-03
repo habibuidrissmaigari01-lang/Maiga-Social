@@ -81,7 +81,6 @@ const initMaiga = () => {
         trendingTopics: [], // Initialize trendingTopics
         savedPostList: [], // Initialize savedPostList for savedPosts getter
         isReporting: false, // Initialize isReporting
-        typingUsers: [], // To store IDs of users currently typing in the active chat
         pinnedChats: [], // Initialize pinnedChats for isPinned getter
         homeSearchTab: 'users',
         friendsTab: 'suggestions',
@@ -465,10 +464,8 @@ const initMaiga = () => {
         isMessaging: false,
         isEditingProfile: false,
         isSideMenuOpen: false,
-        typingUsers: [], // To store IDs of users currently typing in the active chat
         isCreatingGroup: false,
         activeChat: null,
-        typingUsers: [],
         showMemberOptionsFor: null,
         isAddingGroupMembers: false,
         membersToAdd: [],

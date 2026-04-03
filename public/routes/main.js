@@ -245,7 +245,7 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
     if (detectedUrl) {
         const linkPreview = await getLinkPreview(detectedUrl);
         if (linkPreview) post.link_preview = linkPreview;
-    });
+    }
     await post.save();
     const populatedPost = await post.populate('user', 'name first_name surname avatar is_verified');
 
