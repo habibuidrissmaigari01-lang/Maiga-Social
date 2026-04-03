@@ -172,6 +172,7 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
         content: populatedPost.content, media: populatedPost.media, 
         media_type: populatedPost.media_type || (req.file?.mimetype.startsWith('video') ? 'video' : 'image'),
         time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null,
+        user_id: populatedPost.user?._id, // Ensure user_id is returned for reels to correctly filter in profile
         verified: populatedPost.user?.is_verified ?? false
     }});
 });
@@ -206,9 +207,9 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
         expires_at: expiryDate
     });
     
-    // Hook in models.js now handles the socket emission automatically!
     await msg.save();
-    res.json({ success: true });
+    // Return the message ID so the frontend can track read receipts for this specific message
+    res.json({ success: true, message_id: msg._id });
 });
 
 router.post('/create_group', isAuthenticated, upload.single('avatar'), async (req, res) => {
@@ -273,11 +274,17 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
         const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
         const otherId = other._id.toString();
         
+        const isMe = m.sender._id.toString() === userId.toString();
+        const prefix = isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : '';
+        
         if (!chats.has(otherId) && !archivedIds.includes(otherId)) {
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
-                lastMsg: m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`, 
+                lastMsg: prefix + (m.media_type === 'text' ? m.content : `<i>Sent a ${m.media_type}</i>`), 
+                lastMsgId: m._id,
+                lastMsgByMe: isMe,
+                lastMsgIsRead: m.is_read,
                 time: formatTime(m.createdAt),
                 unread: unreadMap.has(otherId),
                 unreadCount: unreadMap.get(otherId) || 0
@@ -303,14 +310,21 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
         
         const groupData = await Promise.all(groups.map(async g => {
             // Fetch the actual last message for this group to persist it after refresh
-            const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 });
+            const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 }).populate('sender', 'name');
+            
+            const isMe = lastMessage ? (lastMessage.sender?._id.toString() === req.session.userId.toString()) : false;
+            const senderPrefix = lastMessage ? (isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${lastMessage.sender?.name?.split(' ')[0]}:</span> `) : '';
+            const lastMsgText = lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `<i>Sent a ${lastMessage.media_type}</i>`) : 'No messages yet';
             
             return {
                 id: g._id,
                 name: g.name,
                 avatar: g.avatar || 'img/default-group.png',
                 type: 'group',
-                lastMsg: lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `Sent a ${lastMessage.media_type}`) : 'No messages yet',
+                lastMsg: senderPrefix + lastMsgText,
+                lastMsgId: lastMessage?._id,
+                lastMsgByMe: isMe,
+                lastMsgIsRead: lastMessage ? lastMessage.is_read : false,
                 time: lastMessage ? formatTime(lastMessage.createdAt) : '',
                 unread: groupUnreadMap.has(g._id.toString()),
                 unreadCount: groupUnreadMap.get(g._id.toString()) || 0
@@ -872,6 +886,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const query = { media_type: 'video' };
         if (req.query.user_id) query.user = req.query.user_id;
 
+        console.log("Fetching reels with query:", query); // Debugging
         const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
         const userId = req.session.userId;
         res.json(reels.map(r => ({
@@ -880,7 +895,8 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             comments: r.comments_count || 0, // Ensure comments count is included
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
             saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
-            myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null
+            myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
+            user_id: r.user?._id // Ensure user_id is returned for reels to correctly filter in profile
         })));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
@@ -1878,6 +1894,13 @@ router.post('/admin/migrate_avatars', isAuthenticated, async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: 'Migration failed', details: error.message });
     }
+});
+
+router.get('/get_animated_stickers', isAuthenticated, (req, res) => {
+    res.json([
+        { name: 'Celebration', url: '/img/stickers/party.svg' },
+        { name: 'Verified', url: '/img/stickers/check.svg' }
+    ]);
 });
 
 module.exports = router;

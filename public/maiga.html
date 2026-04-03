@@ -350,7 +350,20 @@
                                         </div>
                                     </template>
                                     <template x-if="!chat.isTyping">
-                                        <p class="text-sm text-gray-500 truncate w-48" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
+                                        <div class="flex items-center gap-1 overflow-hidden">
+                                            <template x-if="drafts[chat.id] && drafts[chat.id].trim()">
+                                                <p class="text-sm truncate w-48">
+                                                    <span class="text-rose-500 font-bold">Draft:</span>
+                                                    <span class="text-gray-500 dark:text-gray-400" x-text="drafts[chat.id]"></span>
+                                                </p>
+                                            </template>
+                                            <template x-if="!(drafts[chat.id] && drafts[chat.id].trim()) && chat.lastMsgByMe">
+                                                <i class="fa-solid fa-check-double text-[10px] shrink-0" :class="chat.lastMsgIsRead ? 'text-blue-500' : 'text-gray-400'"></i>
+                                            </template>
+                                            <template x-if="!(drafts[chat.id] && drafts[chat.id].trim())">
+                                                <p class="text-sm text-gray-500 truncate w-48" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-html="chat.lastMsg"></p>
+                                            </template>
+                                        </div>
                                     </template>
                                     <template x-if="chat.unreadCount > 0">
                                         <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="chat.unreadCount"></span>
@@ -378,7 +391,20 @@
                                         </div>
                                     </template>
                                     <template x-if="!group.isTyping">
-                                        <p class="text-sm text-gray-500 truncate w-48" :class="group.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="group.lastMsg"></p>
+                                        <div class="flex items-center gap-1 overflow-hidden">
+                                            <template x-if="drafts[group.id] && drafts[group.id].trim()">
+                                                <p class="text-sm truncate w-48">
+                                                    <span class="text-rose-500 font-bold">Draft:</span>
+                                                    <span class="text-gray-500 dark:text-gray-400" x-text="drafts[group.id]"></span>
+                                                </p>
+                                            </template>
+                                            <template x-if="!(drafts[group.id] && drafts[group.id].trim()) && group.lastMsgByMe">
+                                                <i class="fa-solid fa-check-double text-[10px] shrink-0" :class="group.lastMsgIsRead ? 'text-blue-500' : 'text-gray-400'"></i>
+                                            </template>
+                                            <template x-if="!(drafts[group.id] && drafts[group.id].trim())">
+                                                <p class="text-sm text-gray-500 truncate w-48" :class="group.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-html="group.lastMsg"></p>
+                                            </template>
+                                        </div>
                                     </template>
                                     <template x-if="group.unreadCount > 0">
                                         <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="group.unreadCount"></span>
@@ -574,7 +600,7 @@
             </div>
             
             <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900/50">
-                 <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])">
+                 <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
                         <div class="w-8 h-8 rounded-full flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
@@ -1067,7 +1093,10 @@
     <!-- Full Screen Post View -->
     <div x-show="viewingPost" x-cloak class="fixed inset-0 z-[700] bg-black/95 flex flex-col animate-fadeIn overflow-y-auto">
         <div class="p-4 flex justify-between items-center sticky top-0 z-10 bg-black/50 backdrop-blur-md">
-            <button @click="viewingPost = null" class="p-2 rounded-full bg-white/10 text-white"><i class="fa-solid fa-xmark"></i></button>
+            <div class="flex items-center space-x-2">
+                <button @click="viewingPost = null" class="p-2 rounded-full bg-white/10 text-white"><i class="fa-solid fa-xmark"></i></button>
+                <button @click="const a = document.createElement('a'); a.href = viewingPost.media; a.download = 'maiga_media'; a.click();" class="p-2 rounded-full bg-white/10 text-white" title="Download"><i class="fa-solid fa-download text-sm"></i></button>
+            </div>
             <span class="font-bold text-white">Post</span>
             <div class="w-8"></div>
         </div>
@@ -2242,16 +2271,65 @@
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 z-[50] bg-black lg:static lg:z-0 lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()">
             <template x-for="(reel, index) in reels" :key="reel.id">
-                <div class="h-full w-full snap-start relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">                    <video :id="'reel-video-' + reel.id" class="w-full h-full object-cover" playsinline :src="reel.media" @ended="scrollToNextReel(index)" x-effect="$el.muted = isReelsMuted"></video>
+                <div class="h-full w-full snap-start relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
+                    <video :id="'reel-video-' + reel.id" 
+                        class="w-full h-full object-cover" 
+                        playsinline autoplay muted loop 
+                        :src="reel.media" 
+                        @ended="scrollToNextReel(index)" 
+                        @waiting="reel.isLoading = true"
+                        @playing="reel.isLoading = false"
+                        @canplay="reel.isLoading = false"
+                        @timeupdate="reel.progress = ($el.currentTime / $el.duration) * 100"
+                        x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
                     
-                    <button @click.stop="isReelsMuted = !isReelsMuted" class="absolute top-20 right-4 z-30 bg-black/40 backdrop-blur-md text-white p-3 rounded-full transition-transform active:scale-90">
-                        <i class="fa-solid text-xl w-6 text-center" :class="isReelsMuted ? 'fa-volume-xmark' : 'fa-volume-high'"></i>
+                    <!-- Loading Spinner Overlay -->
+                    <div x-show="reel.isLoading" x-transition.opacity class="absolute inset-0 z-20 flex items-center justify-center bg-black/10 pointer-events-none">
+                        <i class="fa-solid fa-circle-notch fa-spin text-white/80 text-4xl"></i>
+                    </div>
+
+                    <!-- Pause/Play Status Icon Overlay -->
+                    <div x-show="reel.showStatusIcon" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-50" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-150" class="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+                        <div class="bg-black/40 backdrop-blur-sm p-6 rounded-full">
+                            <i class="fa-solid text-white text-4xl" :class="reel.lastAction === 'pause' ? 'fa-pause' : 'fa-play'"></i>
+                        </div>
+                    </div>
+
+                    <!-- Playback Progress Bar (Clickable) -->
+                    <div @click.stop="scrubReel(reel, $event)" class="absolute bottom-0 left-0 right-0 h-2 hover:h-3 group cursor-pointer bg-white/20 z-30 transition-all">
+                        <div class="h-full bg-blue-600 transition-all duration-100 ease-linear" :style="`width: ${reel.progress || 0}%`"></div>
+                    </div>
+                    
+                   <!-- Tap to Unmute Overlay (First Reel Only) -->
+                    <template x-if="index === 0 && isReelsMuted && !hasInteractedWithVolume">
+                        <div @click.stop="isReelsMuted = false; hasInteractedWithVolume = true" class="absolute inset-0 z-30 flex items-center justify-center bg-black/20 cursor-pointer animate-fadeIn">
+                            <div class="bg-black/60 backdrop-blur-md px-6 py-4 rounded-3xl flex flex-col items-center space-y-2 border border-white/10 shadow-2xl animate-bounce">
+                                <i class="fa-solid fa-volume-xmark text-white text-3xl"></i>
+                                <span class="text-white text-[10px] font-black uppercase tracking-widest">Tap to Unmute</span>
+                            </div>
+                        </div>
+                    </template>
+
+                    <button @click.stop="isReelsMuted = !isReelsMuted; hasInteractedWithVolume = true" class="absolute top-20 right-4 z-30 bg-black/40 backdrop-blur-md text-white p-3 rounded-full transition-transform active:scale-90">                        <i class="fa-solid text-xl w-6 text-center" :class="isReelsMuted ? 'fa-volume-xmark' : 'fa-volume-high'"></i>
                     </button>
                     
-                    <div @click="handleReelClick(reel, $event)" class="absolute inset-0 z-10"></div>
+                    <div @click="handleReelClick(reel, $event)" 
+                         @mousedown="startReelHold(reel)" 
+                         @mouseup="stopReelHold(reel)" 
+                         @touchstart.passive="startReelHold(reel)" 
+                         @touchend.passive="stopReelHold(reel)" 
+                         class="absolute inset-0 z-10"></div>
                     
-                    <div x-show="reel.showHeart" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-0" x-transition:enter-end="opacity-100 scale-150" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100 scale-150" x-transition:leave-end="opacity-0 scale-0" class="absolute inset-0 flex items-center justify-center pointer-events-none z-20 select-none">
+                    <div x-show="reel.showHeart" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-0" x-transition:enter-end="opacity-100 scale-150" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100 scale-150" x-transition:leave-end="opacity-0 scale-0" 
+                         class="absolute pointer-events-none z-20 select-none -translate-x-1/2 -translate-y-1/2"
+                         :style="{ left: reel.heartX + 'px', top: reel.heartY + 'px' }">
                         <i class="fa-solid fa-heart text-white text-8xl drop-shadow-2xl text-red-500"></i>
+                    </div>
+
+                    <!-- 2x Speed Indicator -->
+                    <div x-show="isSpeedingUp" class="absolute top-20 left-1/2 -translate-x-1/2 z-30 bg-black/40 backdrop-blur-md px-4 py-2 rounded-full flex items-center space-x-2 border border-white/10 animate-pulse">
+                        <i class="fa-solid fa-forward text-white"></i>
+                        <span class="text-white text-xs font-black uppercase tracking-widest">2x Speed</span>
                     </div>
 
                     <div class="absolute bottom-20 lg:bottom-4 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-20">
@@ -2524,7 +2602,7 @@
             <button @click="activeTab = 'home'" class="absolute top-4 left-4 bg-black/20 backdrop-blur-md p-2 parallelogram-sm text-white"><i class="fa-solid fa-arrow-left"></i></button>
         </div>
         <div class="px-4 -mt-14 relative">
-            <div @click="openUserProfile(user.id)" class="relative inline-block cursor-pointer">
+            <div @click="viewingPost = { avatar: user.avatar, media: user.avatar, author: user.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" class="relative inline-block cursor-pointer">
                 <img :src="user.avatar" class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover">
                 <div class="absolute -bottom-2 -right-2 bg-green-500 border-4 border-white dark:border-gray-900 w-8 h-8 parallelogram-sm"></div>
             </div>
@@ -2571,6 +2649,10 @@
                                     <p class="text-[8px] text-center line-clamp-4" x-text="post.content"></p>
                                 </div>
                             </template>
+                            <div class="absolute bottom-1 left-1 flex items-center space-x-1 text-white text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                <i class="fa-regular fa-eye"></i>
+                                <span x-text="formatNumber(post.views || 0)"></span>
+                            </div>
                             <button @click.stop="deletePost(post.id)" class="absolute top-1 right-1 w-6 h-6 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm">
                                 <i class="fa-solid fa-trash text-[10px]"></i>
                             </button>
@@ -2582,6 +2664,10 @@
                         <div @click="selectedReel = reel; showReelOptions = true" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden relative group cursor-pointer">
                             <div class="w-full h-full">
                                 <video :src="reel.media" class="w-full h-full object-cover"></video>
+                            </div>
+                            <div class="absolute bottom-1 left-1 flex items-center space-x-1 text-white text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                <i class="fa-solid fa-play text-[8px]"></i>
+                                <span x-text="formatNumber(reel.views || 0)"></span>
                             </div>
                             <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                                 <i class="fa-solid fa-play text-2xl"></i>
@@ -3128,7 +3214,7 @@
                     <div class="flex-1 overflow-y-auto">
                         <div class="p-6 flex flex-col items-center">
                             <div class="relative">
-                                <img :src="viewingUser?.avatar" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover">
+                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
                                 <template x-if="viewingUser?.online">
                                     <div class="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-900 rounded-full"></div>
                                 </template>
@@ -3278,7 +3364,20 @@
                             <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
                         </div>
                         <div class="flex justify-between items-center mt-1">
-                            <p class="text-xs text-gray-500 truncate" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-text="chat.lastMsg"></p>
+                            <div class="flex items-center gap-1 overflow-hidden">
+                                <template x-if="drafts[chat.id] && drafts[chat.id].trim()">
+                                    <p class="text-xs truncate">
+                                        <span class="text-rose-500 font-bold">Draft:</span>
+                                        <span class="text-gray-500" x-text="drafts[chat.id]"></span>
+                                    </p>
+                                </template>
+                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim()) && chat.lastMsgByMe">
+                                    <i class="fa-solid fa-check-double text-[10px] shrink-0" :class="chat.lastMsgIsRead ? 'text-blue-500' : 'text-gray-400'"></i>
+                                </template>
+                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim())">
+                                    <p class="text-xs text-gray-500 truncate" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-html="chat.lastMsg"></p>
+                                </template>
+                            </div>
                             <template x-if="chat.unreadCount > 0">
                                 <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount"></span>
                             </template>
@@ -3347,12 +3446,4 @@
         <div x-show="!globalPlayer.minimized" class="flex-1 p-4 flex flex-col justify-center bg-gray-50 dark:bg-gray-900/50">
              <div class="flex items-center space-x-2 text-xs text-gray-500 mb-2 font-mono">
                 <span x-text="formatRecordingTime(globalPlayer.currentTime)">00:00</span>
-                <input type="range" min="0" max="100" :value="globalPlayer.progress" @input="seekGlobalAudio($event)" class="flex-1 h-1 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
-                <span x-text="formatRecordingTime(globalPlayer.duration)">00:00</span>
-             </div>
-             <div class="flex justify-center space-x-8 items-center mt-4">
-                 <button class="text-gray-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-backward-step text-xl"></i></button>
-                 <button @click="toggleGlobalPlayback()" class="w-16 h-16 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 hover:scale-105 transition-transform active:scale-95">
-                     <i class="fa-solid text-2xl" :class="globalPlayer.playing ? 'fa-pause pl-1' : 'fa-play pl-1'"></i>
-                 </button>
-                 <button class
+                <input type="range" m
