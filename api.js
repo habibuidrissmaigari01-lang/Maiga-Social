@@ -217,6 +217,17 @@ io.on('connection', (socket) => {
             is_group: !!data.group_id 
         });
     });
+    socket.on('typing', (data) => {
+        const target = data.group_id ? `group_${data.group_id}` : data.receiver_id;
+        socket.to(target).emit('display_typing', {
+            chat_id: data.group_id || data.receiver_id, // Use receiver_id for 1-on-1 chats
+            sender_id: data.sender_id,
+            is_group: !!data.group_id
+        });
+        // Set a timeout to automatically send 'hide_typing' if no further typing events
+        clearTimeout(socket.typingTimeout);
+        socket.typingTimeout = setTimeout(() => { socket.to(target).emit('hide_typing', { chat_id: data.group_id || data.receiver_id, sender_id: data.sender_id, is_group: !!data.group_id }); }, 3000); // Hide after 3 seconds of no activity
+    });
     socket.on('call_user', async (data) => {
         try {
             const caller = await User.findById(data.from);
@@ -292,6 +303,7 @@ io.on('connection', (socket) => {
             User.findByIdAndUpdate(socket.userId, { online: false }).exec();
             // Notify everyone that this user went offline
             socket.broadcast.emit('user_status', { userId: socket.userId, status: 'offline' });
+            if (socket.typingTimeout) clearTimeout(socket.typingTimeout); // Clear any pending typing timeouts
         }
     });
 });

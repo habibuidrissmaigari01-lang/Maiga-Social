@@ -125,6 +125,14 @@
         .anim-skew:hover .anim-unskew {
             transform: skewX(0deg) scale(1);
         }
+        @keyframes spring-pop {
+            0% { transform: scale(1); }
+            40% { transform: scale(1.5); }
+            100% { transform: scale(1); }
+        }
+        .animate-spring {
+            animation: spring-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
         .vertical-range { writing-mode: vertical-lr; direction: rtl; appearance: auto; }
 
         @keyframes wave-pop {
@@ -138,6 +146,17 @@
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
       :class="[{ 'dark': darkMode }, desktopGridCols]"
       x-data="appData">
+
+    <!-- Return to Call Banner -->
+    <div x-show="isCalling && isCallMinimized" x-cloak
+         @click="isCallMinimized = false"
+         class="fixed top-0 left-0 right-0 z-[2000] bg-blue-600 text-white py-2 px-4 flex items-center justify-center space-x-3 cursor-pointer shadow-xl border-b border-white/10 animate-slideDown">
+        <div class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-100 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+        </div>
+        <span class="text-[10px] font-black uppercase tracking-widest">Tap to Return to Call • <span x-text="activeChat?.name"></span></span>
+    </div>
 
     <!-- Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
@@ -276,10 +295,11 @@
 
     <div class="flex flex-col min-w-0 relative">
     <!-- Top Navigation -->
-    <header class="flex-none bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg px-4 py-3 flex justify-between items-center z-[100] border-b dark:border-gray-800">
+    <header class="sticky top-0 flex-none bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg px-4 flex justify-between items-center z-[100] transition-all duration-500"
+            :class="[hasScrolled ? 'py-1.5 shadow-lg border-transparent' : 'py-3 border-b dark:border-gray-800', isHeaderHidden ? '-translate-y-full' : 'translate-y-0']">
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
-            <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200">
+            <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
                 <span class="text-2xl font-black italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
@@ -289,9 +309,9 @@
                 <i class="fa-solid fa-bell dark:text-white"></i>
                 <span x-show="unreadNotificationsCount > 0" x-text="unreadNotificationsDisplay" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
             </button>
-            <button @click="isMessaging = true" class="relative p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm transition-transform active:scale-90">
+            <button @click="isMessaging = true" class="relative p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm transition-transform active:scale-90 overflow-visible">
                 <i class="fa-solid fa-paper-plane dark:text-white"></i>
-                <span x-show="totalUnreadChats > 0" x-text="unreadBadgeDisplay" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
+                <span x-show="totalUnreadChats > 0" x-text="unreadBadgeDisplay" class="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold border-2 border-white dark:border-gray-900 scale-90 translate-x-1/4 -translate-y-1/4"></span>
             </button>
         </div>
     </header>
@@ -333,7 +353,15 @@
                             </div>
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
-                                    <span class="font-bold" x-text="chat.name"></span>
+                                    <div class="flex items-center">
+                                        <span class="font-bold" x-text="chat.name"></span>
+                                        <template x-if="chat.callInProgress">
+                                            <span class="ml-2 flex h-2 w-2">
+                                                <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
+                                                <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                            </span>
+                                        </template>
+                                    </div>
                                     <template x-if="chat.is_admin">
                                         <span class="ml-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 text-[9px] font-black uppercase">Admin</span>
                                     </template>
@@ -537,7 +565,15 @@
                 <img @click="openChatProfile()" :src="activeChat?.avatar" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <p class="font-bold text-sm" x-text="activeChat?.name"></p>
-                    <p class="text-xs text-gray-500">
+                    <p class="text-xs text-gray-500"> 
+                        <span x-show="typingUsers.length > 0" x-transition class="text-green-600 font-medium">
+                            <template x-if="typingUsers.length === 1">
+                                <span x-text="typingUsers[0] === user.id ? 'You are typing...' : (activeChat.type === 'group' ? getTypingUserName(typingUsers[0]) + ' is typing...' : 'Typing...')"></span>
+                            </template>
+                            <template x-if="typingUsers.length > 1">
+                                <span>Multiple users typing...</span>
+                            </template>
+                        </span>
                         <span x-show="typingUsers.length > 0" x-transition class="text-green-600 font-medium">
                             Typing...
                         </span>
@@ -664,7 +700,34 @@
                 <template x-if="activeChat?.type === 'group'">
                     <button @click="isCreatingPoll = true; showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-square-poll-vertical text-yellow-500 text-xl"></i></div><span class="text-[10px] font-bold">Poll</span></button>
                 </template>
-                <button class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
+                <button @click="sendLocation()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
+                <button @click="activeTab = 'blockedUsers'; fetchBlockedUserDetails()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600"><i class="fa-solid fa-user-slash"></i></div>
+                        <span class="font-bold text-sm">Blocked Users</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+                </button>
+    <main x-show="activeTab === 'blockedUsers'" class="animate-fadeIn">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
+            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3 class="font-black text-xl">Blocked Users</h3>
+        </div>
+        <div class="p-4 space-y-2">
+            <template x-for="bUser in blockedUserDetails" :key="bUser.id">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <img :src="bUser.avatar" class="w-10 h-10 rounded-full">
+                        <div>
+                            <p class="font-bold text-sm" x-text="bUser.name"></p>
+                            <p class="text-xs text-gray-500" x-text="'@' + bUser.username"></p>
+                        </div>
+                    </div>
+                    <button @click="viewingUser = bUser; toggleBlock(); blockedUserDetails = blockedUserDetails.filter(u => u.id !== bUser.id)" class="text-xs font-bold text-blue-600 border border-blue-600 px-4 py-1.5 rounded-lg">Unblock</button>
+                </div>
+            </template>
+        </div>
+    </main>
                 <button @click="toggleDisappearingMode()" class="flex flex-col items-center space-y-2 group">
                     <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-hourglass-half text-indigo-500 text-xl"></i></div>
                     <span class="text-[10px] font-bold">24h Timer</span>
@@ -716,7 +779,7 @@
             </div>
 
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
-                <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button>
+                <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
                     <input type="text" x-model="newMessage" @keyup.enter="sendMessage()" :placeholder="isBlocked(activeChat?.id) ? 'You have blocked this user' : 'Message...'" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}">
                     <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
@@ -1869,6 +1932,9 @@
                 <button @click="isMicMuted = !isMicMuted" class="p-4 rounded-full transition-all active:scale-90" :class="isMicMuted ? 'bg-white text-gray-900' : 'bg-white/20 text-white hover:bg-white/30'">
                     <i class="fa-solid text-xl" :class="isMicMuted ? 'fa-microphone-slash' : 'fa-microphone'"></i>
                 </button>
+                 <button x-show="callType === 'voice' && callStatus === 'Connected'" @click="switchToVideo()" class="p-4 rounded-full bg-white/20 text-white hover:bg-white/30 transition-all active:scale-90">
+                    <i class="fa-solid fa-video text-xl"></i>
+                </button>
                 <button x-show="callType === 'video'" @click="isCameraOff = !isCameraOff" class="p-4 rounded-full transition-all active:scale-90" :class="isCameraOff ? 'bg-white text-gray-900' : 'bg-white/20 text-white hover:bg-white/30'">
                     <i class="fa-solid text-xl" :class="isCameraOff ? 'fa-video-slash' : 'fa-video'"></i>
                 </button>
@@ -1954,10 +2020,62 @@
           @touchmove="handlePullMove($event)"
           @touchend="handlePullEnd()"
     >
+        <!-- Redial Suggestion -->
+        <div x-show="lastBusyCall" x-cloak class="mx-4 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center justify-between animate-fadeIn">
+            <div class="flex items-center space-x-3">
+                <img :src="lastBusyCall?.avatar" class="w-8 h-8 rounded-full object-cover">
+                <p class="text-xs font-bold text-blue-800 dark:text-blue-200">
+                    <span x-text="lastBusyCall?.name"></span> was busy. Redial?
+                </p>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button @click="lastBusyCall = null" class="text-gray-400 p-1"><i class="fa-solid fa-xmark"></i></button>
+                <button @click="redial()" class="bg-blue-600 text-white px-4 py-1.5 rounded-xl font-black text-[10px] uppercase tracking-wider shadow-md active:scale-95 transition-all">Redial</button>
+            </div>
+        </div>
+
         <!-- Pull Refresh Indicator -->
-        <div class="flex justify-center overflow-hidden transition-all duration-200 ease-out"
+        <div class="flex justify-center overflow-hidden"
+             :class="isBouncing ? 'transition-all duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)' : ''"
              :style="`height: ${isRefreshing ? '60px' : (pullDistance > 0 ? pullDistance + 'px' : '0px')}; opacity: ${pullDistance > 0 || isRefreshing ? 1 : 0}`">
             <div class="flex items-center justify-center h-full py-2">
+                <button @click="activeTab = 'security'; fetchSecurityData()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-shield-check"></i></div>
+                        <span class="font-bold text-sm">Security Check</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+                </button>
+    <!-- MAIN VIEW: SECURITY CHECK -->
+    <main x-show="activeTab === 'security'" class="animate-fadeIn">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
+            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3 class="font-black text-xl">Security Check</h3>
+        </div>
+        <div class="p-4 space-y-4">
+            <p class="text-xs text-gray-500 px-2 font-medium">Review devices where you're currently logged in.</p>
+            <div class="space-y-2">
+                <template x-for="session in loginSessions" :key="session.id">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
+                                <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm" x-text="session.browser + ' on ' + session.device"></p>
+                                <p class="text-[10px] text-gray-500" x-text="session.location + ' • ' + session.ip"></p>
+                                <p class="text-[9px] text-blue-600 font-bold uppercase mt-1" x-text="'Last active: ' + new Date(session.last_active).toLocaleString()"></p>
+                            </div>
+                        </div>
+                        <button class="text-xs font-bold text-red-500 hover:underline">Log Out</button>
+                    </div>
+                </template>
+                <template x-if="loginSessions.length === 0">
+                    <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
+                </template>
+            </div>
+        </div>
+    </main>
                 <div class="bg-white dark:bg-gray-800 parallelogram-sm p-2 shadow-md border dark:border-gray-700 flex items-center justify-center w-10 h-10">
                     <i class="fa-solid text-blue-600 transition-transform duration-200" :class="isRefreshing ? 'fa-spinner fa-spin' : 'fa-arrow-down'" :style="`transform: rotate(${pullDistance * 2}deg)`"></i>
                 </div>
@@ -2205,7 +2323,11 @@
 
         <!-- Feed -->
         <template x-for="post in homePosts" :key="post.id" x-show="!showSkeletons">
-            <div @click="viewingPost = post" class="bg-white dark:bg-gray-900 mt-2 p-4 post-card border-b dark:border-gray-800 shadow-sm cursor-pointer">
+            <div @click="viewingPost = post" 
+                 x-transition:enter="transition ease-out duration-500"
+                 x-transition:enter-start="opacity-0 translate-y-4"
+                 x-transition:enter-end="opacity-100 translate-y-0"
+                 class="bg-white dark:bg-gray-900 mt-2 p-4 post-card border-b dark:border-gray-800 shadow-sm cursor-pointer">
                 <div class="flex items-center justify-between mb-3"> 
                     <div @click.stop="openUserProfile(post.user_id)" class="flex items-center space-x-3 cursor-pointer">
                         <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700"> 
@@ -2216,7 +2338,7 @@
                     </div>
                     <button @click.stop="selectedPostForMenu = post; showPostOptions = true" class="p-2 text-gray-400"><i class="fa-solid fa-ellipsis"></i></button>
                 </div>
-                <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content)"></p>
+                 <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content, post.link_preview)"></p>
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
                         <template x-if="post.mediaType !== 'video'"><img :src="post.media" class="w-full h-auto object-cover"></template>
@@ -2253,8 +2375,8 @@
                             </div>
 
                             <!-- Main Like Button -->
-                            <button @click.stop="setReaction(post, 'like')" class="flex items-center space-x-1.5 transition-colors duration-75 active:scale-125" :class="getReactionColor(post.myReaction)">
-                                <i class="text-xl" :class="getReactionIcon(post.myReaction)"></i>
+                            <button @click.stop="setReaction(post, 'like')" class="flex items-center space-x-1.5 transition-all duration-300 active:scale-125" :class="[getReactionColor(post.myReaction), post.isAnimatingLike ? 'scale-110' : 'scale-100']">
+                                <i class="text-xl transition-transform" :class="[getReactionIcon(post.myReaction), post.isAnimatingLike ? 'animate-spring' : '']"></i>
                                 <span class="text-xs font-bold" x-text="post.likes"></span>
                             </button>
                         </div>
@@ -2405,7 +2527,7 @@
                     </div>
                     <button @click.stop="selectedPostForMenu = post; showPostOptions = true" class="p-2 text-gray-400"><i class="fa-solid fa-ellipsis"></i></button>
                 </div>
-                <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content)"></p>
+                <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content, post.link_preview)"></p>
                 
                 <!-- Shared Post Content -->
                 <template x-if="post.original_post">
@@ -2775,7 +2897,7 @@
 
     <!-- MAIN VIEW: PERSONAL INFORMATION -->
     <main x-show="activeTab === 'personalInfo'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
             <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
             <h3 class="font-black text-xl">Personal Information</h3>
         </div>
@@ -2798,7 +2920,7 @@
 
     <!-- MAIN VIEW: PASSWORD & SECURITY -->
     <main x-show="activeTab === 'password'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
             <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
             <h3 class="font-black text-xl">Password & Security</h3>
         </div>
@@ -2825,7 +2947,7 @@
 
     <!-- MAIN VIEW: PRIVACY -->
     <main x-show="activeTab === 'privacy'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
             <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
             <h3 class="font-black text-xl">Privacy</h3>
         </div>
@@ -2864,7 +2986,7 @@
 
     <!-- MAIN VIEW: LANGUAGE -->
     <main x-show="activeTab === 'language'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
             <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
             <h3 class="font-black text-xl">Language</h3>
         </div>
@@ -2966,18 +3088,18 @@
         </div>
     </div>
 
-    <!-- Create Story Modal (Text & Media) -->
-    <div x-show="isCreatingStory" x-cloak class="fixed inset-0 z-[500] flex flex-col lg:items-center lg:justify-center">
+    <!-- Create Story Modal (Full Screen Responsive) -->
+    <div x-show="isCreatingStory" x-cloak class="fixed inset-0 z-[500] flex flex-col items-center justify-center">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm hidden lg:block" @click="isCreatingStory = false"></div>
-       <div class="bg-white dark:bg-gray-900 flex flex-col w-full h-full lg:w-[500px] lg:h-[80vh] lg:max-h-[700px] lg:rounded-3xl lg:shadow-2xl relative animate-slideUp">
-            <div class="flex justify-between items-center mb-6">
-                <button @click="isCreatingStory = false" class="text-gray-500 font-bold p-2">Cancel</button>
-                <h3 class="font-black">Create Story</h3>
-                <button @click="createStoryAction()" class="bg-blue-600 text-white px-6 py-2 rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all">Post</button>
+       <div class="bg-white dark:bg-gray-900 flex flex-col w-full h-full lg:w-[450px] lg:h-[90vh] lg:rounded-3xl lg:shadow-2xl relative animate-slideUp overflow-hidden">
+            <div class="flex justify-between items-center p-4 absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/40 to-transparent">
+                <button @click="isCreatingStory = false" class="text-white drop-shadow-md p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-xmark text-xl"></i></button>
+                <h3 class="font-black text-white drop-shadow-md">New Story</h3>
+                <button @click="createStoryAction()" class="bg-blue-600 text-white px-6 py-1.5 rounded-full font-black shadow-lg active:scale-95 transition-all">Post</button>
             </div>
-             <div class="flex-1 flex flex-col p-4 pt-0">
+             <div class="flex-1 flex flex-col relative">
                 <!-- Story Preview Area -->
-                <div x-ref="storyPreviewArea" class="w-full aspect-[9/16] bg-gray-200 dark:bg-gray-800 rounded-2xl overflow-hidden relative flex items-center justify-center mb-4 shadow-inner">
+                <div x-ref="storyPreviewArea" @click="$refs.storyTextarea.focus()" class="w-full h-full bg-gray-200 dark:bg-gray-800 overflow-hidden relative flex items-center justify-center cursor-text">
                     <!-- Background Preview -->
                     <div x-show="!storyFile" class="absolute inset-0 transition-all" :style="`background: ${textStoryStyles[textStoryStyleIndex].background}`"></div>
                     <!-- Media Preview -->
@@ -2985,23 +3107,28 @@
                         <template x-if="storyMediaType === 'image'"><img :src="storyMediaPreview" class="w-full h-full object-cover"></template>
                         <template x-if="storyMediaType === 'video'"><video :src="storyMediaPreview" class="w-full h-full object-cover" autoplay muted loop></video></template>
                     </template>
-                    <!-- Text Preview -->
-                    <div x-show="newStoryContent" class="absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
-                        <span class="text-3xl font-black text-center drop-shadow-md" :style="`color: ${textStoryStyles[textStoryStyleIndex].color}`" x-text="newStoryContent"></span>
+                    <!-- Centered Text Input Overlay (Direct writing on background) -->
+                    <div class="absolute inset-0 flex items-center justify-center p-8 z-30 pointer-events-none">
+                        <textarea x-ref="storyTextarea" x-model="newStoryContent" 
+                                  class="bg-transparent border-none text-3xl font-black text-center focus:ring-0 placeholder-white/40 w-full resize-none leading-tight overflow-hidden drop-shadow-lg pointer-events-auto" 
+                                  :style="`color: ${textStoryStyles[textStoryStyleIndex].color}; font-family: ${editorFonts[textStoryFontIndex]}`"
+                                  placeholder="Type something..."
+                                  rows="1"
+                                  @input="$el.style.height = ''; $el.style.height = $el.scrollHeight + 'px'"
+                                  x-init="$nextTick(() => { $el.style.height = $el.scrollHeight + 'px' })"></textarea>
                     </div>
                     <!-- Sticker Overlays -->
                     <template x-for="overlay in storyOverlays" :key="overlay.id">
                         <div class="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-move select-none text-5xl pointer-events-auto"
                              :style="`left: ${overlay.x}%; top: ${overlay.y}%; transform: translate(-50%, -50%) scale(${overlay.scale || 1}) rotate(${overlay.rotation || 0}deg);`"
                              @mousedown="startDragOverlay($event, overlay)"
-                             @touchstart="startDragOverlay($event, overlay)">
+                             @touchstart="startDragOverlay($event, overlay)"
+                             @click.stop>
                              <span x-text="overlay.content"></span>
                              <button @click.stop.prevent="removeStoryOverlay(overlay.id)" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm pointer-events-auto"><i class="fa-solid fa-xmark"></i></button>
                         </div>
                     </template>
-                   </div>
-           <!-- Text Input -->
-                <textarea x-model="newStoryContent" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm focus:ring-1 focus:ring-blue-500 resize-none" placeholder="Type something..."></textarea>
+                </div>
             </div>
             <!-- Sticker Picker -->
             <div x-show="showStoryStickerPicker" x-cloak @click.away="showStoryStickerPicker = false" x-transition class="absolute bottom-16 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border dark:border-gray-700 p-4 z-10">
@@ -3030,21 +3157,28 @@
                         </template>
                     </template>
                      </div>
-             </div>
-            <!-- Bottom Bar -->
-            <div class="border-t dark:border-gray-800 p-4 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <template x-if="!storyFile">
-                        <div class="flex items-center space-x-2">
-                            <template x-for="(style, index) in textStoryStyles">
-                                <button @click="textStoryStyleIndex = index" class="w-7 h-7 rounded-full border-2 transition-all" :class="textStoryStyleIndex === index ? 'border-blue-500 scale-110' : 'border-white/20'" :style="`background: ${style.background}`"></button>
-                            </template>
-                        </div>
-                    </template>
-                </div>       
-                <button @click="$refs.storyMediaInput.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
-                <button @click="openCamera('story')" class="flex items-center space-x-2 text-rose-500"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
-                <button @click="showStoryStickerPicker = !showStoryStickerPicker" class="flex items-center space-x-2 text-yellow-500"><i class="fa-solid fa-face-smile text-xl"></i><span class="text-xs font-black">Stickers</span></button>
+            </div>
+            <!-- Bottom Controls Overlay -->
+            <div class="absolute bottom-0 left-0 right-0 p-6 z-50 flex flex-col gap-4 bg-gradient-to-t from-black/60 to-transparent">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <template x-if="!storyFile">
+                            <div class="flex items-center space-x-3">
+                                <div class="flex items-center space-x-2 bg-black/20 backdrop-blur-md p-1.5 rounded-full border border-white/10">
+                                    <template x-for="(style, index) in textStoryStyles">
+                                        <button @click="textStoryStyleIndex = index" class="w-6 h-6 rounded-full border-2 transition-all" :class="textStoryStyleIndex === index ? 'border-white scale-110' : 'border-transparent opacity-60'" :style="`background: ${style.background}`"></button>
+                                    </template>
+                                </div>
+                                <button @click="textStoryFontIndex = (textStoryFontIndex + 1) % editorFonts.length" class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/20 transition-all font-black border border-white/10" :style="`font-family: ${editorFonts[textStoryFontIndex]}`">T</button>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button @click="$refs.storyMediaInput.click()" class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/20 transition-all"><i class="fa-solid fa-image"></i></button>
+                        <button @click="openCamera('story')" class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/20 transition-all"><i class="fa-solid fa-camera"></i></button>
+                        <button @click="showStoryStickerPicker = !showStoryStickerPicker" class="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full text-white flex items-center justify-center hover:bg-white/20 transition-all"><i class="fa-solid fa-face-smile text-yellow-400"></i></button>
+                    </div>
+                </div>
                 <input type="file" x-ref="storyMediaInput" class="hidden" accept="image/*,video/*" @change="handleStoryFileSelect">
             </div>
         </div>
@@ -3080,7 +3214,10 @@
                 <span class="text-[10px] text-gray-400 font-bold" x-text="user.dept"></span>
             </div>
         </div>
-        <textarea x-model="newPostContent" class="flex-1 bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-medium" :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
+        <textarea x-model="newPostContent" maxlength="1000" class="flex-1 bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-medium" :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
+        <div class="flex justify-end px-2 py-1">
+            <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="newPostContent.length + ' / 1000'"></span>
+        </div>
         
         <template x-if="selectedMedia">
             <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner">
@@ -3098,7 +3235,12 @@
             <button @click="$refs.postMedia.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
             <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia">
             <button @click="openCamera('post')" :disabled="isUploadingPost || isUploadingReel" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
-            <button class="text-orange-500 flex items-center space-x-2"><i class="fa-solid fa-face-smile text-xl"></i><span class="text-xs font-black">Feeling</span></button>
+            <div class="relative">
+                <select x-model="newPostFeeling" class="appearance-none bg-transparent border-none text-orange-500 text-xs font-black focus:ring-0 cursor-pointer">
+                    <option value="">Feeling/Activity</option>
+                    <option value="happy">😊 Happy</option><option value="sad">😢 Sad</option><option value="studying">📚 Studying</option>
+                </select>
+            </div>
         </div>
         </div>
     </div>
@@ -3367,7 +3509,15 @@
                     </div>
                     <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed" @click="activeChat = chat; isMessaging = true">
                         <div class="flex justify-between items-center">
-                            <span class="font-bold text-sm truncate" x-text="chat.name"></span>
+                            <div class="flex items-center min-w-0">
+                                <span class="font-bold text-sm truncate" x-text="chat.name"></span>
+                                <template x-if="chat.callInProgress">
+                                    <span class="ml-1.5 flex h-1.5 w-1.5 shrink-0">
+                                        <span class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-green-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                                    </span>
+                                </template>
+                            </div>
                             <template x-if="isPinned(chat.id, chat.type || 'user')">
                                 <i class="fa-solid fa-thumbtack text-[10px] text-yellow-500 mr-1"></i>
                             </template>
@@ -3400,25 +3550,27 @@
 
 
     <!-- Bottom Nav -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] z-[150] shadow-2xl lg:hidden">
-        <button @click="activeTab = 'home'" class="flex flex-col items-center nav-indicator relative" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
+    <nav class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[500] shadow-2xl lg:hidden relative">
+        <!-- Fluid Indicator Bar -->
+        <div class="absolute top-0 h-1 bg-blue-600 transition-all duration-500 cubic-bezier(0.2, 0.8, 0.2, 1) rounded-full z-10"
+             :style="getIndicatorStyle()"></div>
+
+        <button @click="activeTab = 'home'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-house-chimney text-xl"></i>
-            <template x-if="activeTab === 'home'"><span class="w-1.5 h-1.5 bg-blue-600 rounded-full absolute -bottom-2"></span></template>
         </button>
-        <button @click="activeTab = 'friends'" class="flex flex-col items-center nav-indicator relative" :class="activeTab === 'friends' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'friends'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'friends' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-users text-xl"></i>
-            <template x-if="activeTab === 'friends'"><span class="w-1.5 h-1.5 bg-blue-600 rounded-full absolute -bottom-2"></span></template>
         </button>
-        <button @click="isCreatingPost = true" class="bg-blue-600 text-white w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center -mt-12 border-4 border-white dark:border-gray-900 active:scale-90 transition-all hover:rotate-12">
-            <i class="fa-solid fa-plus text-2xl"></i>
-        </button>
-        <button @click="activeTab = 'reels'" class="flex flex-col items-center nav-indicator relative" :class="activeTab === 'reels' ? 'text-blue-600' : 'text-gray-400'">
+        <div class="flex-1 flex justify-center -mt-8 relative z-30">
+            <button @click="isCreatingPost = true" class="bg-blue-600 text-white w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-4 border-white dark:border-gray-900 active:scale-90 transition-all hover:rotate-12">
+                <i class="fa-solid fa-plus text-2xl"></i>
+            </button>
+        </div>
+        <button @click="activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-video text-xl"></i>
-            <template x-if="activeTab === 'reels'"><span class="w-1.5 h-1.5 bg-blue-600 rounded-full absolute -bottom-2"></span></template>
         </button>
-        <button @click="activeTab = 'profile'" class="flex flex-col items-center nav-indicator relative" :class="activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'profile'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-circle-user text-xl"></i>
-            <template x-if="activeTab === 'profile'"><span class="w-1.5 h-1.5 bg-blue-600 rounded-full absolute -bottom-2"></span></template>
         </button>
     </nav>
 

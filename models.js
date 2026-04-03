@@ -74,6 +74,20 @@ const userSchema = new mongoose.Schema({
         chat_id: { type: mongoose.Schema.Types.ObjectId, required: true },
         chat_type: { type: String, enum: ['user', 'group'], required: true }
     }],
+    login_sessions: [{
+        device: String,
+        browser: String,
+        location: String,
+        ip: String,
+        last_active: { type: Date, default: Date.now }
+    }],
+    privacy_settings: {
+        privateAccount: { type: Boolean, default: false },
+        activityStatus: { type: Boolean, default: true },
+        location: { type: Boolean, default: true }
+    },
+    language: { type: String, default: 'English' },
+    recent_stickers: [String],
     is_verified: { type: Boolean, default: false },
     blocked: { type: Boolean, default: false },
     banned_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -125,7 +139,14 @@ const postSchema = new mongoose.Schema({
     comments_count: { type: Number, default: 0 },
     views: { type: Number, default: 0 },
     viewed_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-    music_track: String
+    music_track: String,
+    feeling: String,
+    link_preview: { // New field for rich link previews
+        url: String,
+        title: String,
+        description: String,
+        image: String
+    }
 }, schemaOptions);
 
 // Performance: Indexes for feed filtering and Reels

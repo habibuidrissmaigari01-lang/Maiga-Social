@@ -1,23 +1,45 @@
 // Define CSRF_TOKEN globally to prevent ReferenceErrors
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+// Function to extract a URL from text
+function extractUrl(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const match = urlRegex.exec(text);
+    return match ? match[0] : null;
+}
+
 // Automatically switch between local and production backend
 const API_BASE_URL = (function() {
     const host = window.location.hostname;
     return (host === 'localhost' || host === '127.0.0.1') ? 'http://localhost:3000' : '';
 })();
 
+
 let isMaigaInitialized = false;
 const initMaiga = () => {
     if (isMaigaInitialized) return;
 
     // Helper function for formatting post content (hashtags, mentions)
-    window.formatContent = (content) => {
+    window.formatContent = (content, linkPreview) => {
         if (!content) return '';
         content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Basic sanitize
         content = content.replace(/#(\w+)/g, '<a href="#" class="text-blue-500 font-bold hover:underline" onclick="openHashtag(\'$1\'); return false;">#$1</a>');
         content = content.replace(/@(\w+)/g, '<a href="#" class="text-blue-500 font-bold hover:underline" onclick="openUserProfileByName(\'$1\'); return false;">@$1</a>');
-        return content;
+         
+        let html = content;
+        if (linkPreview && linkPreview.url) {
+            html += `
+                <a href="${linkPreview.url}" target="_blank" rel="noopener noreferrer" class="block mt-3 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                    ${linkPreview.image ? `<img src="${linkPreview.image}" alt="Link preview" class="w-full h-32 object-cover">` : ''}
+                    <div class="p-3">
+                        <p class="font-bold text-sm text-blue-600">${linkPreview.title || linkPreview.url}</p>
+                        ${linkPreview.description ? `<p class="text-xs text-gray-500 line-clamp-2">${linkPreview.description}</p>` : ''}
+                        <p class="text-[10px] text-gray-400 mt-1">${new URL(linkPreview.url).hostname}</p>
+                    </div>
+                </a>
+            `;
+        }
+        return html;
     };
 
     // Shims for global onclick handlers used in dynamically injected HTML strings
@@ -59,6 +81,7 @@ const initMaiga = () => {
         trendingTopics: [], // Initialize trendingTopics
         savedPostList: [], // Initialize savedPostList for savedPosts getter
         isReporting: false, // Initialize isReporting
+        typingUsers: [], // To store IDs of users currently typing in the active chat
         pinnedChats: [], // Initialize pinnedChats for isPinned getter
         homeSearchTab: 'users',
         friendsTab: 'suggestions',
@@ -70,16 +93,28 @@ const initMaiga = () => {
         followingList: [],
         swipeOffset: 0,
         showMusicPicker: false,
+        vibrationInterval: null,
+        callTimeoutTimer: null,
         musicPickerSource: 'camera',
         musicTracks: [],
         isCreatingStory: false,
         isCreatingPost: false,
         textStoryStyleIndex: 0,
+        textStoryFontIndex: 0,
         storyFile: null,
         storyMediaPreview: null,
         storyMediaType: null,
         animatedStickers: [], // Initialize animatedStickers
         drafts: {},
+        touchStartX: 0,
+        touchStartY: 0,
+        lastScrollTop: 0,
+        isHeaderHidden: false,
+        newPostFeeling: '',
+        loginSessions: [],
+        hasScrolled: false,
+        isBouncing: false,
+        typingIndicatorTimeout: null,
 
          scrubReel(reel, event) {
             const video = document.getElementById('reel-video-' + reel.id);
@@ -246,6 +281,11 @@ const initMaiga = () => {
             }
             return searchIndex === query.length;
         },
+        getTypingUserName(userId) {
+            const user = this.activeChat.members?.find(m => m.id === userId) || this.chats.find(c => c.id === userId);
+            return user ? user.name.split(' ')[0] : 'Someone';
+        },
+
 
         get filteredStickers() {
             if (!this.stickerSearchQuery?.trim()) return this.stickerGroups?.[this.activeStickerCategory] || [];
@@ -425,6 +465,7 @@ const initMaiga = () => {
         isMessaging: false,
         isEditingProfile: false,
         isSideMenuOpen: false,
+        typingUsers: [], // To store IDs of users currently typing in the active chat
         isCreatingGroup: false,
         activeChat: null,
         typingUsers: [],
@@ -1171,26 +1212,65 @@ const initMaiga = () => {
         handlePullStart(e) {
             if (this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
                 this.pullStartY = e.touches[0].clientY;
+                this.touchStartX = e.touches[0].clientX;
             }
         },
         handlePullMove(e) {
+            const touchX = e.touches[0].clientX;
+            const touchY = e.touches[0].clientY;
+            const deltaX = touchX - this.touchStartX;
+            const deltaY = touchY - this.pullStartY;
+
+            // Gesture Tab Navigation (Horizontal Swipe)
+            // Only trigger if horizontal movement is significantly greater than vertical
+            if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && Math.abs(deltaX) > 40) {
+                if (this.activeChat || this.isCreatingStory || this.isCreatingPost) return;
+                
+                const tabs = ['home', 'friends', 'reels'];
+                let currentIndex = tabs.indexOf(this.activeTab);
+                
+                if (currentIndex !== -1) {
+                    if (deltaX > 100) { // Swipe Right -> Previous Tab
+                        if (currentIndex > 0) this.activeTab = tabs[currentIndex - 1];
+                        this.touchStartX = touchX; // Reset to prevent multiple triggers
+                    } else if (deltaX < -100) { // Swipe Left -> Next Tab
+                        if (currentIndex < tabs.length - 1) this.activeTab = tabs[currentIndex + 1];
+                        this.touchStartX = touchX;
+                    }
+                }
+            }
+
             if (this.pullStartY > 0 && this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
-                const touchY = e.touches[0].clientY;
                 const dist = touchY - this.pullStartY;
                 if (dist > 0) {
+                    this.isBouncing = false;
                     e.preventDefault(); // Prevent browser's default pull-to-refresh
                     this.pullDistance = Math.min(dist * 0.4, 150);
+
+                    // Progressive Haptic Feedback
+                    // Every 20px of pull, trigger a pulse that gets slightly longer
+                    let currentStep = Math.floor(this.pullDistance / 20);
+                    if (currentStep > (this.lastHapticStep || 0)) {
+                        if (navigator.vibrate) {
+                            navigator.vibrate(5 + (currentStep * 3)); 
+                        }
+                        this.lastHapticStep = currentStep;
+                    }
                 } else {
                     this.pullDistance = 0;
+                    this.lastHapticStep = 0;
                 }
             }
         },
         handlePullEnd() {
+            this.isBouncing = true;
             if (this.pullDistance > 80) { // Increased threshold for better UX
                 this.refreshAllData();
             } else {
                 this.pullDistance = 0;
                 this.pullStartY = 0;
+                this.lastHapticStep = 0;
+                setTimeout(() => { this.isBouncing = false; }, 500);
             }
         },
         checkConnection() {
@@ -1523,7 +1603,21 @@ const initMaiga = () => {
 
              // --- Socket Call Listeners ---
             this.socket.on('incoming_call', (data) => {
-                if (this.isCalling || this.incomingCall) return; // Busy
+                if (this.isCalling || this.incomingCall) {
+                    this.socket.emit('call_busy', { to: data.from, callId: data.callId });
+                    return;
+                }
+
+                const chatInList = this.chats.find(c => c.id == data.from);
+                if (chatInList) chatInList.callInProgress = true;
+
+                // Start vibration pattern (500ms on, 200ms off, 500ms on)
+                if (navigator.vibrate) {
+                    this.vibrationInterval = setInterval(() => {
+                        navigator.vibrate([500, 200, 500]);
+                    }, 2000);
+                }
+
                 this.incomingCall = {
                     id: data.callId,
                     caller_id: data.from,
@@ -1536,6 +1630,7 @@ const initMaiga = () => {
             });
 
             this.socket.on('call_accepted', (signal) => {
+                clearTimeout(this.callTimeoutTimer);
                 this.callStatus = 'Connecting...';
                 document.getElementById('ringing-sound').pause();
                 this.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
@@ -1548,8 +1643,16 @@ const initMaiga = () => {
                 }
             });
 
+            this.socket.on('call_busy', () => {
+                this.showToast('Line Busy', 'The user is currently in another call.', 'info');
+                this.endCall(false, false);
+            });
+
             this.socket.on('call_ended', () => {
-                this.endCall();
+                const chatInList = this.chats.find(c => c.id == this.activeChat?.id);
+                if (chatInList) chatInList.callInProgress = false;
+
+                this.endCall(false, false);
                 this.showToast('Info', 'Call ended.');
             });
 
@@ -1727,6 +1830,90 @@ const initMaiga = () => {
             this.$watch('isLeftSidebarCollapsed', (value) => {
                 localStorage.setItem('maiga_sidebar_collapsed', value);
             });
+            
+            // Haptic feedback when switching tabs
+            this.$watch('activeTab', () => {
+                if (navigator.vibrate) navigator.vibrate(10);
+            });
+            
+            // Auto-scroll to top when switching to home
+            this.$watch('activeTab', (val) => {
+                if (val === 'home') this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+            
+            // Listen for typing events
+            this.socket.on('display_typing', (data) => {
+                // Update chat list item
+                const chat = this.chats.find(c => c.id == data.chat_id) || 
+                             this.groups.find(g => g.id == data.chat_id);
+                if (chat) {
+                    chat.isTyping = true;
+                    clearTimeout(chat.typingTimeout);
+                    chat.typingTimeout = setTimeout(() => chat.isTyping = false, 3000); // Clear after 3 seconds
+                }
+
+                // Update active chat header
+                if (this.activeChat && this.activeChat.id == data.chat_id && data.sender_id != this.user.id) {
+                    if (!this.typingUsers.includes(data.sender_id)) {
+                        this.typingUsers.push(data.sender_id);
+                    }
+                    // Clear typing status after a delay if no new typing event
+                    clearTimeout(this.typingIndicatorTimeout);
+                    this.typingIndicatorTimeout = setTimeout(() => {
+                        this.typingUsers = this.typingUsers.filter(id => id !== data.sender_id);
+                    }, 3000);
+                }
+            });
+
+            this.socket.on('hide_typing', (data) => {
+                const chat = this.chats.find(c => c.id == data.chat_id);
+                if (chat) chat.isTyping = false;
+                if (this.activeChat && this.activeChat.id == data.chat_id) {
+                    this.typingUsers = this.typingUsers.filter(id => id !== data.sender_id);
+                }
+            });
+            
+            // Indicator Style Calculation
+            this.getIndicatorStyle = () => {
+                const tabs = ['home', 'friends', 'post', 'reels', 'profile'];
+                const index = tabs.indexOf(this.activeTab === 'notifications' ? 'home' : this.activeTab);
+                const width = 100 / tabs.length;
+                return `width: ${width}%; left: ${index * width}%;`;
+            };
+
+            // Professional Sync: Watch privacy settings and save to backend
+            this.$watch('privacySettings', (value) => {
+                this.apiFetch('/api/update_privacy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(value)
+                });
+            }, { deep: true });
+             
+            // Auto-sync Privacy, Language, and Stickers
+            this.$watch('privacySettings', (value) => {
+                this.apiFetch('/api/update_privacy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(value)
+                });
+            }, { deep: true });
+
+            this.$watch('selectedLanguage', (value) => {
+                this.apiFetch('/api/update_language', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ language: value })
+                });
+            });
+
+            this.$watch('recentlyUsedStickers', (value) => {
+                this.apiFetch('/api/update_recent_stickers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stickers: value })
+                });
+            }, { deep: true });
 
             this.$watch('reels', () => {
                 this.$nextTick(() => this.setupReelsObserver());
@@ -1802,7 +1989,10 @@ const initMaiga = () => {
                 if (userData) {
                     this.user = { ...this.user, ...userData };
                     this.editUser = { ...this.user };
-                    console.log("User data loaded:", this.user); // Debugging
+                    if (userData.privacy_settings) this.privacySettings = { ...userData.privacy_settings };
+                    if (userData.language) this.selectedLanguage = userData.language;
+                    if (userData.recent_stickers) this.recentlyUsedStickers = userData.recent_stickers;
+
                 }
                 this.posts = Array.isArray(postsData) ? postsData : [];
                 this.chats = Array.isArray(chatsData) ? chatsData : [];
@@ -1831,9 +2021,9 @@ const initMaiga = () => {
                     this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver());
                 });
-                console.log("Initial reels loaded:", this.reels); // Debugging
                 this.apiFetch('/api/get_starred_messages').then(d => { if (Array.isArray(d)) this.starredMessages = d; });
                 this.apiFetch('/api/get_blocked_users').then(d => { this.blockedUsers = Array.isArray(d) ? d : []; });
+                this.apiFetch('/api/get_most_active_users').then(d => { if (Array.isArray(d)) this.mostActiveUsers = d; });
 
                 if (this.user.is_admin) {
                     this.apiFetch('/api/admin/get_reports').then(d => { if (Array.isArray(d)) this.reports = d; });
@@ -1841,7 +2031,6 @@ const initMaiga = () => {
             } catch (err) {
                 console.error("Critical data load failed", err);
             } finally {
-                console.log("myReels after initial load:", this.myReels); // Debugging
                 // Set loading states to false regardless of success/failure
                 this.isLoading = false;
                 this.showSkeletons = false;
@@ -1917,7 +2106,6 @@ const initMaiga = () => {
                                     if (postsData) this.viewingUser.posts = postsData;
                                 }); // This fallback is now less critical as get_profile returns posts
                         }
-                        console.log("Fetching reels for user:", userId); // Debugging
                         // Fetch their reels
                         this.apiFetch(`/api/get_reels?user_id=${userId}`)
                             .then(reelsData => {
@@ -2179,11 +2367,11 @@ const initMaiga = () => {
             
             const formData = new FormData();
             formData.append('content', this.newPostContent);
+            formData.append('feeling', this.newPostFeeling);
             
             if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
             this.uploadProgress = 0;
 
-            console.log("Creating post/reel. isVideo:", isVideo, "mediaType:", this.mediaType, "postFile:", this.postFile); // Debugging
             // Use edited file if available, else original input
             if (this.postFile) {
                 formData.append('media', this.postFile);
@@ -2205,7 +2393,6 @@ const initMaiga = () => {
                     const data = JSON.parse(xhr.responseText);
                     if (data && data.success) {
                         this.showToast('Success', 'Post created successfully!', 'success');
-                        console.log("Post created successfully. Data:", data); // Debugging
                         this.posts.unshift({ ...data.post, author: this.user.name, avatar: this.user.avatar });
                         this.newPostContent = '';
                         this.selectedMedia = null;
@@ -2424,6 +2611,37 @@ const initMaiga = () => {
                 delete this.drafts[this.activeChat.id];
             }
         },
+        sendTypingSignal: Alpine.throttle(function() { 
+            if (!this.activeChat) return;
+            this.socket.emit('typing', { 
+                 group_id: this.activeChat.type === 'group' ? this.activeChat.id : null,
+                receiver_id: this.activeChat.type !== 'group' ? this.activeChat.id : null,
+                sender_id: this.user.id
+            });
+        }, 2000),
+
+        sendLocation() {
+            if (!navigator.geolocation) return this.showToast('Error', 'Geolocation not supported', 'error');
+            this.showToast('Location', 'Fetching coordinates...', 'info');
+            navigator.geolocation.getCurrentPosition(position => {
+                const { latitude, longitude } = position.coords;
+                const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                this.sendMessage(mapUrl, 'text', `📍 Shared Location: ${mapUrl}`);
+                this.showChatOptions = false;
+            }, () => this.showToast('Error', 'Unable to retrieve location', 'error'));
+        },
+        async submitSupportTicket() {
+            const title = prompt("Enter a short title for your problem:");
+            if (!title) return;
+            const desc = prompt("Please describe the issue:");
+            if (!desc) return;
+            const res = await this.apiFetch('/api/submit_support_ticket', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, description: desc })
+            });
+            if (res?.success) this.showToast('Success', 'Ticket submitted. Our team will review it.', 'success');
+        },
         handleMediaSelect(event, type) {
             const file = event.target.files[0];
             if (!file) return;
@@ -2517,6 +2735,12 @@ const initMaiga = () => {
                         });
                     }
                 });
+        },
+        async fetchBlockedUserDetails() {
+            const data = await this.apiFetch('/api/get_blocked_user_details');
+            if (data) {
+                this.blockedUserDetails = data;
+            }
         },
         markAsRead(chat) {
             if (!chat) return;
@@ -4037,7 +4261,9 @@ const initMaiga = () => {
             this.storyTimer = setInterval(() => {
                 if (!this.viewingStory || this.isPaused) return; // Check if viewingStory is null
                 this.storyProgress += 1;
-                if (this.storyProgress >= 100) {
+                // Duration for story segment is 5 seconds
+                const segmentDuration = 5000; // ms
+                if (this.storyProgress * 50 >= segmentDuration) { // 50ms interval * progress value
                     if (this.viewingStory.index < this.viewingStory.list.length - 1) {
                         this.viewingStory.index++;
                         this.storyProgress = 0;
@@ -4135,6 +4361,10 @@ const initMaiga = () => {
             this.isAddingStoryText = false;
             this.newStoryText = '';
         },
+        removeStoryOverlay(id) {
+            this.storyOverlays = this.storyOverlays.filter(o => o.id !== id);
+        },
+
         async postStory(audience) {
             if (!this.tempStory) return;
             this.isPostingStory = true;
@@ -4156,6 +4386,12 @@ const initMaiga = () => {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     const img = new Image();
+
+                    if (!this.tempStory.media) {
+                        // If no base media, it's a text-only story background
+                        await this.generateFinalStoryImage(null, this.newStoryContent, this.storyOverlays, ctx);
+                        fileToUpload = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                    } else {
                     
                     const imgLoaded = new Promise((resolve, reject) => {
                         img.onload = resolve; // Fixed: storyOverlays were not being merged
@@ -4194,6 +4430,7 @@ const initMaiga = () => {
                     if (blob) {
                         fileToUpload = new File([blob], "story_edited.jpg", { type: "image/jpeg" });
                     }
+                    } // End of else for !this.tempStory.media
                 } catch (e) {
                     this.showToast('Error', 'Failed to process image for story', 'error');
                     this.isPostingStory = false;
@@ -4891,7 +5128,7 @@ const initMaiga = () => {
                     // 2. Draw main text content
                     if (text && text.trim()) {
                         ctx.fillStyle = this.textStoryStyles[this.textStoryStyleIndex].color;
-                        ctx.font = 'bold 80px sans-serif';
+                        ctx.font = `bold 80px ${this.editorFonts[this.textStoryFontIndex]}`;
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.strokeStyle = 'rgba(0,0,0,0.2)';
@@ -4906,11 +5143,13 @@ const initMaiga = () => {
                         
                         ctx.save();
                         ctx.translate(x, y);
+                        ctx.rotate((overlay.rotation || 0) * Math.PI / 180);
+                        ctx.scale(overlay.scale || 1, overlay.scale || 1);
                         if (overlay.type === 'svg') {
-                            const size = 300 * (overlay.scale || 1);
+                            const size = 300;
                             ctx.drawImage(overlay.img, -size/2, -size/2, size, size);
                         } else {
-                            ctx.font = '150px sans-serif';
+                            ctx.font = `150px ${overlay.font || 'sans-serif'}`;
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
                             ctx.fillText(overlay.content, 0, 0);
@@ -5036,6 +5275,35 @@ const initMaiga = () => {
         },
         startDragOverlay(e, overlay) {
             const isTouchEvent = e.touches && e.touches.length > 0;
+
+            // Multi-touch handling for zoom and rotate
+            if (isTouchEvent && e.touches.length === 2) {
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const initialDist = this.getDistance(t1, t2);
+                const initialAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+                const startScale = overlay.scale || 1;
+                const startRotation = overlay.rotation || 0;
+
+                const pinchMove = (ev) => {
+                    if (ev.touches.length !== 2) return;
+                    ev.preventDefault();
+                    const nt1 = ev.touches[0];
+                    const nt2 = ev.touches[1];
+                    const newDist = this.getDistance(nt1, nt2);
+                    overlay.scale = Math.max(0.2, Math.min(10, startScale * (newDist / initialDist)));
+                    const newAngle = Math.atan2(nt2.clientY - nt1.clientY, nt2.clientX - nt1.clientX);
+                    overlay.rotation = startRotation + (newAngle - initialAngle) * (180 / Math.PI);
+                };
+                const pinchEnd = () => {
+                    window.removeEventListener('touchmove', pinchMove);
+                    window.removeEventListener('touchend', pinchEnd);
+                };
+                window.addEventListener('touchmove', pinchMove, { passive: false });
+                window.addEventListener('touchend', pinchEnd);
+                return;
+            }
+
             const startX = isTouchEvent ? e.touches[0].clientX : e.clientX;
             const startY = isTouchEvent ? e.touches[0].clientY : e.clientY;
             const startLeft = overlay.x;
@@ -5088,6 +5356,10 @@ const initMaiga = () => {
             const currentReaction = post.myReaction || null;
             const isUnreacting = currentReaction === reaction;
             const isReactingForTheFirstTime = !currentReaction;
+            
+            // Trigger Pop Animation
+            post.isAnimatingLike = true;
+            setTimeout(() => { post.isAnimatingLike = false; }, 400);
 
             // Optimistic UI update
             if (isUnreacting) {
@@ -5197,6 +5469,10 @@ const initMaiga = () => {
         startCall(type) {
             if (!this.activeChat) return;
             this.activeChat = { ...this.activeChat }; // Clone to ensure reactivity for call UI
+
+            const chatInList = this.chats.find(c => c.id == this.activeChat.id);
+            if (chatInList) chatInList.callInProgress = true;
+
             this.isCalling = true;
             this.isCallMinimized = false;
             this.isCallChatOpen = false;
@@ -5239,6 +5515,13 @@ const initMaiga = () => {
                         avatar: this.user.avatar,
                         type: type
                     });
+
+                    this.callTimeoutTimer = setTimeout(() => {
+                        if (this.isCalling && this.callStatus === 'Calling...') {
+                            this.showToast('No Answer', 'The user did not answer the call.', 'info');
+                            this.endCall();
+                        }
+                    }, 30000); // 30 seconds timeout
                 });
             }).catch(err => {
                 let errorMsg = 'Could not access camera/microphone.';
@@ -5306,6 +5589,12 @@ const initMaiga = () => {
             const callData = this.incomingCall;
             this.incomingCall = null;
             document.getElementById('ringing-sound')?.pause();
+            clearInterval(this.vibrationInterval);
+            if (navigator.vibrate) navigator.vibrate(0); // Stop vibration
+            clearTimeout(this.callTimeoutTimer);
+
+            const chatInList = this.chats.find(c => c.id == callData.caller_id);
+            if (chatInList) chatInList.callInProgress = true;
 
             // Setup UI
             let caller = this.friends.find(f => f.id == callData.caller_id) || { id: callData.caller_id, name: callData.name, avatar: callData.avatar };
@@ -5326,7 +5615,7 @@ const initMaiga = () => {
                 this.setupPeerConnection();
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
-                this.peerConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(callData.sdp)));
+                this.peerConnection.setRemoteDescription(new RTCSessionDescription(callData.sdp));
                 this.peerConnection.createAnswer().then(answer => {
                     this.peerConnection.setLocalDescription(answer);
                     this.socket.emit('answer_call', {
@@ -5340,18 +5629,28 @@ const initMaiga = () => {
         rejectCall() {
             if (!this.incomingCall) return;
             this.socket.emit('reject_call', { callId: this.incomingCall.id, to: this.incomingCall.caller_id });
+            clearInterval(this.vibrationInterval);
+            if (navigator.vibrate) navigator.vibrate(0);
             this.incomingCall = null;
             document.getElementById('ringing-sound')?.pause();
         },
-        endCall() {
+        endCall(shouldLog = true, shouldEmit = true) {
+            if (!this.isCalling && !this.incomingCall) return;
+
+            clearInterval(this.vibrationInterval);
+            if (navigator.vibrate) navigator.vibrate(0);
+            clearTimeout(this.callTimeoutTimer);
+
             if (this.isCallRecording && this.callRecorder && this.callRecorder.state !== 'inactive') {
                 this.callRecorder.stop();
                 this.isCallRecording = false;
             }
             
             // Notify via Socket
-            const wasActiveChat = this.activeChat;
-            if (this.activeChat) {
+            const chatInList = this.chats.find(c => c.id == this.activeChat?.id);
+            if (chatInList) chatInList.callInProgress = false;
+
+            if (this.activeChat && shouldEmit) {
                 this.socket.emit('end_call', { 
                     callId: this.currentCallId, 
                     to: this.activeChat.id, 
@@ -5378,7 +5677,7 @@ const initMaiga = () => {
             this.$refs.remoteVideo.pause();
             this.$refs.remoteVideo.srcObject = null;
 
-            if (this.activeChat) {
+            if (this.activeChat && shouldLog) {
                 if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
                 
                 let messageContent = '';
@@ -5528,7 +5827,6 @@ const initMaiga = () => {
                     const video = entry.target.querySelector('video');
                     if (!video) return;
 
-                    console.log("Reel video element found:", video); // Debugging
                     const reelId = entry.target.dataset.reelId;
                     const reel = this.reels.find(r => r.id == reelId);
 
@@ -5636,7 +5934,18 @@ const initMaiga = () => {
                     this.isLoadingMoreReels = false;
                 });
         },
+        async fetchSecurityData() {
+            const data = await this.apiFetch('/api/get_security_data');
+            if (data) this.loginSessions = data;
+        },
         handleScroll(el) {
+            // Contextual Header Logic
+            let st = el.scrollTop;
+            if (st > this.lastScrollTop && st > 100) { this.isHeaderHidden = true; }
+            else { this.isHeaderHidden = false; }
+            this.lastScrollTop = st <= 0 ? 0 : st;
+
+            this.hasScrolled = el.scrollTop > 10;
             this.showScrollTop = (el.scrollTop > 300);
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
                 this.loadMorePosts();

@@ -4,6 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const webpush = require('web-push');
+const fetch = require('node-fetch'); // Ensure node-fetch is available
 const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, s3Client } = require('../../models');
@@ -58,6 +59,37 @@ const formatTime = (date) => {
     return past.toLocaleDateString();
 };
 
+// Helper to extract a URL from text
+function extractUrl(text) {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const match = urlRegex.exec(text);
+    return match ? match[0] : null;
+}
+
+// Helper to fetch and parse Open Graph metadata
+async function getLinkPreview(url) {
+    try {
+        const response = await fetch(url);
+        const html = await response.text();
+
+        const ogTags = {};
+        const metaRegex = /<meta\s+(?:property|name)="og:([^"]+)"\s+content="([^"]*)"\s*\/?>/gi;
+        let match;
+        while ((match = metaRegex.exec(html)) !== null) {
+            ogTags[match[1]] = match[2];
+        }
+
+        return {
+            url: url,
+            title: ogTags.title || null,
+            description: ogTags.description || null,
+            image: ogTags.image || null
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
 // --- Routes ---
 
 router.get('/get_user', isAuthenticated, async (req, res) => {
@@ -102,6 +134,44 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
     }
 });
 
+router.post('/update_privacy', isAuthenticated, async (req, res) => {
+    try {
+        const { privateAccount, activityStatus, location } = req.body;
+        // Note: You may need to add these fields to your userSchema first
+        await User.findByIdAndUpdate(req.session.userId, { 
+            $set: { 'privacy_settings': { privateAccount, activityStatus, location } } 
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+router.post('/update_language', isAuthenticated, async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(req.session.userId, { $set: { language: req.body.language } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+router.post('/update_recent_stickers', isAuthenticated, async (req, res) => {
+    try {
+        await User.findByIdAndUpdate(req.session.userId, { $set: { recent_stickers: req.body.stickers } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
+router.post('/submit_support_ticket', isAuthenticated, async (req, res) => {
+    try {
+        const report = new Report({
+            reporter: req.session.userId,
+            reason: 'Support Ticket: ' + req.body.title,
+            details: req.body.description,
+            status: 'open'
+        });
+        await report.save();
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false }); }
+});
+
 router.get('/get_posts', isAuthenticated, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -127,7 +197,8 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
             comments: p.comments_count || 0,
             views: p.views || 0,
             saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
-            myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null
+            myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
+            link_preview: p.link_preview // Include link preview
         })));
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' });
@@ -147,7 +218,8 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
             comments: post.comments_count || 0,
             views: post.views || 0,
             saved: post.saved_by.some(id => id.toString() === req.session.userId?.toString()),
-            myReaction: post.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null
+            myReaction: post.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
+            link_preview: post.link_preview // Include link preview
         });
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' });
@@ -164,7 +236,15 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
         user: req.session.userId,
         content: req.body.content,
         media: mediaUrl,
-        media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 'image') : null
+        media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 'image') : null,
+        feeling: req.body.feeling,
+    });
+
+    // Generate link preview if a URL is present in the content
+    const detectedUrl = extractUrl(req.body.content);
+    if (detectedUrl) {
+        const linkPreview = await getLinkPreview(detectedUrl);
+        if (linkPreview) post.link_preview = linkPreview;
     });
     await post.save();
     const populatedPost = await post.populate('user', 'name first_name surname avatar is_verified');
@@ -184,7 +264,8 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
         id: populatedPost._id, user_id: populatedPost.user?._id, author: populatedPost.user?.full_name || 'Deleted User', avatar: populatedPost.user?.avatar,
         content: populatedPost.content, media: populatedPost.media, 
         media_type: populatedPost.media_type || (req.file?.mimetype.startsWith('video') ? 'video' : 'image'),
-        time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null,
+        time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null, 
+        link_preview: populatedPost.link_preview, // Include link preview
         user_id: populatedPost.user?._id, // Ensure user_id is returned for reels to correctly filter in profile
         verified: populatedPost.user?.is_verified ?? false
     }});
@@ -1356,6 +1437,16 @@ router.post('/unblock_user', isAuthenticated, async (req, res) => {
 router.get('/get_blocked_users', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId).populate('blocked_users', 'name avatar');
     res.json(user.blocked_users.map(u => u._id));
+});
+
+router.get('/get_blocked_user_details', isAuthenticated, async (req, res) => {
+    const user = await User.findById(req.session.userId).populate('blocked_users', 'name avatar username dept');
+    res.json(user.blocked_users.map(u => ({ id: u._id, name: u.name, avatar: u.avatar, username: u.username, dept: u.dept })));
+});
+
+router.get('/get_security_data', isAuthenticated, async (req, res) => {
+    const user = await User.findById(req.session.userId).select('login_sessions');
+    res.json(user.login_sessions || []);
 });
 
 router.get('/get_notifications', isAuthenticated, async (req, res) => {
