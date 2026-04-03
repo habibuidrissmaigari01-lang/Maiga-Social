@@ -1174,7 +1174,8 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
         const stories = await Story.find({
             user: { $in: creators },
             createdAt: { $gte: yesterday }
-        }).populate('user', 'name avatar close_friends');
+        }).populate('user', 'name avatar close_friends')
+          .sort({ createdAt: 1 }); // Sort oldest to newest so .length-1 is the latest
 
         // Filter stories based on privacy settings
         const filteredStories = stories.filter(story => {

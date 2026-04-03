@@ -117,7 +117,6 @@ const initMaiga = () => {
         typingUsers: [],
         blockedUserDetails: [],
         lastBusyCall: null,
-        typingIndicatorTimeout: null,
 
         formatLastSeen(date) {
             if (!date) return '';
@@ -253,9 +252,6 @@ const initMaiga = () => {
             if (!this.activeChat?.id || !this.chatMessages?.[this.activeChat.id]) return null;
             return this.chatMessages[this.activeChat.id].find(m => m.pinned);
         },        
-        get savedPosts() { 
-            return (this.savedPostList || []).length > 0 ? this.savedPostList : (this.posts || []).filter(p => p.saved);
-        },
         async fetchCallHistory() {
             const data = await this.apiFetch('/api/get_call_history');
             if (data) this.callHistory = data;
@@ -1073,7 +1069,6 @@ const initMaiga = () => {
             }
         },
 
-        typingIndicatorTimeout: null,
         isRecording: false,
         mediaRecorder: null,
         audioChunks: [],
@@ -3734,7 +3729,7 @@ const initMaiga = () => {
         redial() {
             if (!this.lastBusyCall) return;
             this.startCall(this.lastBusyCall.type);
-            this.lastBusyCall = null;
+            this.lastBusyCall = null;  
         },
         toggleSelectAll() {
             if (this.newGroup.members.length === this.filteredFollowingForGroup.length) {
@@ -4292,6 +4287,15 @@ const initMaiga = () => {
             this.viewingStory = null;
             this.showSeenList = false;
         },
+        // Safe helper to calculate progress bar width without crashing when viewingStory is null
+        getStoryProgressStyle(idx) {
+            if (!this.viewingStory || !this.viewingStory.list) return 'width: 0%';
+            const currentIndex = this.viewingStory.index || 0;
+            let width = '0%';
+            if (idx < currentIndex) width = '100%';
+            else if (idx === currentIndex) width = (this.storyProgress || 0) + '%';
+            return `width: ${width}`;
+        },
         deleteCurrentStory() {
             if (!this.viewingStory) return;
             const currentStory = this.viewingStory.list[this.viewingStory.index];
@@ -4525,6 +4529,7 @@ const initMaiga = () => {
                     owners.push({ user: f, stories: f.stories }); // Fixed: nextUserStory was not working
                 }
             });
+            if (!this.viewingStory) return;
             const currentIndex = owners.findIndex(o => o.user.name === this.viewingStory.user.name);
             if (currentIndex !== -1 && currentIndex < owners.length - 1) {
                 const next = owners[currentIndex + 1];
@@ -4534,7 +4539,7 @@ const initMaiga = () => {
             }
         },
         didILikeThisStory() {
-            if (!this.viewingStory || this.viewingStory.user.id === this.user.id) return false;
+            if (!this.viewingStory || !this.viewingStory.list || this.viewingStory.user.id === this.user.id) return false;
             const currentStory = this.viewingStory.list[this.viewingStory.index]; // Fixed: didILikeThisStory was not working
             if (!currentStory.seenBy) return false;
             const meAsViewer = currentStory.seenBy.find(v => v.name === this.user.name);
@@ -5336,7 +5341,7 @@ const initMaiga = () => {
             window.addEventListener('touchmove', moveHandler, { passive: false }); window.addEventListener('touchend', upHandler);
         },
         handleStoryTap(e) {
-            if (Date.now() - this.pressStartTime > 200) return;
+            if (!this.viewingStory || Date.now() - this.pressStartTime > 200) return;
             if (this.zoomScale > 1) {
                 return;
             }
@@ -5950,8 +5955,7 @@ const initMaiga = () => {
         handleScroll(el) {
             // Contextual Header Logic
             let st = el.scrollTop;
-            if (st > this.lastScrollTop && st > 100) { this.isHeaderHidden = true; }
-            else { this.isHeaderHidden = false; }
+            this.isHeaderHidden = false; // Keep header pinned at all times
             this.lastScrollTop = st <= 0 ? 0 : st;
 
             this.hasScrolled = el.scrollTop > 10;
