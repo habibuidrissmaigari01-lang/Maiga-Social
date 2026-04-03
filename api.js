@@ -204,9 +204,10 @@ io.on('connection', (socket) => {
             socket.join(`group_${group._id}`);
         });
 
-        await User.findByIdAndUpdate(userId, { online: true });
+        const now = new Date();
+        await User.findByIdAndUpdate(userId, { online: true, last_seen: now });
         // Broadcast to everyone that this user is now online
-        socket.broadcast.emit('user_status', { userId: userId, status: 'online' });
+        socket.broadcast.emit('user_status', { userId: userId, status: 'online', lastSeen: now });
     });
     socket.on('join_group', (groupId) => socket.join(`group_${groupId}`));
     socket.on('typing', (data) => {
@@ -288,13 +289,18 @@ io.on('connection', (socket) => {
         }
     });
     socket.on('update_last_seen', () => {
-        if (socket.userId) User.findByIdAndUpdate(socket.userId, { last_seen: new Date(), online: true }).exec();
+        if (socket.userId) {
+            const now = new Date();
+            User.findByIdAndUpdate(socket.userId, { last_seen: now, online: true }).exec();
+            socket.broadcast.emit('user_status', { userId: socket.userId, status: 'online', lastSeen: now });
+        }
     });
     socket.on('disconnect', () => {
         if (socket.userId) {
-            User.findByIdAndUpdate(socket.userId, { online: false }).exec();
+            const now = new Date();
+            User.findByIdAndUpdate(socket.userId, { online: false, last_seen: now }).exec();
             // Notify everyone that this user went offline
-            socket.broadcast.emit('user_status', { userId: socket.userId, status: 'offline' });
+            socket.broadcast.emit('user_status', { userId: socket.userId, status: 'offline', lastSeen: now });
             if (socket.typingTimeout) clearTimeout(socket.typingTimeout); // Clear any pending typing timeouts
         }
     });

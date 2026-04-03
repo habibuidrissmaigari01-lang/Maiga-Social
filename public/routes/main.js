@@ -4,7 +4,6 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const webpush = require('web-push');
-const fetch = require('node-fetch'); // Ensure node-fetch is available
 const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, s3Client } = require('../../models');
@@ -375,6 +374,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
+                last_seen: other.last_seen,
                 lastMsg: prefix + (m.media_type === 'text' ? m.content : `<i>Sent a ${m.media_type}</i>`), 
                 lastMsgId: m._id,
                 lastMsgByMe: isMe,
@@ -449,6 +449,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
             bio: user.bio,
             dept: user.dept,
             online: user.online,
+            last_seen: user.last_seen,
             is_admin: user.is_admin,
             followers_count: user.followers.length,
             following_count: user.following.length,

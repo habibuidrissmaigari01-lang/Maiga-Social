@@ -577,7 +577,7 @@
                         <span x-show="typingUsers.length > 0" x-transition class="text-green-600 font-medium">
                             Typing...
                         </span>
-                        <span x-show="typingUsers.length === 0" x-text="activeChat?.status === 'online' ? 'Online' : 'Offline'"></span>
+                        <span x-show="typingUsers.length === 0" x-text="activeChat?.status === 'online' ? 'Online' : (activeChat?.last_seen ? 'Last seen ' + formatLastSeen(activeChat.last_seen) : 'Offline')"></span>
                     </p>
                 </div>
                 <div class="flex space-x-2">

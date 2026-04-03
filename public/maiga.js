@@ -105,6 +105,7 @@ const initMaiga = () => {
         storyMediaType: null,
         animatedStickers: [], // Initialize animatedStickers
         drafts: {},
+        currentTime: Date.now(),
         touchStartX: 0,
         touchStartY: 0,
         lastScrollTop: 0,
@@ -114,6 +115,17 @@ const initMaiga = () => {
         hasScrolled: false,
         isBouncing: false,
         typingIndicatorTimeout: null,
+
+        formatLastSeen(date) {
+            if (!date) return '';
+            const now = this.currentTime;
+            const d = new Date(date);
+            const diff = (now - d) / 1000;
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return d.toLocaleDateString();
+        },
 
          scrubReel(reel, event) {
             const video = document.getElementById('reel-video-' + reel.id);
@@ -1726,18 +1738,21 @@ const initMaiga = () => {
                 const chat = this.chats.find(c => c.id == data.userId);
                 if (chat && chat.type !== 'group') { // Only update for direct chats
                     chat.status = data.status;
+                    chat.last_seen = data.lastSeen;
                 }
 
                 // Update Friends/Suggestions List
                 const friend = this.friends.find(f => f.id == data.userId);
                 if (friend) {
                     friend.online = data.status === 'online';
+                    friend.last_seen = data.lastSeen;
                 }
 
                 // Update Following List
                 const following = this.followingList.find(f => f.id == data.userId);
                 if (following) {
                     following.online = data.status === 'online';
+                    following.last_seen = data.lastSeen;
                 }
             });
 
@@ -1828,6 +1843,12 @@ const initMaiga = () => {
                 localStorage.setItem('maiga_sidebar_collapsed', value);
             });
             
+            // Background activity heartbeat and local time update
+            setInterval(() => {
+                this.updateLastSeen();
+                this.currentTime = Date.now();
+            }, 60000);
+            
             // Haptic feedback when switching tabs
             this.$watch('activeTab', () => {
                 if (navigator.vibrate) navigator.vibrate(10);
@@ -1878,15 +1899,6 @@ const initMaiga = () => {
                 return `width: ${width}%; left: ${index * width}%;`;
             };
 
-            // Professional Sync: Watch privacy settings and save to backend
-            this.$watch('privacySettings', (value) => {
-                this.apiFetch('/api/update_privacy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(value)
-                });
-            }, { deep: true });
-             
             // Auto-sync Privacy, Language, and Stickers
             this.$watch('privacySettings', (value) => {
                 this.apiFetch('/api/update_privacy', {
@@ -2146,15 +2158,7 @@ const initMaiga = () => {
                 this.socket.emit('update_last_seen');
             }
         },
-        sendTypingSignal: Alpine.throttle(function() { 
-            if (!this.activeChat) return;
-            this.socket.emit('typing', { 
-                 group_id: this.activeChat.type === 'group' ? this.activeChat.id : null,
-                receiver_id: this.activeChat.type !== 'group' ? this.activeChat.id : null,
-                is_group: this.activeChat.type === 'group',                is_group: this.activeChat.type === 'group',
-                sender_id: this.user.id
-            });
-        }, 2000),
+        // sendTypingSignal was duplicated here (removed first instance)
 
         showToast(title, message, type = 'info') {
             const id = Date.now();
