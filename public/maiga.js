@@ -114,6 +114,9 @@ const initMaiga = () => {
         loginSessions: [],
         hasScrolled: false,
         isBouncing: false,
+        typingUsers: [],
+        blockedUserDetails: [],
+        lastBusyCall: null,
         typingIndicatorTimeout: null,
 
         formatLastSeen(date) {
@@ -3727,6 +3730,11 @@ const initMaiga = () => {
             this.recentSearches = this.recentSearches.filter(t => t !== term);
             this.recentSearches.unshift(term);
             if (this.recentSearches.length > 5) this.recentSearches.pop();
+            },
+        redial() {
+            if (!this.lastBusyCall) return;
+            this.startCall(this.lastBusyCall.type);
+            this.lastBusyCall = null;
         },
         toggleSelectAll() {
             if (this.newGroup.members.length === this.filteredFollowingForGroup.length) {
