@@ -89,6 +89,19 @@ const initMaiga = () => {
             video.currentTime = (x / rect.width) * video.duration;
         },
 
+        retryReelLoad(reel) {
+            reel.hasError = false;
+            reel.isLoading = true;
+            const video = document.getElementById('reel-video-' + reel.id);
+            if (video) {
+                const originalSrc = reel.media.split('?')[0]; // Remove previous retry params
+                video.src = ''; // Reset
+                video.load();
+                // Force a reload by appending a unique timestamp
+                video.src = `${originalSrc}?retry=${Date.now()}`;
+            }
+        },
+
         formatNumber(num) {
             if (!num || num < 1) return '0';
             if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
@@ -1815,7 +1828,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_muted_chats').then(d => { this.mutedChats = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_pinned_chats').then(d => { this.pinnedChats = Array.isArray(d) ? d : []; });
                 this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { 
-                    this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: ''}));
+                    this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver());
                 });
                 console.log("Initial reels loaded:", this.reels); // Debugging
@@ -2210,7 +2223,8 @@ const initMaiga = () => {
                                 isLoading: true,
                                 progress: 0,
                                 showStatusIcon: false,
-                                lastAction: ''
+                                lastAction: '',
+                                hasError: false
                             };
                             this.reels.unshift(newReel);
                             this.myReels.unshift(newReel);
@@ -3066,7 +3080,7 @@ const initMaiga = () => {
                     const video = document.getElementById('reel-video-' + reel.id);
                     if (video) {
                         const isPaused = video.paused;
-                        isPaused ? video.play().catch(e => {}) : video.pause();
+                        isPaused ? video.play().catch(error => console.error("Playback error:", error)) : video.pause();
                         reel.lastAction = isPaused ? 'play' : 'pause';
                         reel.showStatusIcon = true;
                         setTimeout(() => reel.showStatusIcon = false, 800);
@@ -5519,10 +5533,11 @@ const initMaiga = () => {
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
-                        video.play().catch(e => {});
+                        video.play().catch(error => {
+                            console.error(`Error playing reel ${reelId}:`, error);
+                        });
 
                         // Swipe Hint Logic
-                        console.error(`Error playing reel ${reelId}:`, e); // Log playback errors
                         clearTimeout(this.reelHintTimer);
                         this.showSwipeHint = false;
                         this.reelHintTimer = setTimeout(() => {
@@ -5613,7 +5628,7 @@ const initMaiga = () => {
             this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
-                        const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: ''}));
+                        const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                         this.reels = [...this.reels, ...mapped];
                     }
                     this.isLoadingMoreReels = false;

@@ -4,7 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const webpush = require('web-push');
-const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, s3Client } = require('../../models');
 
@@ -29,6 +29,19 @@ const uploadToR2 = async (file, folder) => {
         ContentType: file.mimetype,
     }));
     return `${BASE_PUBLIC_URL}/${key}`;
+};
+
+// Backend Helper: Check if a file actually exists in the R2 bucket
+const checkR2FileExists = async (key) => {
+    try {
+        await s3Client.send(new HeadObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: key,
+        }));
+        return true;
+    } catch (err) {
+        return false;
+    }
 };
 
 // Helper

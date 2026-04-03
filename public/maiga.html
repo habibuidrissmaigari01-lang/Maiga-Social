@@ -2281,11 +2281,21 @@
                         @playing="reel.isLoading = false"
                         @canplay="reel.isLoading = false"
                         @timeupdate="reel.progress = ($el.currentTime / $el.duration) * 100"
+                        @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
                     
                     <!-- Loading Spinner Overlay -->
                     <div x-show="reel.isLoading" x-transition.opacity class="absolute inset-0 z-20 flex items-center justify-center bg-black/10 pointer-events-none">
                         <i class="fa-solid fa-circle-notch fa-spin text-white/80 text-4xl"></i>
+                    </div>
+
+                    <!-- Retry Load Overlay -->
+                    <div x-show="reel.hasError" x-transition.opacity class="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <i class="fa-solid fa-circle-exclamation text-rose-500 text-4xl mb-4"></i>
+                        <p class="text-white text-xs font-bold mb-4 px-10 text-center">Unable to load video. Check your connection.</p>
+                        <button @click.stop="retryReelLoad(reel)" class="bg-blue-600 text-white px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest active:scale-95 transition-all shadow-lg">
+                            <i class="fa-solid fa-rotate-right mr-2"></i> Retry
+                        </button>
                     </div>
 
                     <!-- Pause/Play Status Icon Overlay -->
