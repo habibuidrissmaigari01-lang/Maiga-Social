@@ -163,7 +163,7 @@ router.post('/register', [
 
         await user.save();
         await Otp.deleteOne({ _id: record._id });
-        res.json({ message: 'Registration successful' });
+        res.json({ success: true, message: 'Registration successful' });
     } catch (err) {
         res.status(400).json({ message: 'Registration failed', error: err.message });
     }
@@ -234,7 +234,7 @@ router.post('/forgot-password', otpRequestLimiter, async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     await Otp.findOneAndUpdate({ identity: forgot_identity.toLowerCase(), type: 'password_reset' }, { otp, attempts: 0, createdAt: new Date() }, { upsert: true });
     await sendEmail(forgot_identity, 'Password Reset', `Code: ${otp}`);
-    res.json({ message: 'Reset code sent.' });
+    res.json({ success: true, message: 'Reset code sent.' });
 });
 
 router.post('/verify-otp', otpVerificationLimiter, async (req, res) => {
@@ -254,7 +254,7 @@ router.post('/verify-otp', otpVerificationLimiter, async (req, res) => {
         return res.status(400).json({ message: 'Invalid code.' });
     }
 
-    res.json({ message: 'Code verified.' });
+    res.json({ success: true, message: 'Code verified.' });
 });
 
 router.post('/reset-password', otpVerificationLimiter, async (req, res) => {
@@ -285,7 +285,7 @@ router.post('/reset-password', otpVerificationLimiter, async (req, res) => {
     }
     
     await Otp.deleteOne({ _id: record._id });
-    res.json({ message: 'Password reset successfully.' });
+    res.json({ success: true, message: 'Password reset successfully.' });
 });
 
 router.post('/change_password', async (req, res) => {
