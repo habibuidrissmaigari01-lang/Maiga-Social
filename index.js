@@ -18,8 +18,16 @@ export default {
 
             // Defensive: Remove trailing slashes and accidentally included internal ports
             const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
+            
             try {
-                return await fetch(new Request(target, request));
+                const headers = new Headers(request.headers);
+                headers.delete('Host'); // Ensure Railway routes the request correctly
+
+                return await fetch(new Request(target, {
+                    method: request.method,
+                    headers: headers,
+                    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
+                }));
             } catch (e) {
                 return jsonError('WebSocket Proxy Error', 502);
             }

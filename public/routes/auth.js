@@ -183,10 +183,8 @@ router.post('/login', loginLimiter, async (req, res) => {
         req.session.regenerate(async (err) => {
             if (err) return res.status(500).json({ message: 'Session error' });
 
-            // Handle Remember Me
-            if (remember_me) {
-                req.session.cookie.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 Days
-            }
+            // Every login is persistent by default to support PWA installations.
+            // The long-lived duration is handled by the default config in api.js.
 
             req.session.userId = user._id.toString();
             user.online = true;

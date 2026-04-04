@@ -85,7 +85,8 @@ app.use(session({
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 365 // Persist for 1 year by default
     }
 }));
 
@@ -196,18 +197,22 @@ app.get('/api/health', async (req, res) => {
 io.on('connection', (socket) => {
     socket.on('join_room', async (userId) => {
         socket.join(userId);
-        socket.userId = userId;
-        
-        // Automatically join rooms for all groups the user is a member of
-        const userGroups = await Group.find({ 'members.user': userId }, '_id');
-        userGroups.forEach(group => {
-            socket.join(`group_${group._id}`);
-        });
 
-        const now = new Date();
-        await User.findByIdAndUpdate(userId, { online: true, last_seen: now });
-        // Broadcast to everyone that this user is now online
-        socket.broadcast.emit('user_status', { userId: userId, status: 'online', lastSeen: now });
+        // Only perform database operations if the room name is a valid MongoDB User ID
+        if (mongoose.Types.ObjectId.isValid(userId)) {
+            socket.userId = userId;
+
+            // Automatically join rooms for all groups the user is a member of
+            const userGroups = await Group.find({ 'members.user': userId }, '_id');
+            userGroups.forEach(group => {
+                socket.join(`group_${group._id}`);
+            });
+
+            const now = new Date();
+            await User.findByIdAndUpdate(userId, { online: true, last_seen: now });
+            // Broadcast to everyone that this user is now online
+            socket.broadcast.emit('user_status', { userId: userId, status: 'online', lastSeen: now });
+        }
     });
     socket.on('join_group', (groupId) => socket.join(`group_${groupId}`));
     socket.on('typing', async (data) => {

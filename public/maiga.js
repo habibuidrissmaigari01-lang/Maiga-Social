@@ -968,8 +968,6 @@ const initMaiga = () => {
         },
 
         takeCameraPhoto() {
-            // Trigger Flash Animation
-            document.getElementById('shutter-sound')?.play().catch(()=>{});
             this.showCameraFlash = true;
             setTimeout(() => this.showCameraFlash = false, 50);
 
@@ -1042,9 +1040,7 @@ const initMaiga = () => {
                     this.musicSourceNode = this.audioMixer.createMediaElementSource(this.$refs.cameraMusicPlayer);
                 }
                 this.musicSourceNode.connect(this.audioDestination);
-                this.musicSourceNode.connect(this.audioMixer.destination); // Play locally so user can hear it
                 this.$refs.cameraMusicPlayer.currentTime = 0;
-                this.$refs.cameraMusicPlayer.play();
             }
 
             // 3. Attach mixed audio to the video stream
