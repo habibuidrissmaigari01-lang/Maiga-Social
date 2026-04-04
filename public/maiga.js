@@ -115,6 +115,7 @@ const initMaiga = () => {
         musicTracks: [],
         animatedStickers: [],
         mostActiveUsers: [],
+        loginSessions: [],
 
         // UI Controls
         isMessaging: false,
