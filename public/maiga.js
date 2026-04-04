@@ -71,69 +71,135 @@ const initMaiga = () => {
             });
         },
         installPrompt: null,
-        // Initialize State Variables
+        // Core App State
+        user: { id: 0, name: '', username: '', nickname: '', avatar: '', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
+        friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         darkMode: localStorage.getItem('darkMode') === 'true',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
+        isRightSidebarCollapsed: false,
+        activeTab: localStorage.getItem('maiga_active_tab') || 'home',
+        activeMessageTab: 'all',
+        isLoading: true,
+        dataLoaded: false,
+        loadProgress: 0,
+        showLoadingRetry: false,
+        showSkeletons: true,
+        isRefreshing: false,
+        isOffline: !navigator.onLine,
+        isSocketConnected: false,
+        currentTime: Date.now(),
+        typingUsers: {},
+        drafts: {},
+        toasts: [],
+        recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
 
-        // Missing UI State Variables
-        friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
-        trendingTopics: [], // Initialize trendingTopics
-        savedPostList: [], // Initialize savedPostList for savedPosts getter
-        isReporting: false, // Initialize isReporting
-        pinnedChats: [], // Initialize pinnedChats for isPinned getter
-        homeSearchTab: 'users',
-        friendsTab: 'suggestions',
-        friendsSearchQuery: '',
-        groupSearchQuery: '',
-        showStoryStickerPicker: false,
-        connectionSearchQuery: '',
+        // Feature Lists
+        posts: [],
+        reels: [],
+        groups: [],
+        chats: [],
+        notifications: [],
+        trendingTopics: [],
+        savedPostList: [],
         connectionList: [],
         followingList: [],
-        swipeOffset: 0,
-        showMusicPicker: false,
-        vibrationInterval: null,
-        callTimeoutTimer: null,
-        musicPickerSource: 'camera',
+        blockedUsers: [],
+        blockedUserDetails: [],
+        callHistory: [],
+        starredMessages: [],
+        archivedChats: [],
+        mutedChats: [],
+        pinnedChats: [],
+        forumTopics: [],
         musicTracks: [],
-        isCreatingStory: false,
+        animatedStickers: [],
+        mostActiveUsers: [],
+
+        // UI Controls
+        isMessaging: false,
+        isSideMenuOpen: false,
+        isReporting: false,
         isCreatingPost: false,
-        textStoryStyleIndex: 0,
-        textStoryFontIndex: 0,
+        isCreatingStory: false,
+        isCreatingGroup: false,
+        isEditingProfile: false,
+        isEditingGroupInfo: false,
+        isAddingGroupMembers: false,
+        isMediaEditorOpen: false,
+        isCalling: false,
+        isCallMinimized: false,
+        isCallChatOpen: false,
+        showStoryStickerPicker: false,
+        showMusicPicker: false,
+        showStickerPicker: false,
+        showCommentStickers: false,
+        showLikesModal: false,
+        showShareModal: false,
+        showReelOptions: false,
+        showPostOptions: false,
+        showChatOptions: false,
+        showScrollTop: false,
+        showGroupInfo: false,
+        showMsgInfo: false,
+        showFollowerList: null,
+
+        // Search & Filter State
+        homeSearchQuery: '',
+        homeSearchTab: 'users',
+        friendsSearchQuery: '',
+        friendsTab: 'suggestions',
+        groupSearchQuery: '',
+        connectionSearchQuery: '',
+        chatSearchQuery: '',
+        chatStarFilter: false,
+        addMemberSearchQuery: '',
+
+        // Form & Content State
+        newPostContent: '',
+        newPostFeeling: '',
+        postBgStyleIndex: -1,
+        newMessage: '',
+        commentInput: '',
         storyFile: null,
         storyMediaPreview: null,
         storyMediaType: null,
-        animatedStickers: [], // Initialize animatedStickers
-        drafts: {},
-        currentTime: Date.now(),
+        editorFile: null,
+        editorPreviewUrl: null,
+        editorType: null,
+        textStoryStyleIndex: 0,
+        textStoryFontIndex: 0,
+        musicPickerSource: 'camera',
+
+        // Interaction & Timing
+        pullDistance: 0,
+        pullStartY: 0,
         touchStartX: 0,
         touchStartY: 0,
         lastScrollTop: 0,
         isHeaderHidden: false,
-        newPostFeeling: '',
-        loginSessions: [],
         hasScrolled: false,
         isBouncing: false,
-        typingUsers: {}, // Changed to object mapping chat_id -> array of user names
-        blockedUserDetails: [],
+        swipeOffset: 0,
+        isDragging: false,
+        isPaused: false,
         lastBusyCall: null,
+        vibrationInterval: null,
+        callTimeoutTimer: null,
 
-        dataLoaded: false, // New flag to indicate data is loaded
-        loadProgress: 0,
-        showLoadingRetry: false,
-        // Admin Panel State Initialization
+        // Admin State
         totalUsers: 0,
         currentPage: 1,
         itemsPerPage: 10,
         adminUsers: [],
         flaggedPosts: [],
         adminNotifications: [],
-        settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true },
-        adminSearchQuery: '',
-        adminFilter: 'all',
         accountTypeStats: { maiga: 0, ysu: 0 },
         postsPerDayStats: { labels: [], data: [] },
         weeklySignups: { labels: [], data: [] },
+        settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true },
+        adminSearchQuery: '',
+        adminFilter: 'all',
 
         formatLastSeen(date) {
             if (!date) return '';
@@ -1004,9 +1070,7 @@ const initMaiga = () => {
                     this.musicSourceNode = this.audioMixer.createMediaElementSource(this.$refs.cameraMusicPlayer);
                 }
                 this.musicSourceNode.connect(this.audioDestination);
-                this.musicSourceNode.connect(this.audioMixer.destination); // Play locally so user can hear it
                 this.$refs.cameraMusicPlayer.currentTime = 0;
-                this.$refs.cameraMusicPlayer.play();
             }
 
             // 3. Attach mixed audio to the video stream
@@ -2439,8 +2503,23 @@ const initMaiga = () => {
             reader.onload = (e) => this.newGroup.avatarPreview = e.target.result;
             reader.readAsDataURL(file);
         },
-        createPost() {
+        async createPost() {
             if ((!this.newPostContent && !this.selectedMedia) || this.isUploadingPost || this.isUploadingReel) return;
+
+            // If background style is selected and no other media is picked, bake text into a background image
+            if (this.postBgStyleIndex !== -1 && !this.selectedMedia) {
+                try {
+                    const originalStoryIdx = this.textStoryStyleIndex;
+                    this.textStoryStyleIndex = this.postBgStyleIndex;
+                    // Reuse story generator logic for colorful posts
+                    this.postFile = await this.generateFinalStoryImage(null, this.newPostContent, []);
+                    this.mediaType = 'image';
+                    this.textStoryStyleIndex = originalStoryIdx;
+                } catch (e) {
+                    this.showToast('Error', 'Failed to generate background post.', 'error');
+                    return;
+                }
+            }
 
             const content = this.newPostContent;
             const isVideo = this.mediaType === 'video';
@@ -2476,6 +2555,7 @@ const initMaiga = () => {
                         this.posts.unshift({ ...data.post, author: this.user.name, avatar: this.user.avatar });
                         this.newPostContent = '';
                         this.selectedMedia = null;
+                        this.postBgStyleIndex = -1;
                         this.mediaType = null;
                         this.postFile = null;
 
