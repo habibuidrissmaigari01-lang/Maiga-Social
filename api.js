@@ -210,12 +210,14 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('user_status', { userId: userId, status: 'online', lastSeen: now });
     });
     socket.on('join_group', (groupId) => socket.join(`group_${groupId}`));
-    socket.on('typing', (data) => {
+    socket.on('typing', async (data) => {
         const target = data.group_id ? `group_${data.group_id}` : data.receiver_id;
+        const user = await User.findById(data.sender_id).select('name');
         socket.to(target).emit('display_typing', {
             chat_id: data.group_id || data.receiver_id, // Use receiver_id for 1-on-1 chats
             sender_id: data.sender_id,
-            is_group: !!data.group_id
+            is_group: !!data.group_id,
+            sender_name: user?.name?.split(' ')[0] || 'Someone'
         });
         // Set a timeout to automatically send 'hide_typing' if no further typing events
         clearTimeout(socket.typingTimeout);

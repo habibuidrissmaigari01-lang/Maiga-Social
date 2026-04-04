@@ -68,11 +68,14 @@ function extractUrl(text) {
 // Helper to fetch and parse Open Graph metadata
 async function getLinkPreview(url) {
     try {
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: { 'User-Agent': 'MaigaSocialBot/1.0' }
+        });
         const html = await response.text();
 
         const ogTags = {};
-        const metaRegex = /<meta\s+(?:property|name)="og:([^"]+)"\s+content="([^"]*)"\s*\/?>/gi;
+        // Improved regex to handle various meta tag formats
+        const metaRegex = /<meta\s+(?:property|name)=["']og:([^"']+)["']\s+content=["']([^"']*)["']\s*\/?>/gi;
         let match;
         while ((match = metaRegex.exec(html)) !== null) {
             ogTags[match[1]] = match[2];
@@ -88,6 +91,15 @@ async function getLinkPreview(url) {
         return null;
     }
 }
+
+// Middleware to check for Admin privileges
+const isAdmin = async (req, res, next) => {
+    const user = await User.findById(req.session.userId);
+    if (user && user.is_admin) {
+        return next();
+    }
+    res.status(403).json({ error: 'Admin access denied' });
+};
 
 // --- Routes ---
 
@@ -299,6 +311,13 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
         reply_to: reply_to_id || null,
         expires_at: expiryDate
     });
+
+    // Generate link preview for messages too
+    const detectedUrl = extractUrl(content);
+    if (detectedUrl) {
+        const linkPreview = await getLinkPreview(detectedUrl);
+        if (linkPreview) msg.link_preview = linkPreview;
+    }
     
     await msg.save();
     // Return the message ID so the frontend can track read receipts for this specific message
@@ -529,6 +548,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
             pinned: m.is_pinned,
             is_edited: m.is_edited,
             read_by: m.read_by,
+            link_preview: m.link_preview,
             poll_id: m.poll?._id,
             question: m.poll?.question,
             options: m.poll?.options,
@@ -1367,6 +1387,105 @@ router.post('/report_user', isAuthenticated, upload.single('screenshot'), async 
     }
 });
 
+router.get('/admin/get_dashboard_stats', isAuthenticated, async (req, res) => {
+    try {
+        const adminUser = await User.findById(req.session.userId);
+        if (!adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
+
+        const total_users = await User.countDocuments();
+        const maiga_users = await User.countDocuments({ account_type: 'maiga' });
+        const ysu_users = await User.countDocuments({ account_type: 'ysu' });
+        const open_reports = await Report.countDocuments({ status: 'open' });
+        const online_users = await User.countDocuments({ online: true });
+
+        res.json({ total_users, maiga_users, ysu_users, open_reports, online_users });
+    } catch (error) { res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/admin/get_account_type_stats', isAuthenticated, async (req, res) => {
+    const maiga = await User.countDocuments({ account_type: 'maiga' });
+    const ysu = await User.countDocuments({ account_type: 'ysu' });
+    res.json({ maiga, ysu });
+});
+
+router.get('/admin/get_posts_per_day_stats', isAuthenticated, async (req, res) => {
+    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const stats = await Post.aggregate([
+        { $match: { createdAt: { $gte: last7Days } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+    ]);
+    res.json({ labels: stats.map(s => s._id), data: stats.map(s => s.count) });
+});
+
+router.get('/admin/get_weekly_signups', isAuthenticated, async (req, res) => {
+    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const stats = await User.aggregate([
+        { $match: { createdAt: { $gte: last7Days } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+    ]);
+    res.json({ labels: stats.map(s => s._id), data: stats.map(s => s.count) });
+});
+
+router.get('/admin/get_weekly_signups_by_type', isAuthenticated, async (req, res) => {
+    const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const stats = await User.aggregate([
+        { $match: { createdAt: { $gte: last7Days } } },
+        { $group: { 
+            _id: { date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, type: "$account_type" },
+            count: { $sum: 1 }
+        }},
+        { $sort: { "_id.date": 1 } }
+    ]);
+    const labels = [...new Set(stats.map(s => s._id.date))];
+    const maigaData = labels.map(l => (stats.find(s => s._id.date === l && s._id.type === 'maiga')?.count || 0));
+    const ysuData = labels.map(l => (stats.find(s => s._id.date === l && s._id.type === 'ysu')?.count || 0));
+    res.json({ labels, maigaData, ysuData });
+});
+
+router.get('/admin/get_users', isAuthenticated, async (req, res) => {
+    try {
+        const { page = 1, limit = 10, search = '', filter = 'all', sort = 'name', dir = 'asc' } = req.query;
+        const query = {};
+        if (search) query.name = { $regex: search, $options: 'i' };
+        if (filter === 'online') query.online = true;
+        if (filter === 'blocked') query.blocked = true;
+        if (filter === 'maiga') query.account_type = 'maiga';
+        if (filter === 'ysu') query.account_type = 'ysu';
+
+        const users = await User.find(query)
+            .sort({ [sort]: dir === 'asc' ? 1 : -1 })
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit));
+        const total = await User.countDocuments(query);
+
+        res.json({ users: users.map(u => ({
+            id: u._id, name: u.name, email: u.email, dept: u.dept, avatar: u.avatar,
+            online: u.online, blocked: u.blocked, is_verified: u.is_verified, account_type: u.account_type
+        })), total });
+    } catch (error) { res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/admin/get_settings', isAuthenticated, async (req, res) => {
+    res.json({ success: true, settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true } });
+});
+
+router.get('/admin/get_flagged_posts', isAuthenticated, async (req, res) => {
+    const reports = await Report.find({ status: 'open', reason: /post/i }).populate('reported_user', 'name avatar');
+    res.json(reports.map(r => ({
+        id: r._id, report_id: r._id, author: r.reported_user?.name || 'User', reason: r.reason, content: r.details, time: formatTime(r.created_at)
+    })));
+});
+
+router.get('/admin/get_broadcast_history', isAuthenticated, async (req, res) => {
+    res.json({ success: true, history: [] });
+});
+
+router.get('/admin/get_logs', isAuthenticated, async (req, res) => {
+    res.json({ success: true, logs: [] });
+});
+
 router.get('/vapid_public_key', isAuthenticated, (req, res) => {
     res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
@@ -1648,11 +1767,8 @@ router.post('/revoke_group_invite_link', isAuthenticated, async (req, res) => {
 });
 
 // Admin Routes
-router.get('/admin/get_reports', isAuthenticated, async (req, res) => {
+router.get('/admin/get_reports', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId);
-        if (!user.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const reports = await Report.find({ status: 'open' })
             .populate('reporter', 'name avatar')
             .populate('reported_user', 'name avatar')
@@ -1671,11 +1787,8 @@ router.get('/admin/get_reports', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/admin/dismiss_report', isAuthenticated, async (req, res) => {
+router.post('/admin/dismiss_report', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId);
-        if (!user.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { report_id } = req.body;
         await Report.findByIdAndUpdate(report_id, { status: 'dismissed' });
         res.json({ success: true });
@@ -1684,11 +1797,8 @@ router.post('/admin/dismiss_report', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/admin/block_and_resolve_report', isAuthenticated, async (req, res) => {
+router.post('/admin/block_and_resolve_report', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId);
-        if (!user.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { report_id, user_id } = req.body;
         
         // Block the user
@@ -1702,11 +1812,8 @@ router.post('/admin/block_and_resolve_report', isAuthenticated, async (req, res)
     }
 });
 
-router.post('/admin/delete_post', isAuthenticated, async (req, res) => {
+router.post('/admin/delete_post', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId);
-        if (!user.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { post_id } = req.body;
         const post = await Post.findById(post_id);
         if (!post) return res.status(404).json({ error: 'Post not found' });
@@ -1719,11 +1826,8 @@ router.post('/admin/delete_post', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/admin/warn_user', isAuthenticated, async (req, res) => {
+router.post('/admin/warn_user', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { user_id, message, report_id } = req.body;
         
         const notification = new Notification({
@@ -1744,11 +1848,8 @@ router.post('/admin/warn_user', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/admin/ban_user', isAuthenticated, async (req, res) => {
+router.post('/admin/ban_user', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser || !adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { user_id, reason } = req.body;
         // Permanently set blocked status and record administrative details
         await User.findByIdAndUpdate(user_id, { 
@@ -1763,11 +1864,8 @@ router.post('/admin/ban_user', isAuthenticated, async (req, res) => {
     }
 });
 
-router.get('/admin/get_blocked_user_details', isAuthenticated, async (req, res) => {
+router.get('/admin/get_blocked_user_details', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser || !adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         // Fetch all users marked as globally blocked/banned
         const blockedUsers = await User.find({ blocked: true })
             .populate('banned_by', 'name username')
@@ -1789,11 +1887,8 @@ router.get('/admin/get_blocked_user_details', isAuthenticated, async (req, res) 
     }
 });
 
-router.get('/admin/search_blocked_users', isAuthenticated, async (req, res) => {
+router.get('/admin/search_blocked_users', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser || !adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { q } = req.query;
         if (!q) return res.json([]);
 
@@ -1823,11 +1918,8 @@ router.get('/admin/search_blocked_users', isAuthenticated, async (req, res) => {
     }
 });
 
-router.get('/admin/group_activity_report', isAuthenticated, async (req, res) => {
+router.get('/admin/group_activity_report', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
-
         const { group_id } = req.query;
         const last7Days = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 

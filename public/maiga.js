@@ -55,7 +55,7 @@ const initMaiga = () => {
     isMaigaInitialized = true;
     Alpine.data('appData', () => ({
         init() {
-            this.mainInit();
+            this.mainInit(); // mainInit is async, but init() is not awaiting it.
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
@@ -114,10 +114,11 @@ const initMaiga = () => {
         loginSessions: [],
         hasScrolled: false,
         isBouncing: false,
-        typingUsers: [],
+        typingUsers: {}, // Changed to object mapping chat_id -> array of user names
         blockedUserDetails: [],
         lastBusyCall: null,
 
+        dataLoaded: false, // New flag to indicate data is loaded
         // Admin Panel State Initialization
         totalUsers: 0,
         currentPage: 1,
@@ -306,8 +307,12 @@ const initMaiga = () => {
             return searchIndex === query.length;
         },
         getTypingUserName(userId) {
-            const user = this.activeChat.members?.find(m => m.id === userId) || this.chats.find(c => c.id === userId);
-            return user ? user.name.split(' ')[0] : 'Someone';
+            if (!this.activeChat || !this.typingUsers[this.activeChat.id]) return '';
+            const users = this.typingUsers[this.activeChat.id];
+            if (users.length === 0) return '';
+            if (users.length === 1) return `${users[0]} is typing...`;
+            if (users.length === 2) return `${users[0]} and ${users[1]} are typing...`;
+            return `${users[0]} and ${users.length - 1} others are typing...`;
         },
 
 
@@ -1712,18 +1717,16 @@ const initMaiga = () => {
 
             // Listen for typing events
             this.socket.on('display_typing', (data) => {
-                const chat = this.chats.find(c => c.id == data.chat_id) || 
-                             this.groups.find(g => g.id == data.chat_id);
-
-                if (chat) {
-                    chat.isTyping = true;
-                    clearTimeout(chat.typingTimeout);
-                    chat.typingTimeout = setTimeout(() => chat.isTyping = false, 3000);
+                if (data.sender_id == this.user.id) return;
+                if (!this.typingUsers[data.chat_id]) this.typingUsers[data.chat_id] = [];
+                if (!this.typingUsers[data.chat_id].includes(data.sender_name)) {
+                    this.typingUsers[data.chat_id].push(data.sender_name);
                 }
-                
-                if (this.activeChat && this.activeChat.id == data.chat_id && data.sender_id != this.user.id) {
-                    if (!this.typingUsers.includes(data.sender_id)) this.typingUsers.push(data.sender_id);
-                }
+                // Clear after 3 seconds of inactivity
+                clearTimeout(this[`typing_timeout_${data.chat_id}_${data.sender_id}`]);
+                this[`typing_timeout_${data.chat_id}_${data.sender_id}`] = setTimeout(() => {
+                    this.typingUsers[data.chat_id] = this.typingUsers[data.chat_id].filter(name => name !== data.sender_name);
+                }, 3000);
             });
 
             this.socket.on('message_deleted', (data) => {
@@ -1745,11 +1748,8 @@ const initMaiga = () => {
             });
 
             this.socket.on('hide_typing', (data) => {
-                const chat = this.chats.find(c => c.id == data.chat_id);
-                if (chat) chat.isTyping = false;
-                if (this.activeChat && this.activeChat.id == data.chat_id) {
-                    this.typingUsers = this.typingUsers.filter(id => id != data.sender_id);
-                }
+                if (!this.typingUsers[data.chat_id]) return;
+                this.typingUsers[data.chat_id] = this.typingUsers[data.chat_id].filter(name => name !== data.sender_name);
             });
 
             this.socket.on('disappearing_mode_changed', (data) => {
@@ -2090,6 +2090,7 @@ const initMaiga = () => {
                 // Set loading states to false regardless of success/failure
                 this.isLoading = false;
                 this.showSkeletons = false;
+                this.dataLoaded = true; // Set flag to true after all critical data is loaded
             }
 
             this.$watch('isPaused', val => {
