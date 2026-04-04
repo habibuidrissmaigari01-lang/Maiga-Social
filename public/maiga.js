@@ -111,7 +111,6 @@ const initMaiga = () => {
         lastScrollTop: 0,
         isHeaderHidden: false,
         newPostFeeling: '',
-        postBgStyleIndex: -1,
         loginSessions: [],
         hasScrolled: false,
         isBouncing: false,
@@ -120,6 +119,8 @@ const initMaiga = () => {
         lastBusyCall: null,
 
         dataLoaded: false, // New flag to indicate data is loaded
+        loadProgress: 0,
+        showLoadingRetry: false,
         // Admin Panel State Initialization
         totalUsers: 0,
         currentPage: 1,
@@ -357,12 +358,6 @@ const initMaiga = () => {
             { name: 'Contrast', value: 'contrast(1.5)' },
             { name: 'Brightness', value: 'brightness(1.2)' },
             { name: 'Invert', value: 'invert(1)' },
-            { name: 'Warm', value: 'sepia(0.4) brightness(1.1) saturate(1.2)' },
-            { name: 'Cold', value: 'hue-rotate(180deg) brightness(1.05) saturate(1.1)' },
-            { name: 'Vintage', value: 'sepia(0.5) contrast(1.2) brightness(0.9)' },
-            { name: 'Dramatic', value: 'contrast(1.8) grayscale(0.5)' },
-            { name: 'Blurry', value: 'blur(4px)' },
-            { name: 'Hue', value: 'hue-rotate(90deg)' }
         ],
         drawings: [],
         // State from x-init moved here
@@ -378,11 +373,6 @@ const initMaiga = () => {
             if (this.musicPickerSource === 'camera') {
                 this.cameraMusic = track;
                 this.$refs.cameraMusicPlayer.src = track.src;
-                
-                // Ensure it doesn't play until recording starts
-                this.$refs.cameraMusicPlayer.pause();
-                this.$refs.cameraMusicPlayer.currentTime = 0;
-
                 this.showMusicPicker = false;
                 return;
             }
@@ -551,10 +541,8 @@ const initMaiga = () => {
         isCameraOpen: false,
         cameraStream: null,
         cameraMusic: null,
-        showCameraFlash: false,
         audioMixer: null,
         audioDestination: null,
-        isConfirmingCapture: false,
         cameraSource: 'post', // 'post' or 'story'
         facingMode: 'user', // 'user' or 'environment'
         cameraMode: 'photo', // '15s', '30s', '60s', 'photo'
@@ -564,6 +552,9 @@ const initMaiga = () => {
         recordingProgress: 0,
         cameraRecorder: null,
         cameraChunks: [],
+        beautyFilter: 'none',
+        brightnessIntensity: 100,
+        contrastIntensity: 100,
         dollyZoomScale: 1,
         isGlitchActive: false,
         isDoubleExposureActive: false,
@@ -603,29 +594,17 @@ const initMaiga = () => {
         isGhostModeActive: false,
         ghostFrame: null,
         qrDetector: null,
-        // Camera filters (reusing image editor filters)
         filters: [
             { name: 'Normal', value: 'none' },
-            { name: 'Grayscale', value: 'grayscale(1)' },
-            { name: 'Sepia', value: 'sepia(1)' },
-            { name: 'Saturate', value: 'saturate(2)' },
-            { name: 'Contrast', value: 'contrast(1.5)' },
-            { name: 'Brightness', value: 'brightness(1.2)' },
-            { name: 'Invert', value: 'invert(1)' },
-            { name: 'Warm', value: 'sepia(0.4) brightness(1.1) saturate(1.2)' },
-            { name: 'Cold', value: 'hue-rotate(180deg) brightness(1.05) saturate(1.1)' },
-            { name: 'Vintage', value: 'sepia(0.5) contrast(1.2) brightness(0.9)' },
-            { name: 'Dramatic', value: 'contrast(1.8) grayscale(0.5)' },
-            { name: 'Blurry', value: 'blur(4px)' },
-            { name: 'Hue', value: 'hue-rotate(90deg)' }
+            { name: 'Beauty', value: 'brightness(1.1) saturate(1.1) contrast(1.05)' },
+            { name: 'Vintage', value: 'sepia(0.4) contrast(1.2)' },
+            { name: 'B&W', value: 'grayscale(1)' }
         ],
         filterIndex: 0,
-        // The currently active filter string to apply to the canvas
-        activeCameraFilter: 'none',
 
         toggleBeautyFilter() {
             this.filterIndex = (this.filterIndex + 1) % this.filters.length;
-            this.activeCameraFilter = this.filters[this.filterIndex].value;
+            this.beautyFilter = this.filters[this.filterIndex].value;
             this.showToast('Filter', `Applied: ${this.filters[this.filterIndex].name}`, 'info');
         },
 
@@ -672,12 +651,6 @@ const initMaiga = () => {
             this.isCameraOpen = true;
             this.isCreatingPost = false;
             this.isCreatingStory = false;
-
-            // Ensure music is paused and reset when opening camera
-            if (this.$refs.cameraMusicPlayer) {
-                this.$refs.cameraMusicPlayer.pause();
-                this.$refs.cameraMusicPlayer.currentTime = 0;
-            }
 
             if ('BarcodeDetector' in window) {
                 this.qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
@@ -807,7 +780,10 @@ const initMaiga = () => {
                 }
 
                 // Logic for Manual Beauty Sliders
-                let activeFilter = this.activeCameraFilter;
+                let activeFilter = this.beautyFilter;
+                if (this.filters[this.filterIndex].name === 'Beauty') {
+                    activeFilter = `brightness(${this.brightnessIntensity}%) contrast(${this.contrastIntensity}%) saturate(110%)`;
+                }
 
                 // --- COMPOSITING ENGINE ---
                 if (this.isBackgroundRemovalActive && this.segmentationMask) {
@@ -935,11 +911,7 @@ const initMaiga = () => {
             if (this.cameraStream) {
                 this.cameraStream.getTracks().forEach(track => track.stop());
             }
-            if (this.cameraRecorder && this.cameraRecorder.state !== 'inactive') {
-                this.cameraRecorder.stop();
-            }
             if (this.recordingTimer) clearInterval(this.recordingTimer);
-            this.isConfirmingCapture = false;
             this.isCameraOpen = false;
             this.isCameraRecording = false;
             if (this.cameraSource === 'post') this.isCreatingPost = true;
@@ -947,10 +919,9 @@ const initMaiga = () => {
         },
 
         async triggerShutter() {
-            if (this.cameraMode === 'photo' && !this.isConfirmingCapture) return this.takeCameraPhoto();
+            if (this.cameraMode === 'photo') return this.takeCameraPhoto();
             if (this.isCameraRecording) return this.stopCameraRecording();
             
-            this.recordingProgress = 0;
             // Start Countdown for Video Modes
             this.isCountdownActive = true;
             this.countdownValue = 3;
@@ -968,9 +939,6 @@ const initMaiga = () => {
         },
 
         takeCameraPhoto() {
-            this.showCameraFlash = true;
-            setTimeout(() => this.showCameraFlash = false, 50);
-
             const dataUrl = this.$refs.cameraCanvas.toDataURL('image/jpeg', 0.9);
             
             // Capture frame for Ghost Mode
@@ -979,13 +947,11 @@ const initMaiga = () => {
             this.ghostFrame = img;
 
             this.selectedMedia = dataUrl;
-            this.postBgStyleIndex = -1; // Reset background style if any
             this.mediaType = 'image';
             
             // Convert to file for actual upload
             fetch(dataUrl).then(res => res.blob()).then(blob => {
                 const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                this.postFile = file;
                 if (this.cameraSource === 'post') {
                     this.postFile = file;
                     this.selectedMedia = dataUrl;
@@ -994,8 +960,8 @@ const initMaiga = () => {
                     this.storyMediaPreview = dataUrl;
                     this.storyMediaType = 'image';
                 }
+                this.closeCamera();
             });
-            this.isConfirmingCapture = true;
         },
 
         startCameraRecording() {
@@ -1004,12 +970,10 @@ const initMaiga = () => {
             this.cameraChunks = [];
             
             // Capture filtered stream from canvas
-            const canvasStream = this.$refs.cameraCanvas.captureStream(30);
+            const stream = this.$refs.cameraCanvas.captureStream(30);
 
             // --- AUDIO MIXING ENGINE ---
-            // Close old mixer if it exists to prevent "node accumulation" (the repeating sound bug)
-            if (this.audioMixer) {
-                this.audioMixer.close();
+            if (!this.audioMixer) {
                 this.audioMixer = new (window.AudioContext || window.webkitAudioContext)();
                 this.audioDestination = this.audioMixer.createMediaStreamDestination();
             }
@@ -1035,18 +999,20 @@ const initMaiga = () => {
             audioChain.connect(this.audioDestination);
 
             // 2. Add Music to mix (if selected)
-            if (this.cameraMusic && this.cameraMode !== 'photo') {
+            if (this.cameraMusic) {
                 if (!this.musicSourceNode) {
                     this.musicSourceNode = this.audioMixer.createMediaElementSource(this.$refs.cameraMusicPlayer);
                 }
                 this.musicSourceNode.connect(this.audioDestination);
+                this.musicSourceNode.connect(this.audioMixer.destination); // Play locally so user can hear it
                 this.$refs.cameraMusicPlayer.currentTime = 0;
+                this.$refs.cameraMusicPlayer.play();
             }
 
             // 3. Attach mixed audio to the video stream
-            this.audioDestination.stream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
+            this.audioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track));
 
-            this.cameraRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
+            this.cameraRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
             this.cameraRecorder.ondataavailable = (e) => this.cameraChunks.push(e.data);
             this.cameraRecorder.onstop = () => {
                 const blob = new Blob(this.cameraChunks, { type: 'video/webm' });
@@ -1060,7 +1026,7 @@ const initMaiga = () => {
                     this.storyMediaType = 'video';
                     this.storyMediaPreview = URL.createObjectURL(file);
                 }
-                this.isConfirmingCapture = true;
+                this.closeCamera();
             };
 
             const duration = parseInt(this.cameraMode);
@@ -1072,12 +1038,6 @@ const initMaiga = () => {
                 this.recordingProgress = (elapsed / (duration * 1000)) * 100;
                 if (elapsed >= duration * 1000) this.stopCameraRecording();
             }, 100);
-        },
-
-        retakeCapture() {
-            this.isConfirmingCapture = false;
-            this.selectedMedia = null;
-            this.storyMediaPreview = null;
         },
 
         stopCameraRecording() {
@@ -1432,6 +1392,8 @@ const initMaiga = () => {
             });
         },
         isLoading: true,
+        loadProgress: 0,
+        showLoadingRetry: false,
         showSkeletons: true,
         user: {
             id: 0,
@@ -2514,7 +2476,6 @@ const initMaiga = () => {
                         this.posts.unshift({ ...data.post, author: this.user.name, avatar: this.user.avatar });
                         this.newPostContent = '';
                         this.selectedMedia = null;
-                        this.postBgStyleIndex = -1;
                         this.mediaType = null;
                         this.postFile = null;
 
