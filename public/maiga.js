@@ -87,6 +87,7 @@ const initMaiga = () => {
         showSkeletons: true,
         isRefreshing: false,
         isOffline: !navigator.onLine,
+        isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
         isSocketConnected: false,
         currentTime: Date.now(),
         typingUsers: {},

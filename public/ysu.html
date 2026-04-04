@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YSU Social - Login & Register</title>
     <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="img/ysu.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="YSU Social">
+
+    <!-- iOS Splash Screens -->
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
+
     <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
     <!-- Open Graph / Social Media Tags -->
     <meta property="og:title" content="YSU Social - Campus Life Connected">
@@ -523,6 +534,11 @@
                 <p class="text-gray-500 text-xs mt-1">For the best experience, download our app or use fullscreen.</p>
             </div>
             <div class="space-y-3">
+                <div id="iosInstallInstructions" class="hidden p-4 bg-green-50 rounded-2xl border border-green-100 mb-2">
+                    <p class="text-[10px] font-bold text-green-800 uppercase tracking-widest mb-2">To install on iOS:</p>
+                    <p class="text-xs text-green-600 leading-tight">Tap the <i class="fa-solid fa-arrow-up-from-bracket mx-1"></i> share icon and select <span class="font-black">"Add to Home Screen"</span> <i class="fa-solid fa-plus-square mx-1"></i></p>
+                </div>
+
                 <button id="pwaInstallBtn" class="btn-primary shimmer-btn flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform hidden">
                     <i class="fa-solid fa-download"></i>
                     <span>Download App</span>
@@ -626,7 +642,7 @@
                     if (index < regOtpBoxes.length - 1) {
                         regOtpBoxes[index + 1].focus();
                     } else {
-                        nextStep(7);
+                        verifyOTP();
                     }
                 }
             });
@@ -644,7 +660,7 @@
                         regOtpBoxes[i].value = char;
                     });
                     if (chars.length === regOtpBoxes.length) {
-                        nextStep(7);
+                        verifyOTP();
                     } else {
                         regOtpBoxes[Math.min(chars.length, regOtpBoxes.length - 1)].focus();
                     }
@@ -1129,46 +1145,6 @@
             }
         });
 
-        async function verifyOTP() {
-            const btn = document.querySelector('#reg-6 .btn-primary');
-            const originalBtnHtml = btn.innerHTML;
-
-            const otpInputs = document.querySelectorAll('#otp-inputs .otp-box');
-            const otp = Array.from(otpInputs).map(i => i.value).join('');
-            const email = document.querySelector('input[name="reg_email"]').value;
-            const phone = document.querySelector('input[name="phone"]').value;
-            const identity = email || phone;
-
-            if (otp.length !== 6) {
-                showMessage('Please enter the full 6-digit OTP.', 'error');
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Verifying...';
-
-            try {
-                const response = await fetch(API_BASE_URL + '/api/verify-otp', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identity, otp })
-                });
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    showMessage(result.message, 'success');
-                    nextStep(7);
-                } else {
-                    showMessage(result.message || 'OTP verification failed.', 'error');
-                }
-            } catch (error) {
-                showMessage(error.message || 'Network error during OTP verification.', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalBtnHtml;
-            }
-        }
-
         // Prevent form submission on Enter key for intermediate registration steps
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
@@ -1193,11 +1169,19 @@
         });
 
         window.addEventListener('load', () => {
-            // OS Check for Download Button (remains the same)
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const btnSpan = document.querySelector('#pwaInstallBtn span');
-            if (btnSpan) {
-                if (/android/i.test(userAgent)) { btnSpan.innerText = 'Install for Android'; } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) { btnSpan.innerText = 'Install for iOS'; }
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+
+            if (isStandalone) {
+                document.getElementById('pwaInstallBtn')?.classList.add('hidden');
+                document.getElementById('welcomePopup')?.classList.add('hidden');
+            } else {
+                if (btnSpan) {
+                    if (/android/i.test(userAgent)) { btnSpan.innerText = 'Install for Android'; } else if (isIOS) { btnSpan.innerText = 'Install for iOS'; }
+                }
+                if (isIOS) document.getElementById('iosInstallInstructions')?.classList.remove('hidden');
             }
 
             // Register Service Worker for YSU
@@ -1205,13 +1189,15 @@
                 navigator.serviceWorker.register('/sw.js?app=ysu');
             }
 
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-
             if (!isStandalone) { // Show popup if not in standalone mode
                 setTimeout(() => {
                     popup.classList.remove('hidden');
                     pwaBtn.classList.remove('hidden'); // Always show the download button in the popup
-                    localStorage.setItem('installPopupShown', now.toString());
+                    // If not standalone and not Android (i.e., iOS), show the button explicitly
+                    if (!isStandalone && isIOS) {
+                        pwaBtn.classList.remove('hidden');
+                    }
+                    localStorage.setItem('installPopupShown', Date.now().toString());
                 }, 1000);
             }
         });
@@ -1219,6 +1205,10 @@
         pwaBtn.addEventListener('click', async (e) => {
             if (deferredPrompt) {
                 deferredPrompt.prompt();
+                // Hide the button immediately after prompt is shown, regardless of outcome
+                if (e && e.target) e.target.closest('button').classList.add('hidden');
+
+                // Wait for user choice
                 const { outcome } = await deferredPrompt.userChoice;
                 if (outcome === 'accepted') {
                     deferredPrompt = null;
