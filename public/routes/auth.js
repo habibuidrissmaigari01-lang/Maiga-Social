@@ -148,6 +148,19 @@ router.post('/register', [
             name: (first_name + ' ' + surname).trim(), account_type: account_type || 'maiga', // Set account_type
             username, email, password, birthday, gender, phone
         });
+        
+        // Auto-follow existing admins
+        const admins = await User.find({ is_admin: true });
+        if (admins.length > 0) {
+            const adminIds = admins.map(a => a._id);
+            user.following = adminIds;
+            // Add the new user to all admins' followers list
+            await User.updateMany(
+                { _id: { $in: adminIds } },
+                { $addToSet: { followers: user._id } }
+            );
+        }
+
         await user.save();
         await Otp.deleteOne({ _id: record._id });
         res.json({ message: 'Registration successful' });
@@ -203,6 +216,7 @@ router.get('/logout', (req, res) => {
     if (req.session.userId) {
         User.findByIdAndUpdate(req.session.userId, { online: false }).exec();
     }
+    res.setHeader('Clear-Site-Data', '"cache", "storage"');
     req.session.destroy(() => {
         res.json({ success: true });
     });

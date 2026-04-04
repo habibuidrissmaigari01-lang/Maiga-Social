@@ -225,6 +225,14 @@
             20% { left: 200%; }
             100% { left: 200%; }
         }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .shake-btn {
+            animation: shake 0.5s ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -436,7 +444,7 @@
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
-                    <p id="matchAlert" class="text-[10px] font-bold text-red-500 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i> Passwords do not match</p>
+                    <p id="matchAlert" class="text-[10px] font-bold hidden"></p>
                     <div class="flex items-start">
                         <input id="terms" name="terms" type="checkbox" onchange="checkConfirmPassword()" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1 cursor-pointer">
                         <label for="terms" class="ml-3 block text-sm text-gray-700">
@@ -913,24 +921,50 @@
             const regBtn = document.getElementById('registerBtn');
             const termsCheck = document.getElementById('terms');
 
-            const passwordsMatch = mainPass.value === confirmPass.value && confirmPass.value !== '';
+            // Passwords must match and the first one must not be empty
+            const passwordsMatch = mainPass.value === confirmPass.value && mainPass.value !== '';
+            
+            // Check strength requirements (matching the UI feedback logic)
+            const isStrong = mainPass.value.length >= 8 && /[A-Z]/.test(mainPass.value) && /[0-9]/.test(mainPass.value);
 
-            if (confirmPass.value === '') {
-                confirmPass.classList.remove('border-red-500', 'border-green-500');
+            if (mainPass.value === '' && confirmPass.value === '') {
                 alertEl.classList.add('hidden');
+                confirmPass.classList.remove('border-red-500', 'border-green-500');
             } else if (passwordsMatch) {
+                alertEl.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> Passwords match';
+                alertEl.classList.remove('hidden', 'text-red-500');
+                alertEl.classList.add('text-green-500');
                 confirmPass.classList.remove('border-red-500');
                 confirmPass.classList.add('border-green-500');
-                alertEl.classList.add('hidden');
             } else {
-                confirmPass.classList.remove('border-green-500');
-                confirmPass.classList.add('border-red-500');
-                alertEl.classList.remove('hidden');
+                // Only show "do not match" warning if the user has started typing in the confirm field
+                if (confirmPass.value !== '') {
+                    alertEl.innerHTML = '<i class="fa-solid fa-circle-exclamation mr-1"></i> Passwords do not match';
+                    alertEl.classList.remove('hidden', 'text-green-500');
+                    alertEl.classList.add('text-red-500');
+                    confirmPass.classList.remove('border-green-500');
+                    confirmPass.classList.add('border-red-500');
+                } else {
+                    alertEl.classList.add('hidden');
+                    confirmPass.classList.remove('border-red-500', 'border-green-500');
+                }
             }
 
-            // Enable button only if passwords match AND terms are accepted
-            regBtn.disabled = !(passwordsMatch && termsCheck.checked);
+            // Freeze button if not matching, not meeting strength, or terms not checked
+            regBtn.disabled = !passwordsMatch || !isStrong || !termsCheck.checked;
         }
+
+        // Add shaking animation on disabled button click
+        const registerBtn = document.getElementById('registerBtn');
+        registerBtn.addEventListener('click', function(event) {
+            if (this.disabled) {
+                event.preventDefault();
+                this.classList.add('shake-btn', 'border-red-500');
+                setTimeout(() => {
+                    this.classList.remove('shake-btn', 'border-red-500');
+                }, 500); // Match animation duration
+            }
+        });
 
         // Initial check on load for password fields if they have pre-filled values
         document.addEventListener('DOMContentLoaded', () => {
@@ -1159,18 +1193,11 @@
         });
 
         window.addEventListener('load', () => {
-            const lastPopup = localStorage.getItem('installPopupShown');
-            const now = Date.now();
-
-            // OS Check for Download Button
+            // OS Check for Download Button (remains the same)
             const userAgent = navigator.userAgent || navigator.vendor || window.opera;
             const btnSpan = document.querySelector('#pwaInstallBtn span');
             if (btnSpan) {
-                if (/android/i.test(userAgent)) {
-                    btnSpan.innerText = 'Install for Android';
-                } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
-                    btnSpan.innerText = 'Install for iOS';
-                }
+                if (/android/i.test(userAgent)) { btnSpan.innerText = 'Install for Android'; } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) { btnSpan.innerText = 'Install for iOS'; }
             }
 
             // Register Service Worker for YSU
@@ -1178,19 +1205,9 @@
                 navigator.serviceWorker.register('/sw.js?app=ysu');
             }
 
-            const oneDay = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
-            if (isStandalone) {
-                // App is in standalone mode (Downloaded/Fullscreen)
-                // Proactively request permissions so they are ready for use
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-                        .then(stream => stream.getTracks().forEach(track => track.stop())) // Close immediately, just wanted permission
-                        .catch(err => console.log('Permissions not granted yet:', err));
-                }
-            } else if (!lastPopup || (now - parseInt(lastPopup)) > oneDay) {
-                // Show install popup if not installed and not shown recently
+            if (!isStandalone) { // Show popup if not in standalone mode
                 setTimeout(() => {
                     popup.classList.remove('hidden');
                     pwaBtn.classList.remove('hidden'); // Always show the download button in the popup

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Maiga Social</title>
     <script src="https://cdn.tailwindcss.com"></script>
      <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
@@ -60,7 +60,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        body { background-color: #ffffff; color: #000000; transition: background-color 0.3s, color 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        body { background-color: #ffffff; color: #000000; transition: background-color 0.3s, color 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; min-height: 100dvh; }
         body.dark { background-color: #000000 !important; color: #ffffff !important; }
         .post-card { transition: all 0.2s; border-radius: 12px; }
         .post-card:active { transform: scale(0.99); }
@@ -146,6 +146,30 @@
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
       :class="[{ 'dark': darkMode }, desktopGridCols]"
       x-data="appData">
+
+    <!-- Global Loading Screen -->
+    <div x-show="isLoading" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-[10000] bg-white dark:bg-black flex flex-col items-center justify-center">
+        <div class="relative flex flex-col items-center">
+            <!-- Faded Background Logo -->
+            <img src="img/logo.png" class="w-64 h-64 opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
+            
+            <!-- Centered Main Logo -->
+            <img src="img/logo.png" class="w-24 h-24 mb-10 relative z-10 animate-pulse" alt="Maiga Social">
+            
+            <!-- Modern Spinner -->
+            <div class="relative">
+                <div class="w-12 h-12 border-4 border-blue-100 dark:border-gray-800 rounded-full"></div>
+                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
+            <p class="mt-8 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] animate-pulse">Initializing Excellence</p>
+            
+            <!-- Progress Percentage -->
+            <p x-text="loadProgress + '%'" class="mt-2 text-blue-600 font-black text-xs"></p>
+
+            <!-- Retry Button -->
+            <button x-show="showLoadingRetry" @click="window.location.reload()" x-cloak class="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/30 animate-fadeIn active:scale-95 transition-all">Taking too long? Retry</button>
+        </div>
+    </div>
 
     <!-- Return to Call Banner -->
     <div x-show="isCalling && isCallMinimized" x-cloak
@@ -2737,7 +2761,7 @@
                 <p class="mt-4 text-sm leading-relaxed text-gray-700 dark:text-gray-300" x-text="user.bio"></p>
                 
                 <div class="flex justify-between mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border dark:border-gray-700">
-                    <div class="text-center flex-1 p-4 border-r dark:border-gray-700"><p class="font-black text-lg" x-text="userPosts.length"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Posts</p></div>
+                    <div class="text-center flex-1 p-4 border-r dark:border-gray-700"><p class="font-black text-lg" x-text="formatNumber(user.total_posts_count)"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Posts</p></div>
                     <div @click="openFollowerList('followers')" class="text-center flex-1 p-4 border-r dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-l-xl"><p class="font-black text-lg" x-text="user.followerIds.length"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Followers</p></div>
                     <div @click="openFollowerList('following')" class="text-center flex-1 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-r-xl"><p class="font-black text-lg" x-text="user.followingIds.length"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Following</p></div>
                 </div>
@@ -3206,11 +3230,26 @@
                 <span class="text-[10px] text-gray-400 font-bold" x-text="user.dept"></span>
             </div>
         </div>
-        <textarea x-model="newPostContent" maxlength="1000" class="flex-1 bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-medium" :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
+        <div class="flex-1 flex flex-col min-h-[200px] rounded-3xl transition-all duration-500 overflow-hidden"
+             :style="postBgStyleIndex !== -1 ? `background: ${textStoryStyles[postBgStyleIndex].background}; justify-content: center; align-items: center; padding: 2rem;` : ''">
+            <textarea x-model="newPostContent" maxlength="1000" 
+                      class="w-full bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-bold transition-all duration-500" 
+                      :class="postBgStyleIndex !== -1 ? 'text-center text-3xl' : 'text-left'"
+                      :style="postBgStyleIndex !== -1 ? `color: ${textStoryStyles[postBgStyleIndex].color};` : ''"
+                      :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
+        </div>
         <div class="flex justify-end px-2 py-1">
             <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="newPostContent.length + ' / 1000'"></span>
         </div>
         
+        <!-- Post Background Color Picker -->
+        <div x-show="!selectedMedia" class="flex items-center space-x-2 mb-4 px-1 overflow-x-auto no-scrollbar py-2">
+            <button @click="postBgStyleIndex = -1" class="w-10 h-10 rounded-2xl border-2 flex items-center justify-center shrink-0 transition-all active:scale-90" :class="postBgStyleIndex === -1 ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20 shadow-inner' : 'border-gray-100 dark:border-gray-800'"><i class="fa-solid fa-font text-sm"></i></button>
+            <template x-for="(style, index) in textStoryStyles" :key="index">
+                <button @click="postBgStyleIndex = index" class="w-10 h-10 rounded-2xl shrink-0 border-2 transition-all active:scale-90" :class="postBgStyleIndex === index ? 'border-blue-600 scale-110 shadow-lg' : 'border-transparent'" :style="`background: ${style.background}`"></button>
+            </template>
+        </div>
+
         <template x-if="selectedMedia">
             <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner">
                 <button @click="selectedMedia = null" class="absolute top-3 right-3 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center z-10 backdrop-blur-md"><i class="fa-solid fa-xmark"></i></button>
@@ -3243,8 +3282,24 @@
             <!-- Hidden Video Source -->
             <video x-ref="cameraFeed" autoplay playsinline class="hidden"></video>
             
+            <!-- Background Music Player for Camera -->
+            <audio x-ref="cameraMusicPlayer" class="hidden" preload="auto"></audio>
+
+            <!-- Shutter Sound -->
+            <audio id="shutter-sound" src="https://actions.google.com/sounds/v1/camera/shutter_click.ogg" preload="auto"></audio>
+
             <!-- Live Canvas Output -->
             <div class="relative w-full h-full flex items-center justify-center bg-black">
+                <!-- Capture Flash Effect -->
+                <div x-show="showCameraFlash"
+                     x-transition:enter="transition ease-out duration-100"
+                     x-transition:enter-start="opacity-0"
+                     x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-500"
+                     x-transition:leave-start="opacity-100"
+                     x-transition:leave-end="opacity-0"
+                     class="absolute inset-0 bg-white z-[60] pointer-events-none" x-cloak></div>
+
                 <canvas x-ref="cameraCanvas" 
                         class="w-full h-full object-cover transition-transform duration-300"
                         :style="`transform: scale(${zoomScale})`"
@@ -3252,8 +3307,36 @@
                         @touchmove="handlePinchMove($event)"
                         @touchend="handlePinchEnd()"></canvas>
 
+                <!-- Countdown Overlay -->
+                <div x-show="isCountdownActive" x-cloak
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 scale-50"
+                     x-transition:enter-end="opacity-100 scale-100"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-50"
+                     class="absolute inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm text-white text-9xl font-black drop-shadow-lg">
+                    <span x-text="countdownValue"></span>
+                </div>
+
+                <!-- Capture Confirmation Overlay -->
+                <div x-show="isConfirmingCapture" x-cloak class="absolute inset-0 z-[80] bg-black flex flex-col">
+                    <div class="flex-1 flex items-center justify-center p-4">
+                        <template x-if="mediaType === 'image' || storyMediaType === 'image'">
+                            <img :src="cameraSource === 'post' ? selectedMedia : storyMediaPreview" class="max-w-full max-h-full rounded-3xl shadow-2xl object-contain">
+                        </template>
+                        <template x-if="mediaType === 'video' || storyMediaType === 'video'">
+                            <video :src="cameraSource === 'post' ? selectedMedia : storyMediaPreview" autoplay loop class="max-w-full max-h-full rounded-3xl shadow-2xl object-contain"></video>
+                        </template>
+                    </div>
+                    <div class="p-8 flex gap-4 bg-gradient-to-t from-black/80 to-transparent">
+                        <button @click="retakeCapture()" class="flex-1 py-4 rounded-2xl bg-white/10 backdrop-blur-md text-white font-black uppercase tracking-widest border border-white/20 active:scale-95 transition-all">Retake</button>
+                        <button @click="closeCamera()" class="flex-1 py-4 rounded-2xl bg-blue-600 text-white font-black uppercase tracking-widest shadow-lg shadow-blue-500/30 active:scale-95 transition-all">Use Capture</button>
+                    </div>
+                </div>
+
                 <!-- Top Action Bar -->
-                <div class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+                <div x-show="!isConfirmingCapture" class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
                     <button @click="closeCamera()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all">
                         <i class="fa-solid fa-xmark text-2xl"></i>
                     </button>
@@ -3274,24 +3357,10 @@
                 <div class="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-6 items-center p-4 rounded-3xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl">
                     <button @click="toggleBeautyFilter()" 
                             class="flex flex-col items-center gap-1 group"
-                            :class="filters[filterIndex].name === 'Beauty' ? 'text-yellow-400' : 'text-white'">
+                            :class="activeCameraFilter !== 'none' ? 'text-yellow-400' : 'text-white'">
                         <i class="fa-solid fa-wand-magic-sparkles text-xl"></i>
-                        <span class="text-[9px] font-bold tracking-tighter uppercase">Beauty</span>
+                        <span class="text-[9px] font-bold tracking-tighter uppercase" x-text="filters[filterIndex].name"></span>
                     </button>
-
-                    <!-- Intensity Sliders (Active only in Beauty Mode) -->
-                    <div x-show="filters[filterIndex].name === 'Beauty'" x-collapse class="flex flex-col gap-8 py-4 border-t border-white/10">
-                        <div class="flex flex-col items-center group">
-                            <input type="range" min="50" max="200" x-model="brightnessIntensity" 
-                                   class="appearance-none bg-white/20 h-28 w-1.5 rounded-full outline-none vertical-range cursor-pointer">
-                            <i class="fa-solid fa-sun text-[10px] text-white/50 mt-2"></i>
-                        </div>
-                        <div class="flex flex-col items-center group">
-                            <input type="range" min="50" max="200" x-model="contrastIntensity" 
-                                   class="appearance-none bg-white/20 h-28 w-1.5 rounded-full outline-none vertical-range cursor-pointer">
-                            <i class="fa-solid fa-circle-half-stroke text-[10px] text-white/50 mt-2"></i>
-                        </div>
-                    </div>
 
                     <button @click="isFaceMeshActive = !isFaceMeshActive; if(isFaceMeshActive) initFaceMesh()" 
                             class="flex flex-col items-center gap-1"
@@ -3380,7 +3449,7 @@
                             </template>
 
                             <div class="flex justify-around mt-6 w-full max-w-xs">
-                                <div class="text-center"><p class="font-black text-lg" x-text="viewingUser?.posts?.length || 0"></p><p class="text-[9px] text-gray-500 font-bold uppercase">Posts</p></div>
+                                <div class="text-center"><p class="font-black text-lg" x-text="formatNumber(viewingUser?.total_posts_count || 0)"></p><p class="text-[9px] text-gray-500 font-bold uppercase">Posts</p></div>
                                 <div class="text-center"><p class="font-black text-lg" x-text="viewingUser?.followers_count || 0"></p><p class="text-[9px] text-gray-500 font-bold uppercase">Followers</p></div>
                                 <div class="text-center"><p class="font-black text-lg" x-text="viewingUser?.following_count || 0"></p><p class="text-[9px] text-gray-500 font-bold uppercase">Following</p></div>
                             </div>
@@ -3562,7 +3631,7 @@
 
 
     <!-- Bottom Nav -->
-    <nav x-show="!activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] z-[350] shadow-2xl lg:hidden">
+    <nav x-show="!activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[env(safe-area-inset-bottom,0px)] z-[350] shadow-2xl lg:hidden">
         <!-- Fluid Indicator Bar -->
         <div class="absolute top-0 h-1 bg-blue-600 transition-all duration-500 cubic-bezier(0.2, 0.8, 0.2, 1) rounded-full z-10"
              :style="getIndicatorStyle()"></div>

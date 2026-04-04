@@ -6,7 +6,7 @@ const fs = require('fs');
 const webpush = require('web-push');
 const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
-const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, s3Client } = require('../../models');
+const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
 
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
@@ -105,11 +105,13 @@ const isAdmin = async (req, res, next) => {
 
 router.get('/get_user', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId);
+    const postsCount = await Post.countDocuments({ user: user._id });
     res.json({
         id: user._id, name: user.name, username: user.username, account_type: user.account_type,
         avatar: user.avatar, dept: user.dept, bio: user.bio,
         email: user.email, is_admin: user.is_admin,
-        followerIds: user.followers, followingIds: user.following
+        followerIds: user.followers, followingIds: user.following,
+        total_posts_count: postsCount
     });
 });
 
@@ -179,6 +181,15 @@ router.post('/submit_support_ticket', isAuthenticated, async (req, res) => {
             status: 'open'
         });
         await report.save();
+
+        // Alert admins via Socket.io
+        req.io.to('admins').emit('new_report', {
+            id: report._id,
+            reason: report.reason,
+            reporter: user.name,
+            time: 'Just now'
+        });
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false }); }
 });
@@ -189,7 +200,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const limit = 10;
         const skip = (page - 1) * limit;
         
-        const baseQuery = { media_type: { $ne: 'video' } };
+        const baseQuery = { media_type: { $ne: 'video' }, viewed_by: { $ne: req.session.userId } };
         if (req.query.hashtag) {
             baseQuery.content = { $regex: new RegExp('#' + req.query.hashtag, 'i') };
         }
@@ -197,9 +208,31 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const query = req.query.user_id ? { user: req.query.user_id, ...baseQuery } : baseQuery;
         
         // Populate 'user' and include fields needed for the 'full_name' virtual
-        const posts = await Post.find(query)
+        let posts = await Post.find(query)
             .populate('user', 'name first_name surname avatar is_verified')
             .sort({ createdAt: -1 }).skip(skip).limit(limit);
+
+        // Randomize the current batch and interleave to prevent consecutive posts from the same author
+        if (!req.query.user_id && posts.length > 2) {
+            // Shuffle for variety
+            posts.sort(() => Math.random() - 0.5);
+            
+            // Interleave logic: Group by author and spread them out
+            const interleaved = [];
+            const pools = new Map();
+            for (const p of posts) {
+                const uid = p.user ? p.user._id.toString() : p._id.toString(); // Group deleted users by post ID to avoid clustering
+                if (!pools.has(uid)) pools.set(uid, []);
+                pools.get(uid).push(p);
+            }
+            const sortedPools = Array.from(pools.values()).sort((a, b) => b.length - a.length);
+            while (interleaved.length < posts.length) {
+                for (const pool of sortedPools) {
+                    if (pool.length > 0) interleaved.push(pool.shift());
+                }
+            }
+            posts = interleaved;
+        }
         
         res.json(posts.map(p => ({
             id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'User', avatar: p.user?.avatar,
@@ -458,6 +491,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
+        const totalPostsCount = await Post.countDocuments({ user: user._id });
         const posts = await Post.find({ user: user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
 
         res.json({
@@ -472,6 +506,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
             is_admin: user.is_admin,
             followers_count: user.followers.length,
             following_count: user.following.length,
+            total_posts_count: totalPostsCount,
             posts: posts.slice(0, limit).map(p => ({
                 id: p._id,
                 content: p.content,
@@ -998,11 +1033,32 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-        const query = { media_type: 'video' };
+        const query = { media_type: 'video', viewed_by: { $ne: req.session.userId } };
         if (req.query.user_id) query.user = req.query.user_id;
 
         console.log("Fetching reels with query:", query); // Debugging
-        const reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
+        let reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
+        
+        // Randomize and interleave reels to avoid author clustering
+        if (!req.query.user_id && reels.length > 2) {
+            reels.sort(() => Math.random() - 0.5);
+
+            const interleaved = [];
+            const pools = new Map();
+            for (const r of reels) {
+                const uid = r.user ? r.user._id.toString() : r._id.toString();
+                if (!pools.has(uid)) pools.set(uid, []);
+                pools.get(uid).push(r);
+            }
+            const sortedPools = Array.from(pools.values()).sort((a, b) => b.length - a.length);
+            while (interleaved.length < reels.length) {
+                for (const pool of sortedPools) {
+                    if (pool.length > 0) interleaved.push(pool.shift());
+                }
+            }
+            reels = interleaved;
+        }
+
         const userId = req.session.userId;
         res.json(reels.map(r => ({
             id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
@@ -1195,7 +1251,7 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
             user: { $in: creators },
             createdAt: { $gte: yesterday }
         }).populate('user', 'name avatar close_friends')
-          .sort({ createdAt: 1 }); // Sort oldest to newest so .length-1 is the latest
+          .sort({ createdAt: -1 }); // Sort newest to oldest so it starts from the latest update
 
         // Filter stories based on privacy settings
         const filteredStories = stories.filter(story => {
@@ -1359,6 +1415,15 @@ router.post('/report_message', isAuthenticated, async (req, res) => {
         });
 
         await report.save();
+
+        // Alert admins via Socket.io
+        req.io.to('admins').emit('new_report', {
+            id: report._id,
+            reason: reason,
+            reporter: 'User',
+            time: 'Just now'
+        });
+
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to submit report' });
@@ -1381,6 +1446,15 @@ router.post('/report_user', isAuthenticated, upload.single('screenshot'), async 
         });
 
         await report.save();
+
+        // Alert admins via Socket.io
+        req.io.to('admins').emit('new_report', {
+            id: report._id,
+            reason: reason,
+            reporter: 'User',
+            time: 'Just now'
+        });
+
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to submit report' });
@@ -1397,9 +1471,29 @@ router.get('/admin/get_dashboard_stats', isAuthenticated, async (req, res) => {
         const ysu_users = await User.countDocuments({ account_type: 'ysu' });
         const open_reports = await Report.countDocuments({ status: 'open' });
         const online_users = await User.countDocuments({ online: true });
+        
+        // Dynamic Recommended Actions
+        const recentFlagged = await Report.countDocuments({ status: 'open', reason: /post/i });
+        const newUsersToday = await User.countDocuments({ createdAt: { $gte: new Date().setHours(0,0,0,0) } });
 
-        res.json({ total_users, maiga_users, ysu_users, open_reports, online_users });
+        const recommendations = [
+            { text: `Review ${open_reports} pending user reports`, priority: open_reports > 5 ? 'high' : 'medium' },
+            { text: `Check ${recentFlagged} posts flagged for content`, priority: recentFlagged > 0 ? 'medium' : 'low' },
+            { text: `${newUsersToday} new users joined today`, priority: 'low' }
+        ];
+
+        res.json({ total_users, maiga_users, ysu_users, open_reports, online_users, recommendations });
     } catch (error) { res.status(500).json({ error: 'Failed' }); }
+});
+
+router.get('/admin/get_user_profile_details', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const user = await User.findById(req.query.user_id).populate('banned_by', 'name');
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        
+        // Admin sees sensitive fields like email, phone, and IP logs
+        res.json(user);
+    } catch (error) { res.status(500).json({ error: 'Failed to fetch details' }); }
 });
 
 router.get('/admin/get_account_type_stats', isAuthenticated, async (req, res) => {
@@ -1468,7 +1562,18 @@ router.get('/admin/get_users', isAuthenticated, async (req, res) => {
 });
 
 router.get('/admin/get_settings', isAuthenticated, async (req, res) => {
-    res.json({ success: true, settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true } });
+    const settings = await Setting.find({});
+    const config = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true };
+    settings.forEach(s => config[s.key] = s.value);
+    res.json({ success: true, settings: config });
+});
+
+router.post('/admin/save_settings', isAuthenticated, isAdmin, async (req, res) => {
+    const updates = req.body;
+    for (const [key, value] of Object.entries(updates)) {
+        await Setting.findOneAndUpdate({ key }, { value }, { upsert: true });
+    }
+    res.json({ success: true });
 });
 
 router.get('/admin/get_flagged_posts', isAuthenticated, async (req, res) => {
@@ -1479,11 +1584,27 @@ router.get('/admin/get_flagged_posts', isAuthenticated, async (req, res) => {
 });
 
 router.get('/admin/get_broadcast_history', isAuthenticated, async (req, res) => {
-    res.json({ success: true, history: [] });
+    const history = await Broadcast.find({}).sort({ sent_at: -1 }).limit(50);
+    res.json({ success: true, history });
 });
 
 router.get('/admin/get_logs', isAuthenticated, async (req, res) => {
-    res.json({ success: true, logs: [] });
+    const { startDate, endDate, action } = req.query;
+    const query = {};
+    if (startDate || endDate) {
+        query.timestamp = {};
+        if (startDate) query.timestamp.$gte = new Date(startDate);
+        if (endDate) query.timestamp.$lte = new Date(endDate);
+    }
+    if (action) query.action = action;
+
+    const logs = await Log.find(query).populate('user', 'name').sort({ timestamp: -1 }).limit(100);
+    res.json({ 
+        success: true, 
+        logs: logs.map(l => ({
+            id: l._id, timestamp: formatTime(l.timestamp), user: l.user?.name || 'System', action: l.action, details: l.details
+        })) 
+    });
 });
 
 router.get('/vapid_public_key', isAuthenticated, (req, res) => {
@@ -1637,7 +1758,10 @@ router.get('/get_public_key', isAuthenticated, async (req, res) => {
 });
 
 router.post('/increment_reel_view', isAuthenticated, async (req, res) => {
-    await Post.findByIdAndUpdate(req.body.post_id, { $inc: { views: 1 }, $addToSet: { viewed_by: req.session.userId } });
+    await Post.updateOne(
+        { _id: req.body.post_id, viewed_by: { $ne: req.session.userId } },
+        { $inc: { views: 1 }, $addToSet: { viewed_by: req.session.userId } }
+    );
     res.json({ success: true });
 });
 
@@ -1826,6 +1950,26 @@ router.post('/admin/delete_post', isAuthenticated, isAdmin, async (req, res) => 
     }
 });
 
+router.post('/admin/delete_broadcast', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { id } = req.body;
+        await Broadcast.deleteOne({ _id: id });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete broadcast record' });
+    }
+});
+
+router.post('/admin/revoke_session', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id, session_id } = req.body;
+        await User.findByIdAndUpdate(user_id, { 
+            $pull: { login_sessions: { _id: session_id } } 
+        });
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Failed to revoke session' }); }
+});
+
 router.post('/admin/warn_user', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const { user_id, message, report_id } = req.body;
@@ -1994,10 +2138,31 @@ router.post('/admin/send_broadcast', isAuthenticated, isAdmin, async (req, res) 
             is_read: false
         }));
         await Notification.insertMany(notifications);
+        
+        // Persist to history
+        await Broadcast.create({ title, message, sent_by: req.session.userId });
+        
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to send broadcast' });
     }
+});
+
+router.post('/admin/update_admin_profile', isAuthenticated, isAdmin, upload.single('avatar'), async (req, res) => {
+    try {
+        const { name } = req.body;
+        const updates = { name };
+        if (req.file) updates.avatar = await uploadToR2(req.file, 'admin');
+        
+        await User.findByIdAndUpdate(req.session.userId, { $set: updates });
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Failed to update admin profile' }); }
+});
+
+router.post('/admin/clear_chat', isAuthenticated, isAdmin, async (req, res) => {
+    const { chat_id } = req.body;
+    await Message.deleteMany({ $or: [{ sender: chat_id }, { receiver: chat_id }] });
+    res.json({ success: true });
 });
 
 router.post('/admin/toggle_verify_user', isAuthenticated, isAdmin, async (req, res) => {
@@ -2011,6 +2176,34 @@ router.post('/admin/toggle_verify_user', isAuthenticated, isAdmin, async (req, r
     } catch (error) {
         res.status(500).json({ error: 'Failed to toggle verification' });
     }
+});
+
+router.post('/admin/toggle_admin', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        const user = await User.findById(user_id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        user.is_admin = !user.is_admin;
+        
+        if (user.is_admin) {
+            // Make all existing users follow this new admin
+            const allUserIds = await User.find({ _id: { $ne: user._id } }, '_id');
+            const ids = allUserIds.map(u => u._id);
+            
+            // Update all users to add admin to their 'following'
+            await User.updateMany(
+                { _id: { $in: ids } },
+                { $addToSet: { following: user._id } }
+            );
+            
+            // Add all users to admin's 'followers'
+            user.followers = [...new Set([...user.followers, ...ids])];
+        }
+
+        await user.save();
+        res.json({ success: true, is_admin: user.is_admin });
+    } catch (error) { res.status(500).json({ error: 'Failed to toggle admin status' }); }
 });
 
 router.post('/admin/delete_user', isAuthenticated, isAdmin, async (req, res) => {

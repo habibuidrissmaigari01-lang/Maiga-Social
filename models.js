@@ -448,6 +448,26 @@ const bookmarkSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+const systemSettingSchema = new mongoose.Schema({
+    key: { type: String, unique: true, required: true },
+    value: mongoose.Schema.Types.Mixed
+});
+
+const logSchema = new mongoose.Schema({
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    action: { type: String, required: true },
+    details: String,
+    ip: String,
+    timestamp: { type: Date, default: Date.now }
+});
+
+const broadcastSchema = new mongoose.Schema({
+    title: String,
+    message: { type: String, required: true },
+    sent_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    sent_at: { type: Date, default: Date.now }
+});
+
 const otpSchema = new mongoose.Schema({
     identity: { type: String, required: true },
     otp: { type: String, required: true },
@@ -467,6 +487,9 @@ const models = {
     Call: mongoose.model('Call', callSchema),
     Report: mongoose.model('Report', reportSchema),
     Bookmark: mongoose.model('Bookmark', bookmarkSchema),
+    Setting: mongoose.model('Setting', systemSettingSchema),
+    Log: mongoose.model('Log', logSchema),
+    Broadcast: mongoose.model('Broadcast', broadcastSchema),
     Otp: mongoose.model('Otp', otpSchema),
     s3Client // Export the client to remove duplication in other files
 };

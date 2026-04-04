@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
     <script src="alpine.js" defer></script>
+    <audio id="admin-notif-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         [x-cloak] { display: none !important; }
         .dark { background-color: #18191a; color: #e4e6eb; }
@@ -67,7 +69,7 @@
                     <i class="fa-solid w-8 text-center text-xl" :class="darkMode ? 'fa-sun text-yellow-500' : 'fa-moon text-blue-600'"></i>
                     <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
                 </button>
-                <button @click="logout()" class="flex items-center space-x-4 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
+                <button @click="window.location.href='/home'" class="flex items-center space-x-4 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
                     <i class="fa-solid fa-arrow-left text-xl w-8 text-center"></i>
                     <span>Back to App</span>
                 </button>
@@ -274,6 +276,36 @@
                     <li>Review analytics for user engagement over the last 7 days.</li>
                 </ul>
             </div>
+
+            <!-- Recent Ban History Section -->
+            <div class="mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-md overflow-hidden">
+                <div class="p-6 border-b dark:border-gray-700 flex justify-between items-center">
+                    <h3 class="font-black text-lg">Recent Ban History</h3>
+                    <i class="fa-solid fa-gavel text-gray-400"></i>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 dark:bg-gray-700/50 text-xs uppercase text-gray-500">
+                            <tr>
+                                <th class="p-4">Banned User</th>
+                                <th class="p-4">Reason</th>
+                                <th class="p-4">Banned By</th>
+                                <th class="p-4">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y dark:divide-gray-700">
+                            <template x-for="ban in recentBans" :key="ban.id">
+                                <tr>
+                                    <td class="p-4 font-bold" x-text="ban.name"></td>
+                                    <td class="p-4 text-gray-600 dark:text-gray-400" x-text="ban.ban_reason"></td>
+                                    <td class="p-4 text-blue-600 font-medium" x-text="ban.banned_by"></td>
+                                    <td class="p-4 text-gray-400" x-text="new Date(ban.banned_at).toLocaleDateString()"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
             </div>
 
     <!-- Users -->
@@ -341,11 +373,14 @@
                             </td>
                             <td class="p-4 space-x-2">
                                 <button @click="openProfileModal(user)" class="text-gray-400 hover:text-blue-600"><i class="fa-solid fa-eye"></i></button>
-                                <button @click="toggleBlockUser(user)" class="text-gray-400 hover:text-red-600" :class="{'text-green-500': user.blocked}">
-                                    <i class="fa-solid" :class="user.blocked ? 'fa-unlock' : 'fa-ban'"></i>
+                                <button @click="user.blocked ? toggleBlockUser(user) : openBanModal(user)" class="text-gray-400 hover:text-red-600" :class="{'text-green-500': user.blocked}">
+                                    <i class="fa-solid" :class="user.blocked ? 'fa-unlock' : 'fa-gavel'"></i>
                                 </button>
                                 <button @click="toggleVerify(user)" class="text-gray-400 hover:text-blue-500" :class="{'text-blue-500': user.is_verified == 1}">
                                     <i class="fa-solid fa-circle-check"></i>
+                                </button>
+                                <button @click="toggleAdmin(user)" class="text-gray-400 hover:text-orange-500" :class="{'text-orange-500': user.is_admin}">
+                                    <i class="fa-solid fa-shield-halved"></i>
                                 </button>
                                 <button @click="deleteUser(user.id)" class="text-gray-400 hover:text-purple-600"><i class="fa-solid fa-trash"></i></button>
                             </td>
@@ -589,6 +624,28 @@
         </div>
     </div>
 
+    <!-- Ban User Reason Modal -->
+    <div x-show="showBanModal" x-cloak class="fixed inset-0 z-[700] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div @click.away="showBanModal = false" class="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-md p-6 animate-fadeIn">
+            <div class="flex flex-col items-center text-center mb-6">
+                <div class="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center text-red-600 mb-4">
+                    <i class="fa-solid fa-gavel text-3xl"></i>
+                </div>
+                <h3 class="text-xl font-black">Ban Account</h3>
+                <p class="text-sm text-gray-500 mt-1">Please provide a reason for banning <span class="font-bold text-gray-800 dark:text-white" x-text="userToBan?.name"></span></p>
+            </div>
+            <div class="space-y-4">
+                <textarea x-model="banReason" rows="3" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-2xl p-4 text-sm focus:ring-2 focus:ring-red-500 resize-none" placeholder="Violation of community guidelines, harassment, etc..."></textarea>
+                <div class="flex space-x-3">
+                    <button @click="showBanModal = false" class="flex-1 py-3 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">Cancel</button>
+                    <button @click="confirmBan()" :disabled="!banReason.trim()" class="flex-1 py-3 rounded-xl font-bold bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-500/30 disabled:opacity-50 transition-all">
+                        Ban User
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- User Profile Modal -->
     <div x-show="showUserProfileModal" class="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-cloak>
         <div @click.away="showUserProfileModal = false" class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -660,6 +717,10 @@
                 isSideMenuOpen: false,
                 showUserOptionsModal: false,
                 showUserProfileModal: false,
+                showBanModal: false,
+                banReason: '',
+                userToBan: null,
+                recentBans: [],
                 isEditingAdminProfile: false,
                 viewingUser: null,
                 selectedUser: null,
@@ -670,8 +731,8 @@
                 signupsByAccountTypeChart: null,
                 postsPerDayChart: null,
                 admin: {
-                    name: 'Habibu Idriss Maigari',
-                    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky'
+                    name: 'Loading...',
+                    avatar: 'img/logo.png'
                 },
                 editAdmin: {},
                 posts: [],
@@ -817,9 +878,46 @@
                     this.selectedUser = user;
                     this.showUserOptionsModal = true;
                 },
+                openBanModal(user) {
+                    this.userToBan = user;
+                    this.banReason = '';
+                    this.showBanModal = true;
+                },
+                confirmBan() {
+                    if (!this.userToBan || !this.banReason.trim()) return;
+                    fetch('/api/admin/ban_user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ user_id: this.userToBan.id, reason: this.banReason })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.userToBan.blocked = true;
+                            this.showBanModal = false;
+                            this.fetchUsers(); // Refresh list
+                        }
+                    });
+                },
+                toggleAdmin(user) {
+                    const action = user.is_admin ? 'remove admin privileges from' : 'promote to admin (this will make all users follow them)';
+                    if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+
+                    fetch('/api/admin/toggle_admin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ user_id: user.id })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            user.is_admin = data.is_admin;
+                            this.fetchDashboardData(); // Refresh counts
+                        }
+                    });
+                },
                 toggleBlockUser(user) {
                     if (!user) return;
-                    const action = user.blocked ? 'unblock_user' : 'block_user';
                     const confirmMessage = user.blocked ? 'Are you sure you want to unblock this user?' : 'Are you sure you want to block this user?';
 
                     if (!confirm(confirmMessage)) return;
@@ -878,21 +976,18 @@
                         });
                     }
                 },
-                deleteUserChat(userId) {
-                    if (confirm('Are you sure you want to delete this user\'s chat history? This cannot be undone.')) {
-                        if (this.chatMessages[userId]) {
-                            delete this.chatMessages[userId];
-                            this.chatMessages = { ...this.chatMessages }; // Trigger reactivity
-                            // Also clear on server
-                            fetch('/api/clear_chat', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ chat_id: userId, type: 'user' })
-                            });
-                            this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: 'DELETE_CHAT', details: `Deleted chat history for user ID ${userId}.` });
-                        } else {
-                            alert('No chat history found for this user.');
-                        }
+                async deleteUserChat(userId) {
+                    if (!confirm('Are you sure you want to globally delete this user\'s entire chat history?')) return;
+                    
+                    const res = await fetch('/api/admin/clear_chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ chat_id: userId })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Chat history wiped globally.');
+                        this.fetchUsers();
                     }
                 },
                 updateChartColors() {
@@ -1149,6 +1244,7 @@
                     });
                 },
                 init() {
+                    this.initSocket();
                     this.$watch('darkMode', val => {
                         if (val) document.documentElement.classList.add('dark');
                         else document.documentElement.classList.remove('dark');
@@ -1165,6 +1261,34 @@
                     this.$watch('logFilters', () => this.fetchLogs(), { deep: true });
 
 this.loadInitialData();
+                    
+                    // Sync Admin Profile Avatar/Name with Home Profile
+                    fetch('/api/get_user').then(res => res.json()).then(user => {
+                        this.admin.name = user.name;
+                        this.admin.avatar = user.avatar;
+                        this.editAdmin = { ...this.admin };
+                    });
+                },
+                initSocket() {
+                    this.socket = io();
+                    this.socket.on('connect', () => {
+                        // Join the admin-only notification room
+                        this.socket.emit('join_room', 'admins');
+                    });
+
+                    this.socket.on('new_report', (data) => {
+                        // Add to internal notifications list
+                        this.notifications.unshift({
+                            id: data.id,
+                            message: `New Report: ${data.reason} from ${data.reporter}`,
+                            time: data.time,
+                            unread: true,
+                            icon: 'fa-triangle-exclamation'
+                        });
+                        // Browser Alert
+                        document.getElementById('admin-notif-sound')?.play().catch(()=>{});
+                        alert(`⚠️ New Admin Alert: ${data.reason}`);
+                    });
                 },
                 loadInitialData() {
                     this.fetchError = false;
@@ -1190,7 +1314,8 @@ this.loadInitialData();
                         fetch('/api/admin/get_weekly_signups').then(r => r.json()).then(d => this.initUserActivityChart(d)),
                         fetch('/api/admin/get_weekly_signups_by_type').then(r => r.json()).then(d => this.initSignupsByAccountTypeChart(d)),
                         fetch('/api/admin/get_flagged_posts').then(r => r.json()).then(d => this.flaggedPosts = d),
-                        fetch('/api/admin/get_reports').then(r => r.json()).then(d => this.reports = d)
+                        fetch('/api/admin/get_reports').then(r => r.json()).then(d => this.reports = d),
+                        fetch('/api/admin/get_blocked_user_details').then(r => r.json()).then(d => this.recentBans = d.slice(0, 5))
                     ]);
                 },
                 fetchUsers() {
@@ -1211,12 +1336,25 @@ this.loadInitialData();
                             }
                         }).catch(() => alert('Error fetching users.'));
                 },
-                logout() {
-                    fetch('/api/logout', { method: 'GET' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.success) window.location.href = '/';
-                        });
+                async logout() {
+                    if (!confirm('Are you sure you want to log out?')) return;
+
+                    const res = await fetch('/api/logout', { method: 'GET' });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        // Clear local application storage
+                        localStorage.clear();
+                        sessionStorage.clear();
+
+                        // Force clear browser cache storage
+                        if ('caches' in window) {
+                            const cacheNames = await caches.keys();
+                            await Promise.all(cacheNames.map(name => caches.delete(name)));
+                        }
+
+                        window.location.replace('/');
+                    }
                 },
                 loadSettings() {
                     return fetch('/api/admin/get_settings')
