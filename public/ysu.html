@@ -694,6 +694,50 @@
             });
         });
 
+        async function verifyOTP() {
+            const btn = document.querySelector('#reg-6 .btn-primary');
+            if (!btn) return;
+            const originalBtnHtml = btn.innerHTML;
+
+            const otpInputs = document.querySelectorAll('#otp-inputs .otp-box');
+            const otp = Array.from(otpInputs).map(i => i.value).join('');
+            
+            const emailInput = document.querySelector('input[name="reg_email"]');
+            const phoneInput = document.querySelector('input[name="phone"]');
+            const identity = emailInput?.value || phoneInput?.value;
+
+            if (otp.length !== 6) return;
+
+            if (!identity) {
+                showMessage('Contact identity missing. Please go back and re-enter.', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Verifying...';
+
+            try {
+                const response = await fetch(API_BASE_URL + '/api/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identity, otp, type: 'registration' })
+                });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showMessage(result.message, 'success');
+                    nextStep(7); // Proceed to the next registration step (password)
+                } else {
+                    showMessage(result.message || 'OTP verification failed.', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error during OTP verification.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
+            }
+        }
+
         function resendOTP(e) {
             e.preventDefault();
             const email = document.querySelector('input[name="reg_email"]').value;
@@ -770,6 +814,11 @@
         function validateStep(step) {
             const stepEl = document.getElementById(`reg-${step}`);
             if (!stepEl) return true;
+
+            // Skip generic validation for OTP step as verifyOTP handles its own validation
+            if (step === 6) {
+                return true;
+            }
 
             // Special validation for Contact Step (Step 5)
             if (step === 5) {
@@ -1150,7 +1199,12 @@
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
                 if (currentStep > 0 && currentStep < 7) {
                     e.preventDefault();
-                    nextStep(currentStep + 1);
+                    // If on OTP step, trigger verifyOTP instead of just moving next
+                    if (currentStep === 6) {
+                        verifyOTP();
+                    } else {
+                        nextStep(currentStep + 1);
+                    }
                 }
             }
         });
