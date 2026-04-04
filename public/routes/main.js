@@ -1938,6 +1938,104 @@ router.get('/admin/group_activity_report', isAuthenticated, isAdmin, async (req,
     }
 });
 
+router.get('/admin/get_admin_notifications', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const notifications = await Notification.find({ user: req.session.userId })
+            .sort({ created_at: -1 })
+            .limit(20);
+        
+        res.json({ 
+            success: true, 
+            notifications: notifications.map(n => ({
+                id: n._id,
+                message: n.content,
+                time: formatTime(n.created_at),
+                unread: !n.is_read,
+                icon: n.type === 'system' ? 'fa-triangle-exclamation' : 'fa-bell'
+            }))
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch notifications' });
+    }
+});
+
+router.post('/admin/mark_all_notifications_read', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        await Notification.updateMany({ user: req.session.userId, is_read: false }, { $set: { is_read: true } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update notifications' });
+    }
+});
+
+router.post('/admin/delete_notification', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { id } = req.body;
+        await Notification.deleteOne({ _id: id, user: req.session.userId });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete notification' });
+    }
+});
+
+router.post('/admin/save_settings', isAuthenticated, isAdmin, async (req, res) => {
+    // Placeholder - in a full implementation, you would save these to a 'Settings' collection
+    res.json({ success: true });
+});
+
+router.post('/admin/send_broadcast', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { title, message } = req.body;
+        const users = await User.find({}, '_id');
+        const notifications = users.map(u => ({
+            user: u._id,
+            type: 'system',
+            content: `${title ? title + ': ' : ''}${message}`,
+            is_read: false
+        }));
+        await Notification.insertMany(notifications);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to send broadcast' });
+    }
+});
+
+router.post('/admin/toggle_verify_user', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        const user = await User.findById(user_id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        user.is_verified = !user.is_verified;
+        await user.save();
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to toggle verification' });
+    }
+});
+
+router.post('/admin/delete_user', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        await User.deleteOne({ _id: user_id });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+router.post('/admin/unblock_user', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id } = req.body;
+        await User.findByIdAndUpdate(user_id, { 
+            blocked: false, 
+            $unset: { banned_by: 1, ban_reason: 1 } 
+        });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to unblock user' });
+    }
+});
+
 router.get('/get_trending', isAuthenticated, async (req, res) => {
     try {
         // Aggregate hashtags from posts created in the last 7 days

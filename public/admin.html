@@ -434,9 +434,10 @@
                 <textarea x-model="broadcast.message" rows="5" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white transition-all resize-none" placeholder="Type your message to all users..."></textarea>
             </div>
             <div class="flex justify-end">
-                <button @click="sendBroadcast()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!broadcast.message.trim()">
+                <button @click="sendBroadcast()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!broadcast.message.trim() || broadcast.isSendingBroadcast">
                     <i class="fa-solid fa-paper-plane"></i>
-                    <span>Send Broadcast</span>
+                    <span x-text="broadcast.isSendingBroadcast ? 'Sending...' : 'Send Broadcast'"></span>
+                    <i x-show="broadcast.isSendingBroadcast" class="fa-solid fa-spinner fa-spin"></i>
                 </button>
             </div>
         </div>
@@ -675,6 +676,7 @@
                 editAdmin: {},
                 posts: [],
                 chatMessages: {},
+                settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true },
                 searchQuery: '',
                 broadcastSearchQuery: '',
                 isExporting: false,
@@ -694,7 +696,6 @@
                     message: ''
                 },
                 notifications: [],
-                settings: {}, // Initialize as an empty object to prevent ReferenceError
                 markAllRead() {
                     this.notifications.forEach(n => n.unread = false);
                 },
@@ -1156,14 +1157,12 @@
                     this.editAdmin = { ...this.admin };
 
                     // Watchers for server-side filtering
-                    this.settings = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true }; // Then populate with defaults
                     this.$watch('currentPage', () => this.fetchUsers());
                     this.$watch('searchQuery', () => { this.currentPage = 1; this.fetchUsers(); });
                     this.$watch('userFilter', () => { this.currentPage = 1; this.fetchUsers(); });
                     this.$watch('sortCol', () => this.fetchUsers());
                     this.$watch('sortAsc', () => this.fetchUsers());
                     this.$watch('logFilters', () => this.fetchLogs(), { deep: true });
-                    this.settings = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true }; // Set default values here
 
 this.loadInitialData();
                 },
