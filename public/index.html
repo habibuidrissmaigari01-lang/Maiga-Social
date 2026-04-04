@@ -432,8 +432,9 @@
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
+                    <p id="matchAlert" class="text-[10px] font-bold text-red-500 hidden"><i class="fa-solid fa-circle-exclamation mr-1"></i> Passwords do not match</p>
                     <div class="flex items-start">
-                        <input id="terms" name="terms" type="checkbox" onchange="document.getElementById('registerBtn').disabled = !this.checked" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1 cursor-pointer">
+                        <input id="terms" name="terms" type="checkbox" onchange="checkConfirmPassword()" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1 cursor-pointer">
                         <label for="terms" class="ml-3 block text-sm text-gray-700">
                             I have read and agree to the 
                             <a href="#" onclick="showTerms(event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
@@ -958,17 +959,27 @@
         function checkConfirmPassword() {
             const mainPass = document.getElementById('mainPass');
             const confirmPass = document.getElementById('confirmPass');
-            if (!mainPass || !confirmPass) return;
+            const alertEl = document.getElementById('matchAlert');
+            const regBtn = document.getElementById('registerBtn');
+            const termsCheck = document.getElementById('terms');
 
-            if (mainPass.value === confirmPass.value && confirmPass.value !== '') {
+            const passwordsMatch = mainPass.value === confirmPass.value && confirmPass.value !== '';
+
+            if (confirmPass.value === '') {
+                confirmPass.classList.remove('border-red-500', 'border-green-500');
+                alertEl.classList.add('hidden');
+            } else if (passwordsMatch) {
                 confirmPass.classList.remove('border-red-500');
                 confirmPass.classList.add('border-green-500');
-            } else if (confirmPass.value !== '') {
+                alertEl.classList.add('hidden');
+            } else {
                 confirmPass.classList.remove('border-green-500');
                 confirmPass.classList.add('border-red-500');
-            } else {
-                confirmPass.classList.remove('border-red-500', 'border-green-500');
+                alertEl.classList.remove('hidden');
             }
+
+            // Enable button only if passwords match AND terms are accepted
+            regBtn.disabled = !(passwordsMatch && termsCheck.checked);
         }
 
         // Initial check on load for password fields if they have pre-filled values

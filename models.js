@@ -437,6 +437,7 @@ const reportSchema = new mongoose.Schema({
     reported_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     reason: String,
     details: String,
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
     status: { type: String, default: 'open' }, // open, dismissed
     created_at: { type: Date, default: Date.now }
 });

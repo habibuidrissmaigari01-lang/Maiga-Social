@@ -118,6 +118,20 @@ const initMaiga = () => {
         blockedUserDetails: [],
         lastBusyCall: null,
 
+        // Admin Panel State Initialization
+        totalUsers: 0,
+        currentPage: 1,
+        itemsPerPage: 10,
+        adminUsers: [],
+        flaggedPosts: [],
+        adminNotifications: [],
+        settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true },
+        adminSearchQuery: '',
+        adminFilter: 'all',
+        accountTypeStats: { maiga: 0, ysu: 0 },
+        postsPerDayStats: { labels: [], data: [] },
+        weeklySignups: { labels: [], data: [] },
+
         formatLastSeen(date) {
             if (!date) return '';
             const now = this.currentTime;
@@ -1069,6 +1083,39 @@ const initMaiga = () => {
             }
         },
 
+        async fetchAdminDashboard() {
+            const stats = await this.apiFetch('/api/admin/get_dashboard_stats');
+            if (stats) {
+                this.totalUsers = stats.total_users;
+                // Other stats like maiga_users can be mapped here if needed by the UI
+            }
+            const settingsData = await this.apiFetch('/api/admin/get_settings');
+            if (settingsData?.settings) {
+                this.settings = settingsData.settings;
+            }
+            const flagged = await this.apiFetch('/api/admin/get_flagged_posts');
+            if (Array.isArray(flagged)) this.flaggedPosts = flagged;
+
+            // Fetch Chart Data
+            const accStats = await this.apiFetch('/api/admin/get_account_type_stats');
+            if (accStats) this.accountTypeStats = accStats;
+
+            const postStats = await this.apiFetch('/api/admin/get_posts_per_day_stats');
+            if (postStats) this.postsPerDayStats = postStats;
+
+            const signupStats = await this.apiFetch('/api/admin/get_weekly_signups');
+            if (signupStats) this.weeklySignups = signupStats;
+        },
+
+        async fetchAdminUsers(page = 1) {
+            this.currentPage = page;
+            const data = await this.apiFetch(`/api/admin/get_users?page=${page}&limit=${this.itemsPerPage}&search=${this.adminSearchQuery}&filter=${this.adminFilter}`);
+            if (data) {
+                this.adminUsers = data.users;
+                this.totalUsers = data.total;
+            }
+        },
+
         isRecording: false,
         mediaRecorder: null,
         audioChunks: [],
@@ -1209,7 +1256,7 @@ const initMaiga = () => {
         toasts: [],
         searchSuggestions: [],
         recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
-        reportForm: { title: '', description: '', screenshot: null, preview: null, targetType: '', targetId: null, targetUserId: null },
+        reportForm: { title: '', description: '', screenshot: null, preview: null, targetType: '', targetId: null, targetUserId: null, priority: 'low' },
         // Pull to Refresh
         pullStartY: 0,
         pullDistance: 0,
@@ -2034,6 +2081,8 @@ const initMaiga = () => {
 
                 if (this.user.is_admin) {
                     this.apiFetch('/api/admin/get_reports').then(d => { if (Array.isArray(d)) this.reports = d; });
+                    this.fetchAdminDashboard();
+                    this.fetchAdminUsers(1);
                 }
             } catch (err) {
                 console.error("Critical data load failed", err);
@@ -2094,12 +2143,14 @@ const initMaiga = () => {
 
             this.viewingUser = null; // Show loading state
             this.showUserProfile = true;
+            this.profileTab = 'posts'; // Reset tab to posts when opening a new profile
 
             // Fetch full user profile from API
             this.apiFetch(`/api/get_profile?user_id=${userId}`)
                 .then(data => {
                     if (data && !data.error && data.id) {
                         this.viewingUser = { ...data,
+                            reels: [], // Initialize reels array
                             profilePostsPage: 1,
                             profilePostsLimit: 10,
                             isLoadingMoreProfilePosts: false }; // Initialize pagination state
@@ -2211,7 +2262,7 @@ const initMaiga = () => {
             this.following = Array.from(storiesByUser.values());
         },
         get userMediaPosts() {
-            return this.myReels;
+           return (this.showUserProfile && this.viewingUser) ? (this.viewingUser.reels || []) : this.myReels;
         },
         get userLikedPosts() {
            return (this.posts || []).filter(p => p.myReaction !== null);
@@ -2629,17 +2680,9 @@ const initMaiga = () => {
                 this.showChatOptions = false;
             }, () => this.showToast('Error', 'Unable to retrieve location', 'error'));
         },
-        async submitSupportTicket() {
-            const title = prompt("Enter a short title for your problem:");
-            if (!title) return;
-            const desc = prompt("Please describe the issue:");
-            if (!desc) return;
-            const res = await this.apiFetch('/api/submit_support_ticket', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, description: desc })
-            });
-            if (res?.success) this.showToast('Success', 'Ticket submitted. Our team will review it.', 'success');
+        submitSupportTicket() {
+            // Reusing the reporting modal for general support tickets
+            this.openReportModal('support_ticket', { id: 'general' });
         },
         handleMediaSelect(event, type) {
             const file = event.target.files[0];
@@ -6007,6 +6050,7 @@ const initMaiga = () => {
             this.reportForm = {
                 title: '', description: '', screenshot: null, preview: null,
                 targetType: type,
+                priority: 'low',
                 targetId: target.id,
                 targetUserId: type === 'user' ? target.id : (target.user_id || (target.user ? target.user.id : null))
             };
@@ -6033,6 +6077,7 @@ const initMaiga = () => {
             formData.append('user_id', this.reportForm.targetUserId);
             formData.append('reason', this.reportForm.title);
             formData.append('details', this.reportForm.description + `\n(Reported ${this.reportForm.targetType} ID: ${this.reportForm.targetId})`);
+            formData.append('priority', this.reportForm.priority);
             if (this.reportForm.screenshot) {
                 formData.append('screenshot', this.reportForm.screenshot);
             }

@@ -1792,7 +1792,26 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Description</label>
-                    <textarea x-model="reportForm.description" rows="4" placeholder="Describe the issue in detail..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none transition-all"></textarea>
+                    <textarea x-model="reportForm.description" maxlength="500" rows="4" placeholder="Describe the issue in detail..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none transition-all"></textarea>
+                    <div class="flex justify-end mt-1">
+                        <span class="text-[10px] font-bold" :class="reportForm.description.length > 450 ? 'text-red-500' : 'text-gray-400'" x-text="reportForm.description.length + ' / 500'"></span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Priority Level</label>
+                    <div class="grid grid-cols-3 gap-2 mt-1">
+                        <template x-for="p in ['low', 'medium', 'high']">
+                            <button @click="reportForm.priority = p"
+                                    type="button"
+                                    class="py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all"
+                                    :class="reportForm.priority === p ?
+                                        (p === 'low' ? 'border-green-500 bg-green-50 text-green-600' :
+                                         p === 'medium' ? 'border-orange-500 bg-orange-50 text-orange-600' :
+                                         'border-red-500 bg-red-50 text-red-600') :
+                                        'border-gray-100 dark:border-gray-800 text-gray-400'"
+                                    x-text="p"></button>
+                        </template>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Evidence (Screenshot)</label>
@@ -2972,7 +2991,7 @@
                         <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-circle-question"></i></div>
                         <div>
                             <span class="font-bold text-sm">Help Center</span>
-                            <p class="text-xs text-gray-500">Find answers to common questions.</p>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Browse our detailed guides and tutorials to master all features of Maiga Social.</p>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
@@ -2982,37 +3001,40 @@
                         <div class="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600"><i class="fa-solid fa-envelope-open-text"></i></div>
                         <div>
                             <span class="font-bold text-sm">Support Inbox</span>
-                            <p class="text-xs text-gray-500">Review your communication with our support team.</p>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Track your active support tickets and view responses from our administration team.</p>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
-                <button class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800 text-left">
+                <button @click="submitSupportTicket()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800 text-left">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600"><i class="fa-solid fa-triangle-exclamation"></i></div>
                         <div>
                             <span class="font-bold text-sm">Report a Problem</span>
-                            <p class="text-xs text-gray-500">Let us know about a technical issue or bug.</p>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Spotted a bug or a technical glitch? Report it here to help us improve the experience.</p>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
             </div>
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
-                <button class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left">
+                <button @click="showTerms($event)" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600"><i class="fa-solid fa-book"></i></div>
                         <div>
                             <span class="font-bold text-sm">Terms & Policies</span>
-                            <p class="text-xs text-gray-500">Understand our rules and data usage policies.</p>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Read our community guidelines and data privacy policies to stay informed.</p>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
                 <button @click="activeTab = 'security'; fetchSecurityData()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-shield-check"></i></div>
-                        <span class="font-bold text-sm">Security Check</span>
+                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div>
+                            <span class="font-bold text-sm">Security Check</span>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Review active login sessions and manage your account security settings.</p>
+                        </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
@@ -3385,10 +3407,30 @@
                              @scroll.passive="if ($el.scrollTop + $el.clientHeight >= $el.scrollHeight - 100) loadMoreProfilePosts()"
                              x-ref="profilePostsContainer"
                         >
-                            <h4 class="font-bold text-sm mb-3 text-gray-500">Posts</h4>
-                            <div class="grid grid-cols-3 gap-1">
+                            <div class="flex border-b dark:border-gray-800 mb-4">
+                                <button @click="profileTab = 'posts'" class="flex-1 py-3 text-xs font-bold transition-colors" :class="profileTab === 'posts' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400 border-b-2 border-transparent'">Posts</button>
+                                <button @click="profileTab = 'media'" class="flex-1 py-3 text-xs font-bold transition-colors" :class="profileTab === 'media' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-400 border-b-2 border-transparent'">Media</button>
+                            </div>
+
+                            <div x-show="profileTab === 'posts'" class="grid grid-cols-3 gap-1">
                                 <template x-for="post in viewingUser?.posts" :key="post.id"><div @click="viewingPost = post; showUserProfile = false" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer"><template x-if="post.media"><img :src="post.media" class="w-full h-full object-cover"></template><template x-if="!post.media"><div class="w-full h-full flex items-center justify-center p-2 text-[8px] text-center" x-text="post.content"></div></template></div></template>
                             </div>
+
+                            <div x-show="profileTab === 'media'" class="grid grid-cols-3 gap-1">
+                                <template x-for="reel in viewingUser?.reels" :key="reel.id">
+                                    <div @click="selectedReel = reel; showReelOptions = true; showUserProfile = false; activeTab = 'reels'" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer">
+                                        <video :src="reel.media" class="w-full h-full object-cover"></video>
+                                        <div class="absolute bottom-1 left-1 flex items-center space-x-1 text-white text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                            <i class="fa-solid fa-play text-[8px]"></i>
+                                            <span x-text="formatNumber(reel.views || 0)"></span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template x-if="!viewingUser?.reels || viewingUser?.reels.length === 0">
+                                    <p class="col-span-3 text-center text-xs text-gray-500 py-8">No reels found.</p>
+                                </template>
+                            </div>
+
                             <template x-if="!viewingUser?.posts || viewingUser?.posts.length === 0"><p class="col-span-3 text-center text-xs text-gray-500 py-8">This user has no posts.</p></template>
                             <template x-if="viewingUser?.hasMorePosts">
                                 <div class="col-span-3 text-center py-4">

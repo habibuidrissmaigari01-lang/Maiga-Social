@@ -1347,7 +1347,7 @@ router.post('/report_message', isAuthenticated, async (req, res) => {
 
 router.post('/report_user', isAuthenticated, upload.single('screenshot'), async (req, res) => {
     try {
-        const { user_id, reason, details } = req.body;
+        const { user_id, reason, details, priority } = req.body;
         let screenshotUrl = null;
         if (req.file) screenshotUrl = await uploadToR2(req.file, 'reports');
 
@@ -1356,6 +1356,7 @@ router.post('/report_user', isAuthenticated, upload.single('screenshot'), async 
             reported_user: user_id,
             reason: reason,
             details: details + (screenshotUrl ? `\nEvidence: ${screenshotUrl}` : ''),
+            priority: priority || 'low',
             status: 'open'
         });
 
