@@ -81,9 +81,12 @@
         .dark .border-gray-100, .dark .border-gray-200, .dark .border-gray-800, .dark .border-gray-700 { border-color: #262626 !important; }
         .pulse-active::after { content: ''; position: absolute; bottom: 0; right: 0; width: 12px; height: 12px; background: #31a24c; border: 2px solid white; border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(49, 162, 76, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(49, 162, 76, 0); } 100% { box-shadow: 0 0 0 0 rgba(49, 162, 76, 0); } }
-        .chat-bubble-me { background-color: #0084ff; color: white; border-radius: 18px 18px 4px 18px; }
-        .chat-bubble-them { background-color: #e4e6eb; color: black; border-radius: 18px 18px 18px 4px; }
-        .dark .chat-bubble-them { background-color: #3e4042; color: #e4e6eb; }
+        .chat-bubble-me { background-color: #dcf8c6; color: #111b21; border-radius: 18px 18px 4px 18px; }
+        .dark .chat-bubble-me { background-color: #005c4b; color: #e9edef; }
+        .chat-bubble-them { background-color: #ffffff; color: #111b21; border-radius: 18px 18px 18px 4px; }
+        .dark .chat-bubble-them { background-color: #202c33; color: #e9edef; }
+        .chat-wallpaper { background-color: #e5ddd5; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-repeat: repeat; }
+        .dark .chat-wallpaper { background-color: #0b141a; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; }
         ::-webkit-scrollbar { display: none; }
         .nav-indicator { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -669,12 +672,12 @@
                 </div>
             </div>
             
-            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900/50">
+            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-wallpaper">
                  <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
                         <div class="w-8 h-8 rounded-full flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
-                            <template x-if="activeChat && activeChat.type === 'group' && msg.sender !== 'me'">
+                            <template x-if="activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index)">
                                 <img :src="msg.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + msg.author" class="w-full h-full object-cover rounded-full">
                             </template>
                            </div>
@@ -687,7 +690,7 @@
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[80%] overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm' : 'chat-bubble-them shadow-sm'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1')]">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[90%] overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm' : 'chat-bubble-them shadow-sm'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1')]">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
                                     <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
@@ -700,7 +703,7 @@
                                     <p class="text-xs font-bold mb-1" :class="getUserColor(msg.sender_id)" x-text="msg.author"></p>
                                 </template>
                                 
-                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-[14px] leading-tight" x-text="msg.content"></p></template>
+                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-[14px] leading-normal break-words" x-text="msg.content"></p></template>
                                 <template x-if="msg.type === 'image'"><img :src="msg.content" class="rounded-lg max-h-60 w-full object-cover"></template>
                                 <template x-if="msg.type === 'video'"><video :src="msg.content" controls class="rounded-lg max-h-60 w-full"></video></template>
                                 <template x-if="msg.type === 'audio'"><div class="flex items-center space-x-3 p-3 min-w-[200px]"><button class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors" @click="toggleAudio('msg-audio-' + msg.id)"><i class="fa-solid" :class="activeAudioId === 'msg-audio-' + msg.id ? 'fa-pause' : 'fa-play'"></i></button><div class="flex items-center space-x-1 h-8 flex-1 opacity-80"><template x-for="i in 12"><div class="w-1 bg-current rounded-full" :class="activeAudioId === 'msg-audio-' + msg.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%; animation-duration: ${0.4 + Math.random() * 0.5}s`"></div></template></div><audio :id="'msg-audio-' + msg.id" :src="msg.content" class="hidden" @play="handleAudioPlay('msg-audio-' + msg.id)" @pause="handleAudioPause('msg-audio-' + msg.id)" @ended="handleAudioPause('msg-audio-' + msg.id)"></audio></div></template>
@@ -820,6 +823,7 @@
                         <i class="fa-solid fa-face-smile text-xl"></i>
                     </button>
                     <div x-show="isRecording" x-cloak class="absolute inset-0 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-between px-4 pointer-events-none">
+                        <canvas id="chat-record-waveform" class="w-20 h-6"></canvas>
                         <i class="fa-solid fa-microphone-lines text-red-500 animate-pulse"></i>
                         <span class="font-mono font-bold text-sm" x-text="formatRecordingTime(recordingDuration)">00:00</span>
                         <span class="text-xs text-gray-500">Release to send</span>
@@ -1281,6 +1285,31 @@
                     <button @click="sendStoryReply('👏')" class="text-3xl hover:scale-125 transition-transform">👏</button>
                 </div>
                 <div class="flex items-center space-x-3">
+                    <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
+                    <button x-show="!replyContent.trim()" @mousedown="startStoryReplyRecording()" @mouseup="stopStoryReplyRecording()" @touchstart.prevent="startStoryReplyRecording()" @touchend.prevent="stopStoryReplyRecording()" class="p-2 text-white disabled:opacity-30" :disabled="isSendingStoryReply">
+                        <i class="fa-solid text-xl" :class="isRecordingStoryReply ? 'fa-stop text-red-500' : 'fa-microphone'"></i>
+                    </button>
+                    <button @click="toggleStoryLike()" class="text-white p-2">
+                        <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
+                    </button>
+                    <button @click="sendStoryReply(replyContent); replyContent = ''" class="text-white p-2"><i class="fa-solid fa-paper-plane text-xl"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Story Reply & Reactions -->
+        <div class="absolute bottom-0 left-0 right-0 p-4 z-30 bg-gradient-to-t from-black/90 to-transparent" x-show="viewingStory?.user?.id !== user.id">
+            <div class="flex flex-col space-y-4">
+                 <div class="flex justify-between px-2">
+                    <button @click="sendStoryReply('🔥')" class="text-3xl hover:scale-125 transition-transform">🔥</button>
+                    <button @click="sendStoryReply('😂')" class="text-3xl hover:scale-125 transition-transform">😂</button>
+                    <button @click="sendStoryReply('😍')" class="text-3xl hover:scale-125 transition-transform">😍</button>
+                    <button @click="sendStoryReply('😮')" class="text-3xl hover:scale-125 transition-transform">😮</button>
+                    <button @click="sendStoryReply('😢')" class="text-3xl hover:scale-125 transition-transform">😢</button>
+                    <button @click="sendStoryReply('👏')" class="text-3xl hover:scale-125 transition-transform">👏</button>
+                </div>
+                <div class="flex items-center space-x-3 min-w-0">
+                    <canvas id="story-reply-record-waveform" class="w-16 h-6" x-show="isRecordingStoryReply"></canvas>
                     <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm">
                     <button @click="toggleStoryLike()" class="text-white p-2">
                         <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
@@ -1442,6 +1471,7 @@
                                     <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="comment.author"></p>
                                     <button x-show="comment.user_id == user.id || (viewingComments && viewingComments.post_author_id == user.id)" @click="deleteComment(comment.id)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash text-[10px]"></i></button>
                                 </div>
+                                
                                 <p x-show="comment.text" class="text-sm" x-text="comment.text"></p>
                                 <template x-if="comment.media_type === 'audio'">
                                             <div class="flex items-center space-x-3 p-2 min-w-[200px] text-gray-800 dark:text-white">
@@ -1513,21 +1543,22 @@
             </div>
             <div class="p-4 border-t dark:border-gray-800 flex items-center space-x-2" :class="replyingToComment ? 'bg-gray-50 dark:bg-gray-800/50' : ''">
                 <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
-                <div class="flex-1 relative">
+                <div class="flex-1 relative min-w-0">
                     <input type="text" x-model="commentInput" @keyup.enter="addComment()" placeholder="Add a comment..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-blue-500" :class="{'opacity-0': isRecordingComment}">
                     <button @click="showCommentStickers = !showCommentStickers" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors">
                         <i class="fa-solid fa-face-smile text-lg"></i>
                     </button>
                     <div x-show="isRecordingComment" x-cloak class="absolute inset-0 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-between px-4 pointer-events-none">
+                        <canvas id="comment-record-waveform" class="w-20 h-6"></canvas>
                         <i class="fa-solid fa-microphone-lines text-red-500 animate-pulse"></i>
                         <span class="font-mono font-bold text-sm" x-text="formatRecordingTime(commentRecordingDuration)">00:00</span>
                         <span class="text-xs text-gray-500">Release to send</span>
                     </div>
                 </div>
-                <button x-show="!commentInput.trim()" @mousedown="startCommentRecording()" @mouseup="stopCommentRecording()" @touchstart.prevent="startCommentRecording()" @touchend.prevent="stopCommentRecording()" class="p-2 text-blue-600 transition-all">
+                <button x-show="!commentInput.trim()" @mousedown="startCommentRecording()" @mouseup="stopCommentRecording()" @touchstart.prevent="startCommentRecording()" @touchend.prevent="stopCommentRecording()" class="p-2 text-blue-600 disabled:opacity-30 transition-all" :disabled="isSendingComment">
                     <i class="fa-solid text-xl" :class="isRecordingComment ? 'fa-stop text-red-500' : 'fa-microphone'"></i>
                 </button>
-                <button x-show="commentInput.trim()" @click="addComment()" class="text-blue-600 font-bold text-sm disabled:opacity-50" :disabled="!commentInput.trim()">Post</button>
+                <button x-show="commentInput.trim()" @click="addComment()" class="text-blue-600 font-bold text-sm disabled:opacity-30" :disabled="!commentInput.trim() || isSendingComment">Post</button>
             </div>
         </div>
     </div>
@@ -1747,6 +1778,31 @@
             <div class="flex space-x-2 mb-4 overflow-x-auto max-w-full"><template x-for="font in editorFonts"><button @click="editorTextFont = font" class="px-3 py-1 rounded bg-gray-700 text-white text-xs" :style="`font-family: ${font}`" x-text="font"></button></template></div>
             <div class="flex space-x-3 mb-6"><template x-for="color in storyTextColors"><button @click="editorTextColor = color" class="w-8 h-8 rounded-full border-2 border-white" :style="`background-color: ${color}`"></button></template></div>
             <div class="flex space-x-4"><button @click="isAddingEditorText = false" class="text-white">Cancel</button><button @click="addEditorText()" class="bg-white text-black px-6 py-2 rounded-full font-bold">Done</button></div>
+        </div>
+    </div>
+
+    <!-- Share Profile Modal -->
+    <div x-show="showShareProfileModal" x-cloak class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div @click.away="showShareProfileModal = false" class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-fadeIn flex flex-col">
+            <div class="p-4 border-b dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                <h3 class="font-black text-lg">Share Profile</h3>
+                <button @click="showShareProfileModal = false" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-8 flex flex-col items-center">
+                <div class="bg-white p-4 rounded-3xl shadow-inner mb-6 border-4 border-gray-100">
+                    <img :src="`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(profileUrl)}`" class="w-48 h-48" alt="Profile QR Code">
+                </div>
+                <p class="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Your Profile Link</p>
+                <div @click="copyProfileLink()" class="w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-xl flex items-center justify-between cursor-pointer group hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mb-6">
+                    <span class="text-xs font-mono truncate mr-2 text-blue-600 dark:text-blue-400" x-text="profileUrl"></span>
+                    <i class="fa-regular fa-copy text-gray-400 group-hover:text-blue-600"></i>
+                </div>
+                <div class="grid grid-cols-3 gap-2 w-full">
+                    <button @click="copyProfileLink()" class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 font-bold text-xs">Copy</button>
+                    <button @click="downloadQRCode()" class="py-3 rounded-xl bg-gray-100 dark:bg-gray-800 font-bold text-xs"><i class="fa-solid fa-download mr-1"></i>Save</button>
+                    <button @click="shareProfileLink()" class="flex-1 py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">Share Link</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -2034,8 +2090,8 @@
             <div class="flex-1 overflow-y-auto p-4 space-y-4" id="callChatContainer">
                 <template x-for="msg in (chatMessages[activeChat?.id] || [])">
                     <div class="flex flex-col" :class="msg.sender === 'me' ? 'items-end' : 'items-start'">
-                        <div class="max-w-[80%] px-4 py-2 rounded-2xl text-sm" :class="msg.sender === 'me' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'">
-                            <p x-text="msg.content"></p>
+                        <div class="max-w-[85%] px-4 py-2 rounded-2xl text-sm break-words" :class="msg.sender === 'me' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-white'">
+                            <p x-text="msg.content" class="leading-normal"></p>
                         </div>
                         <span class="text-[10px] text-gray-400 mt-1 px-1" x-text="msg.time"></span>
                     </div>
@@ -2111,6 +2167,9 @@
                     <button x-show="homeSearchQuery.length > 0" @click="homeSearchQuery = ''; $refs.searchInput.focus()" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
+                    <button @click="openCamera('scan')" class="p-2 text-gray-400 hover:text-blue-600 transition-colors" title="Scan QR Code">
+                        <i class="fa-solid fa-qrcode"></i>
+                    </button>
                     <button @click="startVoiceSearch()" class="p-2 text-gray-400 hover:text-blue-600 transition-colors">
                         <i class="fa-solid fa-microphone"></i>
                     </button>
@@ -2130,6 +2189,14 @@
                                 <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate" x-html="highlight(sug.name || (sug.content || sug.caption), homeSearchQuery)"></span>
                             </div>
                         </template>
+                    </div>
+
+                    <!-- Video Filter Toggle -->
+                    <div class="px-4 py-2 border-b dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/5 flex items-center justify-between">
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filter Results</span>
+                        <button @click="homeSearchTab = 'reels'; searchUsers()" class="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase hover:underline">
+                            <i class="fa-solid fa-video"></i> Show Reels Only
+                        </button>
                     </div>
 
                     <div class="flex p-2 bg-gray-50 dark:bg-gray-800/50 border-b dark:border-gray-700">
@@ -2238,6 +2305,23 @@
                             </div>
                         </template>
                         <div x-show="trendingTopics.length === 0" class="p-6 text-center text-gray-400 text-xs font-medium italic">Discover what's happening on campus...</div>
+                    </div>
+
+                    <!-- Trending Reels Section -->
+                    <div class="p-3 border-t dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                        <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Trending Reels</span>
+                        <i class="fa-solid fa-clapperboard text-blue-500 text-xs"></i>
+                    </div>
+                    <div class="flex p-2 space-x-2 overflow-x-auto no-scrollbar bg-white dark:bg-gray-800">
+                        <template x-for="trReel in trendingReels" :key="trReel.id">
+                            <div @click="selectedReel = trReel; activeTab = 'reels'; isSearchFocused = false" class="relative w-24 h-40 shrink-0 rounded-xl overflow-hidden shadow-sm group cursor-pointer border dark:border-gray-700">
+                                <video :src="trReel.media" class="w-full h-full object-cover"></video>
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2">
+                                    <p class="text-[8px] text-white font-black leading-tight line-clamp-2" x-text="trReel.caption"></p>
+                                    <p class="text-[7px] text-blue-400 font-bold mt-1" x-text="formatNumber(trReel.views) + ' views'"></p>
+                                </div>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -2422,6 +2506,21 @@
                         @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
                     
+                    <!-- Seen Badge & Watch Again -->
+                    <div x-show="reel.seen" class="absolute top-20 left-4 z-30 flex items-center gap-2">
+                        <div class="bg-blue-600/60 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg border border-white/10">
+                            <i class="fa-solid fa-check-double"></i> <span>Seen</span>
+                        </div>
+                        <button @click.stop="watchAgain(reel)" class="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg border border-white/10 transition-all active:scale-95">
+                            <i class="fa-solid fa-rotate-right"></i> <span>Watch Again</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Seen Badge -->
+                    <div x-show="reel.seen" class="absolute top-20 left-4 z-30 bg-blue-600/60 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg border border-white/10">
+                        <i class="fa-solid fa-check-double"></i> <span>Seen</span>
+                    </div>
+                    
                     <!-- Loading Spinner Overlay -->
                     <div x-show="reel.isLoading" x-transition.opacity class="absolute inset-0 z-20 flex items-center justify-center bg-black/10 pointer-events-none">
                         <i class="fa-solid fa-circle-notch fa-spin text-white/80 text-4xl"></i>
@@ -2560,8 +2659,21 @@
 
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
-                        <template x-if="post.mediaType !== 'video'"><img :src="post.media" class="w-full h-auto object-cover"></template>
-                        <template x-if="post.mediaType === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
+                        <template x-if="post.media_type === 'image' || (!post.media_type && post.media)"><img :src="post.media" class="w-full h-auto object-cover"></template>
+                        <template x-if="post.media_type === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
+                        <template x-if="post.media_type === 'audio'">
+                            <div class="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-900/20">
+                                <button class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center" @click.stop="toggleAudio('feed-audio-' + post.id)">
+                                    <i class="fa-solid" :class="activeAudioId === 'feed-audio-' + post.id ? 'fa-pause' : 'fa-play'"></i>
+                                </button>
+                                <div class="flex items-center space-x-1 h-8 flex-1 opacity-80">
+                                    <template x-for="i in 15">
+                                        <div class="w-1 bg-blue-400 rounded-full" :class="activeAudioId === 'feed-audio-' + post.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%;`"></div>
+                                    </template>
+                                </div>
+                                <audio :id="'feed-audio-' + post.id" :src="post.media" class="hidden" @play="handleAudioPlay('feed-audio-' + post.id)" @pause="handleAudioPause('feed-audio-' + post.id)" @ended="handleAudioPause('feed-audio-' + post.id)"></audio>
+                            </div>
+                        </template>
                     </div>
                 </template>
                 <div class="mt-4 flex justify-between items-center text-gray-500 dark:text-gray-400 px-1">
@@ -2581,14 +2693,20 @@
 
     <!-- MAIN VIEW: FRIENDS -->
     <main x-show="activeTab === 'friends'" class="p-4 space-y-4 animate-fadeIn">
-        <div class="relative" x-data="{ showSuggestions: false }">
-            <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-            <input type="text" x-model="friendsSearchQuery" 
-                   @focus="showSuggestions = true"
-                   @click.away="showSuggestions = false"
-                   @input.debounce.300ms="showSuggestions = true"
-                   placeholder="Search friends or departments..." class="w-full bg-white dark:bg-gray-800 rounded-2xl py-3 pl-12 pr-4 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
-            
+        <div class="flex items-center space-x-2">
+            <div class="relative flex-1" x-data="{ showSuggestions: false }">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                <input type="text" x-model="friendsSearchQuery" 
+                       @focus="showSuggestions = true"
+                       @click.away="showSuggestions = false"
+                       @input.debounce.300ms="showSuggestions = true"
+                       placeholder="Search friends..." class="w-full bg-white dark:bg-gray-800 rounded-2xl py-3 pl-12 pr-4 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
+            </div>
+            <button @click="openCamera('scan')" class="p-3.5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-90 transition-transform">
+                <i class="fa-solid fa-qrcode"></i>
+            </button>
+        </div>
+
             <!-- Search Suggestions Dropdown -->
             <div x-show="showSuggestions && friendsSearchQuery.length >= 2 && filteredFriendsList.length > 0" 
                  class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[60] animate-fadeIn" x-cloak>
@@ -2766,7 +2884,12 @@
                              <span class="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded text-[10px] font-black uppercase" x-text="user.dept"></span>
                         </div>
                     </div>
-                    <button @click="editUser = { ...user }; isEditingProfile = true" class="border-2 border-blue-600 text-blue-600 px-5 py-2 rounded-2xl font-black text-xs active:bg-blue-600 active:text-white transition-all shadow-sm">Edit Profile</button>
+                    <div class="flex items-center space-x-2">
+                        <button @click="showShareProfileModal = true" class="p-2.5 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-2xl hover:bg-gray-200 transition-all active:scale-90 shadow-sm" title="Share Profile">
+                            <i class="fa-solid fa-qrcode"></i>
+                        </button>
+                        <button @click="editUser = { ...user }; isEditingProfile = true" class="border-2 border-blue-600 text-blue-600 px-5 py-2 rounded-2xl font-black text-xs active:bg-blue-600 active:text-white transition-all shadow-sm">Edit Profile</button>
+                    </div>
                 </div>
                 <p class="mt-4 text-sm leading-relaxed text-gray-700 dark:text-gray-300" x-text="user.bio"></p>
                 
@@ -2895,6 +3018,13 @@
                     <div class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors" :class="darkMode ? 'bg-blue-600' : ''">
                         <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="darkMode ? 'left-6' : 'left-1'"></div>
                     </div>
+                </button>
+                <button @click="shareApp()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600"><i class="fa-solid fa-share-nodes"></i></div>
+                        <span class="font-bold text-sm">Share App</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
                 <button @click="checkForUpdates()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">
@@ -3261,19 +3391,41 @@
         </div>
 
         <template x-if="selectedMedia">
-            <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner">
-                <button @click="selectedMedia = null" class="absolute top-3 right-3 bg-black/60 text-white w-8 h-8 rounded-full flex items-center justify-center z-10 backdrop-blur-md"><i class="fa-solid fa-xmark"></i></button>
+            <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner p-4">
+                <button @click="deletePostMedia()" class="absolute top-3 right-3 bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center z-20 shadow-lg"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                <template x-if="mediaType === 'audio'">
+                    <div class="flex items-center space-x-4 bg-white dark:bg-gray-700 p-4 rounded-xl">
+                        <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
+                            <i class="fa-solid fa-microphone-lines text-xl"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-xs font-black uppercase text-gray-400">Voice Note Draft</p>
+                            <audio :src="selectedMedia" controls class="h-8 w-full mt-1"></audio>
+                        </div>
+                    </div>
+                </template>
                 <div class="absolute top-3 left-3 flex gap-2 z-10">
                     <button @click="openMediaEditor('post')" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Edit</span></button>
                     <button @click="shareFile()" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-download"></i> <span>Save</span></button>
                 </div>
+                <template x-if="mediaType === 'image'"><img :src="selectedMedia" class="w-full max-h-60 object-cover"></template>
                 <template x-if="mediaType === 'image'"><img :src="selectedMedia" class="w-full max-h-60 object-cover"></template>
                 <template x-if="mediaType === 'video'"><video :src="selectedMedia" class="w-full max-h-60" autoplay muted loop></video></template>
             </div>
         </template>
 
         <div class="border-t dark:border-gray-800 py-4 flex items-center space-x-8">
-            <button @click="$refs.postMedia.click()" class="flex items-center space-x-2 text-blue-600"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
+            <button @click="$refs.postMedia.click()" class="flex items-center space-x-2 text-blue-600 disabled:opacity-30" :disabled="isRecordingPost"><i class="fa-solid fa-image text-xl"></i><span class="text-xs font-black">Media</span></button>
+            <div class="relative">
+                <button x-show="!newPostContent.trim() && !selectedMedia" @mousedown="startPostRecording()" @mouseup="stopPostRecording()" @touchstart.prevent="startPostRecording()" @touchend.prevent="stopPostRecording()" class="flex items-center space-x-2 text-purple-600 disabled:opacity-30" :disabled="isSendingPost"><i class="fa-solid text-xl" :class="isRecordingPost ? 'fa-stop text-red-500' : 'fa-microphone'"></i><span class="text-xs font-black">Voice</span></button>
+                <div x-show="isRecordingPost" x-cloak class="absolute inset-0 bg-white dark:bg-gray-900 rounded-2xl flex items-center justify-between px-4 pointer-events-none">
+                    <canvas id="post-record-waveform" class="w-24 h-8"></canvas>
+                    <i class="fa-solid fa-microphone-lines text-red-500 animate-pulse"></i>
+                    <span class="font-mono font-bold text-sm" x-text="formatRecordingTime(postRecordingDuration)">00:00</span>
+                    <span class="text-xs text-gray-500">Release to send</span>
+                </div>
+            </div>
+
             <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia">
             <button @click="openCamera('post')" :disabled="isUploadingPost || isUploadingReel" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
             <div class="relative">
@@ -3289,7 +3441,7 @@
     <!-- Professional Camera Modal -->
     <template x-if="isCameraOpen">
         <div class="fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center overflow-hidden font-sans">
-            <!-- Hidden Video Source -->
+            <!-- Hidden Video Source (for actual stream) -->
             <video x-ref="cameraFeed" autoplay playsinline class="hidden"></video>
             
             <!-- Background Music Player for Camera -->
@@ -3301,6 +3453,12 @@
             <!-- Live Canvas Output -->
             <div class="relative w-full h-full flex items-center justify-center bg-black">
                 <!-- Capture Flash Effect -->
+                <!-- Scanning Line for QR Mode -->
+                <div x-show="isScanning" class="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-green-400 to-transparent z-50"
+                     :style="`top: ${scanLinePosition}px; box-shadow: 0 0 15px 5px rgba(0,255,0,0.7);`"
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+                     x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
                 <div x-show="showCameraFlash"
                      x-transition:enter="transition ease-out duration-100"
                      x-transition:enter-start="opacity-0"
@@ -3383,13 +3541,19 @@
                 <!-- Bottom Interface -->
                 <div class="absolute bottom-0 left-0 right-0 pb-12 pt-20 flex flex-col items-center bg-gradient-to-t from-black/90 to-transparent">
                     <!-- Mode Selector Carousel -->
-                    <div class="flex gap-8 mb-8 items-center justify-center w-full">
+                    <div class="flex gap-6 mb-8 items-center justify-center w-full">
                         <template x-for="mode in ['photo', '15s', '30s', '60s']">
                             <button @click="cameraMode = mode" 
                                     class="relative transition-all"
                                     :class="cameraMode === mode ? 'text-white scale-110 font-bold' : 'text-white/50 scale-90 text-xs'">
                                 <span x-text="mode === 'photo' ? 'PHOTO' : mode"></span>
                                 <div x-show="cameraMode === mode" class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></div>
+                            </button>
+                        </template>
+                        <template x-if="qrDetector">
+                            <button @click="cameraMode = 'scan'" class="relative transition-all" :class="cameraMode === 'scan' ? 'text-white scale-110 font-bold' : 'text-white/50 scale-90 text-xs'">
+                                <span>SCAN QR</span>
+                                <div x-show="cameraMode === 'scan'" class="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></div>
                             </button>
                         </template>
                     </div>

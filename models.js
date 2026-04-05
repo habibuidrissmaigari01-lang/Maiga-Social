@@ -374,7 +374,37 @@ baseNotificationSchema.index({ user: 1, is_read: 1 });
 // --- Real-time Notification Broadcast Hook ---
 baseNotificationSchema.post('save', function(doc) {
     if (ioInstance) {
-        ioInstance.to(doc.user.toString()).emit('new_notification', doc);
+        // Populate necessary fields to construct the notification message
+        doc.populate([
+            { path: 'trigger_user', select: 'name first_name surname avatar' },
+            { path: 'post', select: 'content' }, // Only need content for post notifications
+            { path: 'story', select: 'media type' } // Only need media/type for story notifications
+        ]).then(populatedDoc => {
+            let content = populatedDoc.content; // Default for system notifications
+            if (populatedDoc.type === 'like' && populatedDoc.trigger_user) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = populatedDoc.others_count > 0
+                    ? `${name} and ${populatedDoc.others_count} others liked your post`
+                    : `${name} liked your post`;
+            } else if (populatedDoc.type === 'follow' && populatedDoc.trigger_user) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = `${name} started following you`;
+            } else if (populatedDoc.type === 'mention' && populatedDoc.trigger_user && populatedDoc.post) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = `${name} mentioned you in a post: "${populatedDoc.post.content.substring(0, 30)}..."`;
+            } else if (populatedDoc.type === 'post' && populatedDoc.trigger_user) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = `${name} posted a new update.`;
+            } else if (populatedDoc.type === 'story' && populatedDoc.trigger_user) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = `${name} added a new story.`;
+            }
+
+            const notificationPayload = { ...populatedDoc.toJSON(), content: content };
+            ioInstance.to(populatedDoc.user.toString()).emit('new_notification', notificationPayload);
+        }).catch(err => {
+            console.error("Error populating notification for socket emit:", err);
+        });
     }
 });
 

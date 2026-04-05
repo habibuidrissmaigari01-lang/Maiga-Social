@@ -18,7 +18,7 @@ const ASSETS_TO_CACHE = [
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
 
-const CACHE_NAME = `${APP_TYPE}-offline-v3`;
+const CACHE_NAME = `${APP_TYPE}-offline-v4`;
 const OFFLINE_URL = '/offline.html';
 const DB_NAME = 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
@@ -125,33 +125,27 @@ self.addEventListener('fetch', (event) => {
 
   const isLocalAsset = event.request.url.startsWith(self.location.origin) ||
                        (event.request.url.startsWith('https://cdnjs.cloudflare.com') && !isApi) ||
-                       event.request.url.startsWith('https://fonts.googleapis.com');
+                       event.request.url.startsWith('https://fonts.googleapis.com') ||
+                       event.request.url.startsWith('https://fonts.gstatic.com') ||
+                       event.request.url.startsWith('https://api.dicebear.com');
 
-  if (isNavigate) {
+  if (isNavigate || (isLocalAsset && !isApi)) {
     event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.open(CACHE_NAME).then((cache) => {
-          return cache.match(OFFLINE_URL);
-        });
-      })
-    );
-  } else if (isApi) {
-    // API calls: Network Only (to ensure fresh data on refresh)
-    return; 
-  } else if (isLocalAsset && !isApi) {
-    event.respondWith(
-      caches.match(event.request).then((response) => {
-        if (response) {
-          return response;
-        }
-        return fetch(event.request).then((fetchResponse) => {
-          return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, fetchResponse.clone());
-            return fetchResponse;
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          const fetchPromise = fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              cache.put(event.request, networkResponse.clone());
+            }
+            return networkResponse;
           });
-        }).catch((error) => {
-          // For non-navigate requests, if network fails and not in cache, return a generic error response
-          return new Response(null, { status: 503, statusText: 'Service Unavailable' });
+          
+          // Serve cached response immediately if found, but update it in the background.
+          // This provides an "instant" feel on reload while keeping the app current.
+          return cachedResponse || fetchPromise;
+        }).catch(() => {
+          if (isNavigate) return cache.match(OFFLINE_URL);
+          return new Response(null, { status: 503 });
         });
       })
     );

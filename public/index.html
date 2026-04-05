@@ -241,6 +241,13 @@
         .shake-btn {
             animation: shake 0.5s ease-in-out;
         }
+        @keyframes float-envelope {
+            0%, 100% { transform: translateY(0) rotate(0); }
+            50% { transform: translateY(-10px) rotate(5deg); }
+        }
+        .animate-float-envelope {
+            animation: float-envelope 2s infinite ease-in-out;
+        }
     </style>
 </head>
 <body>
@@ -350,7 +357,7 @@
                 <p class="text-gray-500 text-sm mb-6">Your unique username will be public.</p>
                 <div class="space-y-4">
                     <div class="relative">
-                        <input type="text" name="username" id="username" placeholder="Username" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400" oninput="checkUsername(this.value)">
+                        <input type="text" name="username" id="username" placeholder="Username" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400" oninput="this.value = this.value.replace(/\s/g, '_'); checkUsername(this.value)">
                         <div id="username-feedback" class="absolute right-3 top-1/2 -translate-y-1/2"></div>
                     </div>
                     <div id="username-suggestions" class="text-xs text-gray-500 -mt-2 px-1"></div>
@@ -406,6 +413,12 @@
                 <button type="button" onclick="nextStep(5)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Verify your account</h2>
                 <p class="text-gray-500 text-sm mb-6">Enter the 6-digit verification code.</p>
+                <div id="checkEmailAnim" class="hidden flex flex-col items-center justify-center space-y-2 mb-6">
+                    <div class="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 animate-float-envelope shadow-lg border border-indigo-100 dark:border-indigo-800">
+                        <i class="fa-solid fa-envelope-open-text text-2xl"></i>
+                    </div>
+                    <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Checking your mailbox...</p>
+                </div>
                 <div class="space-y-6">
                     <div class="flex justify-center gap-1 sm:gap-2" id="otp-inputs">
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
@@ -417,7 +430,7 @@
                     </div>
                     <button type="button" onclick="verifyOTP()" class="btn-primary">Verify</button>
                     <div class="text-center">
-                       <p id="timerContainer" class="text-xs text-gray-400">Resend code in <span id="timer" class="font-bold text-indigo-500">00:59</span></p>
+                       <p id="timerContainer" class="text-xs text-gray-400">Resend code in <span id="timer" class="font-bold text-indigo-500">03:00</span></p>
                        <a href="#" id="resendBtn" onclick="resendOTP(event)" class="hidden text-xs font-bold text-indigo-600 underline">Resend code</a>
                     </div>
                     <div class="text-center mt-4">
@@ -571,9 +584,79 @@
         let countdownTimer;
         const API_BASE_URL = ''; // Use relative path so it works on any IP
 
+        function saveAuthProgress(otpSent = false) {
+            const form = document.getElementById('mainAuthForm');
+            const data = {};
+            Array.from(form.elements).forEach(el => {
+                if (el.name && !['login_password', 'reg_password', 'confirm_password', 'login_identity'].includes(el.name)) {
+                    if (el.name.endsWith('[]')) {
+                        if (!data[el.name]) data[el.name] = [];
+                        data[el.name].push(el.value);
+                    } else if (el.type !== 'checkbox' || el.checked) {
+                        data[el.name] = el.value;
+                    }
+                }
+            });
+            
+            const currentState = JSON.parse(localStorage.getItem('maiga_reg_state') || '{}');
+            localStorage.setItem('maiga_reg_state', JSON.stringify({
+                step: currentStep,
+                authType: document.getElementById('authType').value,
+                data: data,
+                timestamp: Date.now(),
+                otpTimestamp: otpSent ? Date.now() : (currentState.otpTimestamp || 0)
+            }));
+        }
+
         // Initialize page based on session
         document.addEventListener('DOMContentLoaded', () => {
             showPage('page-login');
+
+            // Restore registration progress if it exists and is less than 60 mins old
+            const savedState = localStorage.getItem('maiga_reg_state');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                const age = (Date.now() - state.timestamp) / 1000 / 60; // minutes
+                if (age < 60 && state.step > 0 && state.authType === 'register') {
+                    Object.keys(state.data).forEach(key => {
+                        if (key.endsWith('[]')) {
+                            const inputs = document.querySelectorAll(`[name="${key.replace('[]', '\\[\\]')}"]`);
+                            const values = state.data[key];
+                            inputs.forEach((input, i) => { if (values[i]) input.value = values[i]; });
+                        } else {
+                            const input = document.querySelector(`[name="${key}"]`);
+                            if (input) input.value = state.data[key];
+                        }
+                    });
+                    
+                    document.getElementById('authType').value = "register";
+                    document.getElementById('page-login').classList.remove('active');
+                    document.getElementById('regProgress').classList.remove('hidden');
+                    nextStep(state.step);
+                    
+                    if (state.step === 6) {
+                        const remaining = Math.max(0, Math.floor(180 - (Date.now() - state.otpTimestamp) / 1000));
+                        if (remaining > 0) startTimer(remaining);
+                    }
+                }
+            }
+
+            document.getElementById('mainAuthForm').addEventListener('input', () => saveAuthProgress());
+
+            // PWA Auto-Update Check
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration().then(reg => {
+                    if (reg) reg.update();
+                });
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    // Only force reload if the user is on the login screen (currentStep 0)
+                    // This prevents interrupting someone in the middle of typing registration info
+                    if (currentStep === 0) {
+                        window.location.reload();
+                    }
+                });
+            }
 
             // Check for saved username
             const savedIdentity = localStorage.getItem('saved_identity');
@@ -589,6 +672,7 @@
         async function checkUsername(username) {
             const feedbackEl = document.getElementById('username-feedback');
             const suggestionsEl = document.getElementById('username-suggestions');
+            const inputEl = document.getElementById('username');
             feedbackEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-gray-400"></i>';
             suggestionsEl.innerHTML = '';
 
@@ -596,29 +680,34 @@
             if (username.length < 3) {
                 feedbackEl.innerHTML = '<i class="fa-solid fa-times-circle text-red-500"></i>';
                 suggestionsEl.innerHTML = '<span class="text-red-500">Username must be at least 3 characters.</span>';
+                inputEl.classList.remove('border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
+                inputEl.classList.add('border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]');
                 return;
             }
 
             usernameCheckTimeout = setTimeout(() => {
                 fetch(`${API_BASE_URL}/api/check_username?username=${encodeURIComponent(username)}`)
                     .then(async res => {
-                        const isJson = res.headers.get('content-type')?.includes('application/json');
-                        let data = null;
-                        try { 
-                            if (isJson) data = await res.json(); 
-                        } catch (jsonErr) { }
-
-                        if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
-                        return data;
+                        if (res.ok) return res.json();
                     })
                     .then(data => {
                         if (!data) return;
                         
                         if (data.available) {
                             feedbackEl.innerHTML = '<i class="fa-solid fa-check-circle text-green-500"></i>';
+                            inputEl.classList.remove('border-gray-100', 'border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]');
+                            inputEl.classList.add('border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
                         } else {
                             feedbackEl.innerHTML = '<i class="fa-solid fa-times-circle text-red-500"></i>';
-                            suggestionsEl.innerHTML = '<span class="text-red-500">Username taken.</span>';
+                            let html = '<p class="text-red-500 mb-1">Taken. Try:</p><div class="flex flex-wrap gap-2">';
+                            data.suggestions.forEach(s => {
+                                html += `<button type="button" onclick="useSuggestion('${s}')" class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-700 hover:text-indigo-600">${s}</button>`;
+                            });
+                            html += '</div>';
+                            suggestionsEl.innerHTML = html;
+                            inputEl.classList.remove('border-gray-100', 'border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
+                            inputEl.classList.add('border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]', 'shake-btn');
+                            setTimeout(() => inputEl.classList.remove('shake-btn'), 500);
                         }
                     }).catch(err => { });
             }, 500);
@@ -768,23 +857,29 @@
             });
         }
 
-        function startTimer() {
+        function startTimer(seconds) {
             clearInterval(countdownTimer);
-            let timeLeft = 59;
+            let timeLeft = seconds || 180;
             const timerDisplay = document.getElementById('timer');
             const container = document.getElementById('timerContainer');
             const resend = document.getElementById('resendBtn');
+            const anim = document.getElementById('checkEmailAnim');
             
             container.classList.remove('hidden');
             resend.classList.add('hidden');
+            anim?.classList.remove('hidden');
 
             countdownTimer = setInterval(() => {
                 timeLeft--;
-                timerDisplay.innerText = `00:${timeLeft < 10 ? '0' + timeLeft : timeLeft}`;
+                const mins = Math.floor(timeLeft / 60);
+                const secs = timeLeft % 60;
+                    if (timerDisplay)
+                timerDisplay.innerText = `${mins}:${secs < 10 ? '0' + secs : secs}`;
                 if (timeLeft <= 0) {
                     clearInterval(countdownTimer);
                     container.classList.add('hidden');
                     resend.classList.remove('hidden');
+                    anim?.classList.add('hidden');
                 }
             }, 1000);
         }
@@ -796,6 +891,7 @@
             if (!pageId.startsWith('reg-')) {
                 document.getElementById('regProgress').classList.add('hidden');
             }
+            saveAuthProgress();
         }
 
         function showLogin(event) {
@@ -803,6 +899,7 @@
             document.getElementById('authType').value = "login";
             showPage('page-login');
             currentStep = 0;
+            localStorage.removeItem('maiga_reg_state');
         }
 
         function showRegister(event) {
@@ -893,7 +990,7 @@
                     .then(data => {
                         if (data.success || data.status === 429) {
                             if (data.status === 429) {
-                                showMessage('A code was recently sent. Please check your inbox.', 'success');
+                                showMessage(data.message || 'A code was recently sent.', 'success');
                             } else {
                                 showMessage('A verification code has been sent to ' + identity, 'success');
                             }
@@ -904,8 +1001,9 @@
                             const nextEl = document.getElementById(`reg-${step}`);
                             nextEl.classList.add('active');
                             currentStep = step;
+                            saveAuthProgress(true); // Reset OTP timestamp
                             updateProgress();
-                            startTimer();
+                            startTimer(data.remaining || 180);
                         }
                     })
                     .catch(err => {
@@ -922,6 +1020,7 @@
             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
             document.getElementById(step === 0 ? 'page-login' : `reg-${step}`).classList.add('active');
             currentStep = step;
+            saveAuthProgress();
             updateProgress();
         }
 
@@ -1239,10 +1338,12 @@
                 document.getElementById('pwaInstallBtn')?.classList.add('hidden');
                 document.getElementById('welcomePopup')?.classList.add('hidden');
             } else {
-                if (btnSpan) {
-                    if (/android/i.test(userAgent)) { btnSpan.innerText = 'Install for Android'; } else if (isIOS) { btnSpan.innerText = 'Install for iOS'; }
+                if (isIOS) {
+                    document.getElementById('pwaInstallBtn')?.classList.add('hidden');
+                    document.getElementById('iosInstallInstructions')?.classList.remove('hidden');
+                } else if (btnSpan && /android/i.test(userAgent)) {
+                    btnSpan.innerText = 'Install for Android';
                 }
-                if (isIOS) document.getElementById('iosInstallInstructions')?.classList.remove('hidden');
             }
 
             // Register Service Worker for Maiga

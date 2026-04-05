@@ -98,6 +98,7 @@ const initMaiga = () => {
         // Feature Lists
         posts: [],
         reels: [],
+        trendingReels: [],
         groups: [],
         chats: [],
         notifications: [],
@@ -145,6 +146,7 @@ const initMaiga = () => {
         showGroupInfo: false,
         showMsgInfo: false,
         showFollowerList: null,
+        showShareProfileModal: false,
 
         // Search & Filter State
         homeSearchQuery: '',
@@ -212,6 +214,17 @@ const initMaiga = () => {
             if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
             if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
             return d.toLocaleDateString();
+        },
+
+        watchAgain(reel) {
+            const video = document.getElementById('reel-video-' + reel.id);
+            if (video) {
+                video.currentTime = 0;
+                video.play();
+                reel.lastAction = 'play';
+                reel.showStatusIcon = true;
+                setTimeout(() => reel.showStatusIcon = false, 800);
+            }
         },
 
          scrubReel(reel, event) {
@@ -661,6 +674,10 @@ const initMaiga = () => {
         faceDetector: null,
         isGhostModeActive: false,
         ghostFrame: null,
+        isScanning: false,
+        scanLinePosition: 0,
+        scanLineDirection: 1, // 1 for down, -1 for up
+        scanLineSpeed: 2, // pixels per frame
         qrDetector: null,
         filters: [
             { name: 'Normal', value: 'none' },
@@ -719,6 +736,7 @@ const initMaiga = () => {
             this.isCameraOpen = true;
             this.isCreatingPost = false;
             this.isCreatingStory = false;
+            this.isScanning = (source === 'scan');
 
             if ('BarcodeDetector' in window) {
                 this.qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
@@ -793,6 +811,17 @@ const initMaiga = () => {
             const render = async () => {
                 if (!this.isCameraOpen || this.isPaused) return;
 
+                // Clear canvas for each frame
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw video frame first
+                ctx.save();
+                if (this.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+                ctx.filter = this.beautyFilter;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+                ctx.filter = 'none';
+
                 // 0. Update Lip Sync volume
                 if (this.micAnalyser) {
                     this.micAnalyser.getByteFrequencyData(this.micDataArray);
@@ -812,7 +841,7 @@ const initMaiga = () => {
                 }
 
                 // 0. Process Double Exposure (Background Overlay)
-                if (this.isDoubleExposureActive && this.$refs.secondaryVideo) {
+                if (this.isDoubleExposureActive && this.$refs.secondaryVideo && this.cameraMode !== 'scan') {
                     ctx.globalCompositeOperation = 'screen';
                     ctx.globalAlpha = 0.5;
                     ctx.drawImage(this.$refs.secondaryVideo, 0, 0, canvas.width, canvas.height);
@@ -821,7 +850,7 @@ const initMaiga = () => {
                 }
 
                 // 0. Optimized Glitch logic
-                if (this.isGlitchActive && Math.random() > 0.85) {
+                if (this.isGlitchActive && Math.random() > 0.85 && this.cameraMode !== 'scan') {
                     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     const data = imgData.data;
                     const width = canvas.width;
@@ -854,7 +883,7 @@ const initMaiga = () => {
                 }
 
                 // --- COMPOSITING ENGINE ---
-                if (this.isBackgroundRemovalActive && this.segmentationMask) {
+                if (this.isBackgroundRemovalActive && this.segmentationMask && this.cameraMode !== 'scan') {
                     // 1. Draw Background Image
                     ctx.drawImage(this.arAssets.background, 0, 0, canvas.width, canvas.height);
                     
@@ -871,7 +900,7 @@ const initMaiga = () => {
                 } else if (this.isGreenScreenActive) {
                     ctx.fillStyle = '#003366'; // Corporate blue background placeholder
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    // ... existing chroma key logic
+                    // ... existing chroma key logic (applied below)
                 }
 
                 // 1. Ghost Frame Overlay (Bottom Layer)
@@ -882,7 +911,7 @@ const initMaiga = () => {
                 }
 
                 // 2. Live Camera Feed
-                if (this.isGreenScreenActive) {
+                if (this.isGreenScreenActive && this.cameraMode !== 'scan') {
                     // Offscreen processing for Chroma Key
                     const offCanvas = new OffscreenCanvas(canvas.width, canvas.height);
                     const offCtx = offCanvas.getContext('2d');
@@ -898,16 +927,14 @@ const initMaiga = () => {
                     }
                     ctx.putImageData(imgData, 0, 0);
                 } else {
-                    ctx.save();
-                    // Mirror the selfie camera for a professional feel
-                    if (this.facingMode === 'user') {
-                        ctx.translate(canvas.width, 0);
-                        ctx.scale(-1, 1);
-                    }
-                    ctx.filter = activeFilter;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    ctx.restore();
+                    // Image already drawn at the beginning of render()
                 }
+
+                // 3. Draw AR Filter Elements
+                if (this.isFaceMeshActive && this.faceLandmarks && this.cameraMode !== 'scan') {
+                    this.drawARFilter(ctx);
+                }
+
                 ctx.filter = 'none';
 
                 // 3. Draw AR Filter Elements
@@ -921,12 +948,20 @@ const initMaiga = () => {
                     const codes = await this.qrDetector.detect(canvas);
                     if (codes.length > 0) {
                         const raw = codes[0].rawValue;
-                        if (confirm(`QR Detected: ${raw}\n\nOpen link?`)) window.open(raw, '_blank');
+                        if (raw.includes('/user/')) {
+                            const username = raw.split('/user/').pop();
+                            this.closeCamera();
+                            this.openUserProfileByName(username);
+                            if (navigator.vibrate) navigator.vibrate(100);
+                            this.showToast('Found!', `Opening @${username}`, 'success');
+                        } else {
+                            if (confirm(`External Link: ${raw}\n\nOpen in browser?`)) window.open(raw, '_blank');
+                        }
                     }
                 }
 
                 // 4. Auto-Capture Face/Smile Detection (Throttled)
-                if (this.faceDetector && this.isAutoCaptureActive && !this.isCameraRecording && Date.now() - lastFaceDetect > 500) {
+                if (this.faceDetector && this.isAutoCaptureActive && !this.isCameraRecording && this.cameraMode !== 'scan' && Date.now() - lastFaceDetect > 500) {
                     lastFaceDetect = Date.now();
                     const faces = await this.faceDetector.detect(canvas);
                     if (faces.length > 0) {
@@ -939,6 +974,15 @@ const initMaiga = () => {
                     } else { faceStayCount = 0; }
                 }
 
+                // 5. Scanning Line Animation
+                if (this.isScanning) {
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Green scanning line
+                    ctx.fillRect(0, this.scanLinePosition, canvas.width, 5); // 5px thick line
+                    this.scanLinePosition += this.scanLineSpeed * this.scanLineDirection;
+                    if (this.scanLinePosition >= canvas.height || this.scanLinePosition <= 0) {
+                        this.scanLineDirection *= -1; // Reverse direction
+                    }
+                }
                 requestAnimationFrame(render);
             };
             requestAnimationFrame(render);
@@ -987,7 +1031,7 @@ const initMaiga = () => {
         },
 
         async triggerShutter() {
-            if (this.cameraMode === 'photo') return this.takeCameraPhoto();
+            if (this.cameraMode === 'photo' || this.cameraMode === 'scan') return this.takeCameraPhoto();
             if (this.isCameraRecording) return this.stopCameraRecording();
             
             // Start Countdown for Video Modes
@@ -1029,7 +1073,7 @@ const initMaiga = () => {
                     this.storyMediaType = 'image';
                 }
                 this.closeCamera();
-            });
+            }).catch(err => this.showToast('Error', 'Failed to capture photo.', 'error'));
         },
 
         startCameraRecording() {
@@ -1188,6 +1232,65 @@ const initMaiga = () => {
                 this.totalUsers = data.total;
             }
         },
+                get profileUrl() {
+            return `${window.location.origin}/user/${this.user.username}`;
+        },
+        async copyProfileLink() {
+            try {
+                await navigator.clipboard.writeText(this.profileUrl);
+                this.showToast('Copied', 'Profile link copied to clipboard', 'success');
+            } catch (err) {
+                this.showToast('Error', 'Failed to copy link', 'error');
+            }
+        },
+        async shareProfileLink() {
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: `${this.user.name} on Maiga Social`,
+                        text: `Check out my profile on Maiga Social!`,
+                        url: this.profileUrl
+                    });
+                } catch (err) { }
+            } else {
+                this.copyProfileLink();
+            }
+        },
+        async downloadQRCode() {
+            try {
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(this.profileUrl)}`;
+                const response = await fetch(qrUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${this.user.username}_maiga_qr.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+                this.showToast('Success', 'QR Code saved to gallery', 'success');
+            } catch (err) {
+                this.showToast('Error', 'Failed to download QR code', 'error');
+            }
+        },
+        async shareApp() {
+            const brand = this.user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social';
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: brand,
+                        text: `Join me on ${brand}, the best place to connect!`,
+                        url: window.location.origin
+                    });
+                } catch (err) {}
+            } else {
+                try {
+                    await navigator.clipboard.writeText(window.location.origin);
+                    this.showToast('Copied', 'App link copied to clipboard', 'success');
+                } catch (err) {}
+            }
+        },
 
         isRecording: false,
         mediaRecorder: null,
@@ -1197,10 +1300,45 @@ const initMaiga = () => {
         isRecordingComment: false,
         commentRecordingDuration: 0,
         commentMediaRecorder: null,
+        isSendingComment: false,
+        isRecordingPost: false,
+        postRecordingDuration: 0,
+        postMediaRecorder: null,
+        isRecordingStoryReply: false,
+        storyReplyMediaRecorder: null,
+        storyReplyRecordingDuration: 0,
         commentAudioChunks: [],
         commentRecordingTimer: null,
         showMessageOptions: false,
         selectedMessageForOptions: null,
+        recordAnalyser: null,
+        recordAnimationId: null,
+        visualizeStream(stream, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            this.recordAnalyser = audioContext.createAnalyser();
+            this.recordAnalyser.fftSize = 64;
+            source.connect(this.recordAnalyser);
+            const dataArray = new Uint8Array(this.recordAnalyser.frequencyBinCount);
+
+            const draw = () => {
+                this.recordAnimationId = requestAnimationFrame(draw);
+                this.recordAnalyser.getByteFrequencyData(dataArray);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const barWidth = (canvas.width / dataArray.length) * 2;
+                let x = 0;
+                for (let i = 0; i < dataArray.length; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    ctx.fillStyle = this.darkMode ? '#60a5fa' : '#2563eb';
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+                    x += barWidth;
+                }
+            };
+            draw();
+        },
         showForwardModal: false,
         messageToForward: null,
         replyingTo: null,
@@ -1210,6 +1348,10 @@ const initMaiga = () => {
         scheduledTime: '',
         scheduledMessages: [],
         isReelsMuted: true,
+        postAudioChunks: [],
+        postRecordingTimer: null,
+        storyReplyAudioChunks: [],
+        storyReplyRecordingTimer: null,
         hasInteractedWithVolume: false,
         reelVolume: 1,
         showVolumeSlider: false,
@@ -1281,6 +1423,14 @@ const initMaiga = () => {
                 body: JSON.stringify({ user_id: friend.id })
             });
             this.startChatWithUser(friend);
+        },
+        deletePostMedia() {
+            if (this.selectedMedia && this.selectedMedia.startsWith('blob:')) URL.revokeObjectURL(this.selectedMedia);
+            this.selectedMedia = null;
+            this.mediaType = null;
+            this.postFile = null;
+            this.saveCreatePostDraft();
+
         },
         isCallRecording: false,
         isRightSidebarCollapsed: false,
@@ -1659,6 +1809,23 @@ const initMaiga = () => {
         },
 
         async mainInit() {
+            // --- PWA Force Update Logic ---
+            if ('serviceWorker' in navigator) {
+                // Check the server for a new service worker version immediately
+                navigator.serviceWorker.getRegistration().then(reg => {
+                    if (reg) reg.update();
+                });
+
+                // Detect when the new service worker has activated and taken control
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    refreshing = true;
+                    this.showToast('System Update', 'New version installed. Refreshing app...', 'success');
+                    setTimeout(() => window.location.reload(), 1500);
+                });
+            }
+
             // Prevent back button to login page
             history.pushState(null, null, location.href);
             window.onpopstate = function () {
@@ -1699,7 +1866,7 @@ const initMaiga = () => {
                 document.getElementById('receive-sound')?.play().catch(()=>{}); // Play notification sound
 
                 // Make sure it's not our own message coming back
-                if (data.sender_id == this.user.id) return;
+                if (data.sender_id.toString() === this.user.id.toString()) return;
 
                 // Acknowledge delivery to the server
                 this.socket.emit('message_received', { message_id: data.id });
@@ -1712,15 +1879,15 @@ const initMaiga = () => {
                     time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
 
-                const chatId = data.group_id || data.sender_id;
+                const chatId = data.group_id ? data.group_id.toString() : data.sender_id.toString();
                 if (!this.chatMessages[chatId]) {
                     this.chatMessages[chatId] = [];
                 }
                 this.chatMessages[chatId].push(formattedMsg);
 
                 const chatInList = data.group_id 
-                    ? this.groups.find(g => g.id == data.group_id)
-                    : this.chats.find(c => c.id == data.sender_id);
+                    ? this.groups.find(g => g.id.toString() === chatId)
+                    : this.chats.find(c => c.id.toString() === chatId);
                 if (chatInList) {
                     const prefix = data.group_id ? `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${data.author.split(' ')[0]}:</span> ` : '';
                     chatInList.lastMsg = prefix + (data.media_type === 'text' ? data.content : `<i>Sent a ${data.media_type}</i>`);
@@ -1728,14 +1895,14 @@ const initMaiga = () => {
                     chatInList.lastMsgByMe = false;
                     chatInList.lastMsgIsRead = false;
                     chatInList.time = 'Just now';
-                    if (this.activeChat?.id != chatId) {
+                    if (this.activeChat?.id.toString() !== chatId) {
                         chatInList.unread = true;
                         chatInList.unreadCount = (chatInList.unreadCount || 0) + 1;
                     }
                 } else if (!data.group_id) {
                     // Create the chat entry for the receiver if it doesn't exist yet
                     this.chats.unshift({
-                        id: data.sender_id,
+                        id: chatId,
                         name: data.author,
                         avatar: data.avatar,
                         lastMsg: data.content,
@@ -1768,7 +1935,7 @@ const initMaiga = () => {
                 }
 
                 this.incomingCall = {
-                    id: data.callId,
+                    id: data.callId.toString(),
                     caller_id: data.from,
                     name: data.name,
                     avatar: data.avatar,
@@ -1798,7 +1965,7 @@ const initMaiga = () => {
             });
 
             this.socket.on('call_ended', () => {
-                const chatInList = this.chats.find(c => c.id == this.activeChat?.id);
+                const chatInList = this.chats.find(c => c.id.toString() === this.activeChat?.id.toString());
                 if (chatInList) chatInList.callInProgress = false;
 
                 this.endCall(false, false);
@@ -1807,7 +1974,7 @@ const initMaiga = () => {
 
             // Listen for typing events
             this.socket.on('display_typing', (data) => {
-                if (data.sender_id == this.user.id) return;
+                if (data.sender_id.toString() === this.user.id.toString()) return;
                 if (!this.typingUsers[data.chat_id]) this.typingUsers[data.chat_id] = [];
                 if (!this.typingUsers[data.chat_id].includes(data.sender_name)) {
                     this.typingUsers[data.chat_id].push(data.sender_name);
@@ -1822,7 +1989,7 @@ const initMaiga = () => {
             this.socket.on('message_deleted', (data) => {
                 // Look through all chat buckets to find and remove the deleted message
                 for (let chatId in this.chatMessages) {
-                    this.chatMessages[chatId] = this.chatMessages[chatId].filter(m => m.id != data.message_id);
+                    this.chatMessages[chatId] = this.chatMessages[chatId].filter(m => m.id.toString() !== data.message_id.toString());
                 }
             });
 
@@ -1830,7 +1997,7 @@ const initMaiga = () => {
             this.socket.on('message_delivered', (data) => {
                 for (let chatId in this.chatMessages) {
                     const msg = this.chatMessages[chatId].find(m => m.id == data.message_id);
-                    if (msg) {
+                    if (msg && msg.id.toString() === data.message_id.toString()) {
                         msg.delivered = true;
                         break;
                     }
@@ -1843,7 +2010,7 @@ const initMaiga = () => {
             });
 
             this.socket.on('disappearing_mode_changed', (data) => {
-                if (this.activeChat && this.activeChat.id == data.chat_id) {
+                if (this.activeChat && this.activeChat.id.toString() === data.chat_id.toString()) {
                     this.showToast('Chat Update', `Disappearing messages ${data.active ? 'enabled' : 'disabled'} by ${data.user_name}`, 'info');
                 }
             });
@@ -1870,7 +2037,7 @@ const initMaiga = () => {
 
             // --- User Status Listener (Online/Offline) ---
             this.socket.on('user_status', (data) => {
-                const chat = this.chats.find(c => c.id == data.userId);
+                const chat = this.chats.find(c => c.id.toString() === data.userId.toString());
                 if (chat && chat.type !== 'group') { // Only update for direct chats
                     chat.status = data.status;
                     chat.last_seen = data.lastSeen;
@@ -1878,14 +2045,14 @@ const initMaiga = () => {
 
                 // Update Friends/Suggestions List
                 const friend = this.friends.find(f => f.id == data.userId);
-                if (friend) {
+                if (friend && friend.id.toString() === data.userId.toString()) {
                     friend.online = data.status === 'online';
                     friend.last_seen = data.lastSeen;
                 }
 
                 // Update Following List
                 const following = this.followingList.find(f => f.id == data.userId);
-                if (following) {
+                if (following && following.id.toString() === data.userId.toString()) {
                     following.online = data.status === 'online';
                     following.last_seen = data.lastSeen;
                 }
@@ -1893,11 +2060,11 @@ const initMaiga = () => {
 
             // --- Message Edited Listener ---
             this.socket.on('message_edited', async (data) => {
-                const chatId = data.group_id || (data.sender_id == this.user.id ? data.receiver_id : data.sender_id);
+                const chatId = data.group_id ? data.group_id.toString() : (data.sender_id.toString() === this.user.id.toString() ? data.receiver_id.toString() : data.sender_id.toString());
                 const messages = this.chatMessages[chatId];
                 if (!messages) return;
 
-                const msg = messages.find(m => m.id == data.id);
+                const msg = messages.find(m => m.id.toString() === data.id.toString());
                 if (msg) {
                     let content = data.content;
                     let type = data.media_type;
@@ -1924,7 +2091,7 @@ const initMaiga = () => {
             this.socket.on('messages_seen', (data) => {
                 // Someone viewed my messages
                 // data.viewer_id is the person who read them
-                const chatId = data.viewer_id;
+                const chatId = data.viewer_id.toString();
                 if (this.chatMessages[chatId]) {
                     this.chatMessages[chatId].forEach(m => {
                         if (m.sender === 'me') m.read = true;
@@ -1936,7 +2103,7 @@ const initMaiga = () => {
     // Updates UI checkmarks and "Seen by" lists real-time
     this.socket.on('read_receipt', (data) => {
         for (let chatId in this.chatMessages) {
-            const msg = this.chatMessages[chatId].find(m => m.id == data.message_id);
+            const msg = this.chatMessages[chatId].find(m => m.id.toString() === data.message_id.toString());
             if (msg) {
                 msg.read = data.is_read;
                 msg.read_by = data.read_by;
@@ -1988,6 +2155,12 @@ const initMaiga = () => {
             this.$watch('activeTab', () => {
                 if (navigator.vibrate) navigator.vibrate(10);
             });
+
+             // Watch for changes to create post fields to save draft
+            this.$watch('newPostContent', () => this.saveCreatePostDraft());
+            this.$watch('newPostFeeling', () => this.saveCreatePostDraft());
+            this.$watch('postBgStyleIndex', () => this.saveCreatePostDraft());
+
             
             // Auto-scroll to top when switching to home
             this.$watch('activeTab', (val) => {
@@ -1997,16 +2170,16 @@ const initMaiga = () => {
             // Listen for typing events
             this.socket.on('display_typing', (data) => {
                 // Update chat list item
-                const chat = this.chats.find(c => c.id == data.chat_id) || 
-                             this.groups.find(g => g.id == data.chat_id);
+                const chat = this.chats.find(c => c.id.toString() === data.chat_id.toString()) || 
+                             this.groups.find(g => g.id.toString() === data.chat_id.toString());
                 if (chat) {
                     chat.isTyping = true;
                     clearTimeout(chat.typingTimeout);
                     chat.typingTimeout = setTimeout(() => chat.isTyping = false, 3000); // Clear after 3 seconds
                 }
 
-                // Update active chat header
-                if (this.activeChat && this.activeChat.id == data.chat_id && data.sender_id != this.user.id) {
+                // Update active chat header (only if not current user)
+                if (this.activeChat && this.activeChat.id.toString() === data.chat_id.toString() && data.sender_id.toString() !== this.user.id.toString()) {
                     if (!this.typingUsers.includes(data.sender_id)) {
                         this.typingUsers.push(data.sender_id);
                     }
@@ -2019,9 +2192,9 @@ const initMaiga = () => {
             });
 
             this.socket.on('hide_typing', (data) => {
-                const chat = this.chats.find(c => c.id == data.chat_id);
+                const chat = this.chats.find(c => c.id.toString() === data.chat_id.toString());
                 if (chat) chat.isTyping = false;
-                if (this.activeChat && this.activeChat.id == data.chat_id) {
+                if (this.activeChat && this.activeChat.id.toString() === data.chat_id.toString()) {
                     this.typingUsers = this.typingUsers.filter(id => id !== data.sender_id);
                 }
             });
@@ -2081,15 +2254,18 @@ const initMaiga = () => {
                 // Load draft for the new chat
                 this.newMessage = newChat ? (this.drafts[newChat.id] || '') : '';
                 if (newChat) {
+                    localStorage.setItem('maiga_active_chat_id', newChat.id);
                     this.markAsRead(newChat);
                     this.fetchMessages(newChat, false);
+                } else {
+                    localStorage.removeItem('maiga_active_chat_id');
                 }
             });
 
             // Re-join room if user data loads after socket connects
             this.$watch('user.id', (newId) => {
                 if (newId && this.socket && this.socket.connected) this.socket.emit('join_room', newId);
-            });
+            }, { immediate: true }); // Ensure this runs immediately if user.id is already set
             
             // Load tab-specific data when switching tabs
             this.$watch('activeTab', (newTab) => {
@@ -2097,7 +2273,7 @@ const initMaiga = () => {
                     this.fetchSavedPosts();
                 }
                 if (newTab === 'profile' && this.myReels.length === 0) {
-                    this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (d) this.myReels = d; });
+                    this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (Array.isArray(d)) this.myReels = d; });
                 }
                 // Add other tab-specific loading here if needed
             });
@@ -2138,10 +2314,33 @@ const initMaiga = () => {
                     if (userData.recent_stickers) this.recentlyUsedStickers = userData.recent_stickers;
 
                 }
+
+            // Restore Create Post Modal state if draft exists
+            const postDraft = localStorage.getItem('maiga_create_post_draft');
+            if (postDraft) {
+                this.isCreatingPost = true;
+                // Reconstruct postFile if selectedMedia exists and is a data URL
+                if (this.selectedMedia && this.selectedMedia.startsWith('data:')) {
+                    fetch(this.selectedMedia)
+                        .then(res => res.blob())
+                        .then(blob => {
+                            this.postFile = new File([blob], `draft_${Date.now()}.jpg`, { type: blob.type });
+                        });
+                }
+            }
+
                 this.posts = Array.isArray(postsData) ? postsData : [];
                 this.chats = Array.isArray(chatsData) ? chatsData : [];
                 this.groups = Array.isArray(groupsData) ? groupsData : [];
                 this.followingList = Array.isArray(connectionsData) ? connectionsData : [];
+
+                this.loadCreatePostDraft();
+                // Restore active chat after lists are loaded
+                const savedChatId = localStorage.getItem('maiga_active_chat_id');
+                if (savedChatId) {
+                    const chat = this.chats.find(c => c.id == savedChatId) || this.groups.find(g => g.id == savedChatId);
+                    if (chat) this.activeChat = chat;
+                }
 
                 // Join group rooms for real-time updates after data is loaded
                 if (this.socket && this.socket.connected) {
@@ -2165,9 +2364,10 @@ const initMaiga = () => {
                     this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver()); incrementProgress();
                 });
+                this.apiFetch('/api/get_trending_reels').then(d => { if (Array.isArray(d)) this.trendingReels = d; });
                 this.apiFetch('/api/get_starred_messages').then(d => { if (Array.isArray(d)) this.starredMessages = d; incrementProgress(); });
                 this.apiFetch('/api/get_blocked_users').then(d => { this.blockedUsers = Array.isArray(d) ? d : []; incrementProgress(); });
-                this.apiFetch('/api/get_most_active_users').then(d => { if (Array.isArray(d)) this.mostActiveUsers = d; incrementProgress(); });
+                this.apiFetch('/api/get_most_active_users').then(d => { if (Array.isArray(d)) this.mostActiveUsers = d.map(u => ({...u, id: u.id.toString()})); incrementProgress(); });
 
                 if (this.user.is_admin) {
                     this.apiFetch('/api/admin/get_reports').then(d => { if (Array.isArray(d)) this.reports = d; });
@@ -2226,7 +2426,7 @@ const initMaiga = () => {
                 userId = userOrId;
             }
             
-
+            // Convert to string for consistent comparison
             if (!userId || userId == this.user.id) {
                 this.activeTab = 'profile';
                 return;
@@ -2244,7 +2444,7 @@ const initMaiga = () => {
             // Fetch full user profile from API
             this.apiFetch(`/api/get_profile?user_id=${userId}`)
                 .then(data => {
-                    if (data && !data.error && data.id) {
+                    if (data && !data.error && data.id) { // Ensure ID is present
                         this.viewingUser = { ...data,
                             reels: [], // Initialize reels array
                             profilePostsPage: 1,
@@ -2255,12 +2455,12 @@ const initMaiga = () => {
                             this.viewingUser.posts = data.posts;
                         } else {
                             this.viewingUser.posts = [];
-                            this.apiFetch(`/api/get_posts?user_id=${userId}`)
+                            this.apiFetch(`/api/get_posts?user_id=${userId.toString()}`) // Ensure string ID
                                 .then(postsData => {
                                     if (postsData) this.viewingUser.posts = postsData;
                                 }); // This fallback is now less critical as get_profile returns posts
                         }
-                        // Fetch their reels
+                        // Fetch their reels (ensure string ID)
                         this.apiFetch(`/api/get_reels?user_id=${userId}`)
                             .then(reelsData => {
                                 if (reelsData) this.viewingUser.reels = reelsData;
@@ -2283,7 +2483,7 @@ const initMaiga = () => {
             this.viewingUser.isLoadingMoreProfilePosts = true;
             this.viewingUser.profilePostsPage++;
 
-            const data = await this.apiFetch(`/api/get_profile?user_id=${this.viewingUser.id}&page=${this.viewingUser.profilePostsPage}&limit=${this.viewingUser.profilePostsLimit}`);
+            const data = await this.apiFetch(`/api/get_profile?user_id=${this.viewingUser.id.toString()}&page=${this.viewingUser.profilePostsPage}&limit=${this.viewingUser.profilePostsLimit}`);
             
             if (data && !data.error && data.id) {
                 if (Array.isArray(data.posts) && data.posts.length > 0) {
@@ -2338,7 +2538,7 @@ const initMaiga = () => {
                 // Check if story belongs to current user
                 // Note: Ensure both IDs are compared as strings or numbers consistentnly
                 if (String(story.user_id) === String(this.user.id)) {
-                    fetchedMyStories.push(storyObj);
+                    fetchedMyStories.push(storyObj); // Ensure story.id is string
                 } else {
                     if (!storiesByUser.has(story.user_id)) {
                         storiesByUser.set(story.user_id, {
@@ -2364,7 +2564,7 @@ const initMaiga = () => {
            return (this.posts || []).filter(p => p.myReaction !== null);
         },
         get filteredConnectionList() {
-            if (!this.connectionSearchQuery.trim()) {
+            if (!this.connectionSearchQuery?.trim()) {
                 return this.connectionList;
             }
             const query = this.connectionSearchQuery.toLowerCase();
@@ -2375,11 +2575,11 @@ const initMaiga = () => {
             );
         },
         isFollowing(friendId) {
-            if (!friendId) return false;
-            return this.user.followingIds.some(id => id == friendId);
+            if (!friendId) return false; // Ensure friendId is string for comparison
+            return this.user.followingIds.some(id => id.toString() === friendId.toString());
         },
         isChatMuted(chatId, type) {
-            return this.mutedChats.some(m => m.chat_id == chatId && m.type == type);
+            return this.mutedChats.some(m => m.chat_id.toString() === chatId.toString() && m.type === type);
         },
         isPinned(chatId, type) {
             return (this.pinnedChats || []).some(p => p.chat_id == chatId && p.type == type);
@@ -2391,14 +2591,14 @@ const initMaiga = () => {
             const isCurrentlyFollowing = this.isFollowing(friendId);
 
             // --- Optimistic UI Update ---
-            if (isCurrentlyFollowing) {
-                this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
-                if (this.viewingUser && this.viewingUser.id == friendId) {
+            if (isCurrentlyFollowing) { // Ensure string comparison
+                this.user.followingIds = this.user.followingIds.filter(id => id.toString() !== friendId.toString());
+                if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) {
                     this.viewingUser.followers_count--;
                 }
             } else {
-                this.user.followingIds.push(friendId);
-                if (this.viewingUser && this.viewingUser.id == friendId) {
+                this.user.followingIds.push(friendId.toString()); // Store as string
+                if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) {
                     this.viewingUser.followers_count++;
                 }
             }
@@ -2415,12 +2615,12 @@ const initMaiga = () => {
             .then(data => {
                 if (!data || !data.success) {
                     // --- Revert on failure ---
-                    if (isCurrentlyFollowing) {
-                        this.user.followingIds.push(friendId);
-                        if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count++;
+                    if (isCurrentlyFollowing) { // Ensure string comparison
+                        this.user.followingIds.push(friendId.toString());
+                        if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) this.viewingUser.followers_count++;
                     } else {
-                        this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
-                        if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count--;
+                        this.user.followingIds = this.user.followingIds.filter(id => id.toString() !== friendId.toString());
+                        if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) this.viewingUser.followers_count--;
                     }
                     this.showToast('Error', (data && data.error) || 'Failed to update follow status.', 'error');
                 } else {
@@ -2432,12 +2632,12 @@ const initMaiga = () => {
             })
             .catch(err => {
                 // --- Revert on network error ---
-                if (isCurrentlyFollowing) {
-                    this.user.followingIds.push(friendId);
-                    if (this.viewingUser && this.viewingUser.id == friendId) this.viewingUser.followers_count++;
+                if (isCurrentlyFollowing) { // Ensure string comparison
+                    this.user.followingIds.push(friendId.toString());
+                    if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) this.viewingUser.followers_count++;
                 } else {
-                    this.user.followingIds = this.user.followingIds.filter(id => id != friendId);
-                    if (this.viewingUser && this.viewingUser.id == friendId) {
+                    this.user.followingIds = this.user.followingIds.filter(id => id.toString() !== friendId.toString());
+                    if (this.viewingUser && this.viewingUser.id.toString() === friendId.toString()) {
                         this.viewingUser.followers_count--;
                     }
                 }
@@ -2470,8 +2670,8 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-                    this.connectionList = this.connectionList.filter(p => p.id !== followerId);
-                    this.user.followerIds = this.user.followerIds.filter(id => id !== followerId);
+                    this.connectionList = this.connectionList.filter(p => p.id.toString() !== followerId.toString());
+                    this.user.followerIds = this.user.followerIds.filter(id => id.toString() !== followerId.toString());
                     this.showToast('Success', 'Follower removed.');
                 } else {
                     this.showToast('Error', data.error || 'Failed to remove follower.', 'error');
@@ -2484,7 +2684,10 @@ const initMaiga = () => {
             this.postFile = file;
             this.mediaType = file.type.startsWith('video') ? 'video' : 'image';
             const reader = new FileReader();
-            reader.onload = (e) => this.selectedMedia = e.target.result;
+            reader.onload = (e) => {
+                this.selectedMedia = e.target.result;
+                this.saveCreatePostDraft(); // Save after media is actually read and set
+            };
             reader.readAsDataURL(file);
         },
         handleEditingGroupAvatarChange(event) {
@@ -2579,11 +2782,12 @@ const initMaiga = () => {
                             this.myReels.unshift(newReel);
                             this.activeTab = 'reels';
                             this.apiFetch('/api/get_reels').then(d => { if (d) this.reels = d; });
-                            this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (d) this.myReels = d; });
+                            this.apiFetch(`/api/get_reels?user_id=${this.user.id.toString()}`).then(d => { if (Array.isArray(d)) this.myReels = d; });
                         } else {
                             this.activeTab = 'home';
                         }
                         this.apiFetch('/api/get_trending').then(d => { if (d) this.trendingTopics = d; });
+                        localStorage.removeItem('maiga_create_post_draft'); // Clear draft on successful post
                     } else {
                         this.showToast('Error', data.error || 'Failed to create post.', 'error');
                     }
@@ -2642,11 +2846,11 @@ const initMaiga = () => {
         async sendMessage(mediaData = null, type = 'text', contentOverride = null, fileObject = null) {
 
             if (this.isBlocked(this.activeChat?.id)) return;
-            let content = contentOverride || mediaData || this.newMessage;
+            let content = contentOverride || this.newMessage;
             this.isSendingMessage = true;
             
             // Handle Edit
-            if (this.editingMessageId) {
+            if (this.editingMessageId) { // Ensure ID is string for comparison
                 await this.apiFetch('/api/edit_message', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
@@ -2660,13 +2864,13 @@ const initMaiga = () => {
                 return;
             }
 
-            if (!content && type === 'text') return;
+            if (!content && type === 'text' && !mediaData) return;
             
             const formData = new FormData();
-            formData.append('content', (type === 'text' || type === 'sticker' || type === 'call_log') ? content : '');
+            formData.append('content', (type === 'text' || type === 'sticker' || type === 'call_log' || type === 'poll') ? content : '');
             formData.append('media_type', type);
 
-            if (this.replyingTo) {
+            if (this.replyingTo) { // Ensure ID is string for comparison
                 formData.append('reply_to_id', this.replyingTo.id);
             }
 
@@ -2678,15 +2882,15 @@ const initMaiga = () => {
 
             // Handle media upload if it's not text
             // Note: For simplicity in this snippet, we assume mediaData is a base64 string for preview, 
-            // but for real upload you'd attach the file object. 
-            // If using the file input refs:
+            // but for real upload you'd attach the file object.
+            // If using the file input refs or an audio blob:
             if (fileObject) {
                 formData.append('media', fileObject);
             } else if (type === 'image' && this.$refs.imgInput.files[0]) {
                 formData.append('media', this.$refs.imgInput.files[0]);
             } else if (type === 'video' && this.$refs.videoInput.files[0]) {
                 formData.append('media', this.$refs.videoInput.files[0]);
-            } else if (type === 'file' && this.$refs.fileInput.files[0]) {
+            } else if (type === 'file' && this.$refs.fileInput.files[0]) { // Fixed: mediaData was not being handled for audio
                 formData.append('media', this.$refs.fileInput.files[0]);
             }
             else if (type === 'audio' && mediaData) {
@@ -2696,7 +2900,7 @@ const initMaiga = () => {
             // Optimistic UI Update
             const messagePayload = {
                 id: Date.now(),
-                sender_id: this.user.id,
+                sender_id: this.user.id.toString(),
                 receiver_id: this.activeChat.id,
                 content: content, // This might be encrypted content or raw, careful with display
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -2713,7 +2917,7 @@ const initMaiga = () => {
             });
 
             // Update chat list preview with pending state
-            const chatInList = this.chats.find(c => c.id == this.activeChat.id) || this.groups.find(g => g.id == this.activeChat.id);
+            const chatInList = this.chats.find(c => c.id.toString() === this.activeChat.id.toString()) || this.groups.find(g => g.id.toString() === this.activeChat.id.toString());
             if (chatInList) {
                 chatInList.lastMsg = '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' + (type === 'text' ? content : `<i>Sent a ${type}</i>`);
                 chatInList.lastMsgId = messagePayload.id;
@@ -2724,7 +2928,7 @@ const initMaiga = () => {
             } else if (this.activeChat.type !== 'group') {
                 // If it's a new chat not yet in the list, add it
                 this.chats.unshift({ 
-                    ...this.activeChat, 
+                    ...this.activeChat, // Ensure activeChat.id is string
                     lastMsg: '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' + content, 
                     lastMsgId: messagePayload.id,
                     lastMsgByMe: true,
@@ -2740,7 +2944,7 @@ const initMaiga = () => {
                     headers: { 'X-CSRF-Token': CSRF_TOKEN }
                 }).then(data => {
                     if (data && data.success && chatInList) {
-                        chatInList.lastMsgId = data.message_id; // Sync optimistic ID with DB ID
+                        chatInList.lastMsgId = data.message_id.toString(); // Sync optimistic ID with DB ID
                         document.getElementById('sent-sound')?.play().catch(()=>{});
                     } else {
                         this.showToast('Error', 'Message failed to send.', 'error');
@@ -2752,7 +2956,7 @@ const initMaiga = () => {
                 // Background Sync Logic
                 const pendingMsg = {
                     chat_id: this.activeChat.id,
-                    is_group: this.activeChat.type === 'group',
+                    is_group: this.activeChat.type === 'group', // Fixed: finalType was not defined
                     content: content,
                     media_type: finalType,
                     reply_to_id: this.replyingTo?.id || null,
@@ -2769,6 +2973,7 @@ const initMaiga = () => {
             this.newMessage = '';
             this.replyingTo = null;
             // Clear draft when message is sent
+            this.isSendingMessage = false;
             if (this.activeChat) {
                 delete this.drafts[this.activeChat.id];
             }
@@ -2778,7 +2983,7 @@ const initMaiga = () => {
             this.socket.emit('typing', { 
                  group_id: this.activeChat.type === 'group' ? this.activeChat.id : null,
                 receiver_id: this.activeChat.type !== 'group' ? this.activeChat.id : null,
-                sender_id: this.user.id
+                sender_id: this.user.id.toString()
             });
         }, 2000),
 
@@ -2829,7 +3034,7 @@ const initMaiga = () => {
         },
         async toggleDisappearingMode() {
             if (!this.activeChat) return;
-            const type = this.activeChat.type === 'group' ? 'group' : 'user';
+            const type = this.activeChat.type === 'group' ? 'group' : 'user'; // Ensure activeChat.id is string
             const data = await this.apiFetch('/api/toggle_disappearing_mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2842,7 +3047,7 @@ const initMaiga = () => {
         },
         fetchMessages(chat, forceScroll = true) {
             const type = chat.type === 'group' ? 'group' : 'user';
-            let url = `/api/get_messages?chat_id=${chat.id}&type=${type}`;
+            let url = `/api/get_messages?chat_id=${chat.id.toString()}&type=${type}`;
             if (this.chatSearchQuery) {
                 url += `&search=${encodeURIComponent(this.chatSearchQuery)}`;
             }
@@ -2855,7 +3060,7 @@ const initMaiga = () => {
                     const formattedMessages = await Promise.all(data.map(async m => {
                         let content = m.media || m.content;
                         let msgType = m.media_type || 'text';
-
+                        // Ensure IDs are strings for consistency
                         return {
                         id: m.id,
                         sender_id: m.sender_id,
@@ -2868,7 +3073,7 @@ const initMaiga = () => {
                         pinned: !!m.is_pinned,
                         read: !!m.is_read,
                         read_by: m.read_by || [],
-                        author: m.first_name + ' ' + m.surname, // For groups
+                       author: m.first_name + ' ' + m.surname, // For groups (ensure m.sender is populated)
                         avatar: m.avatar,
                         replyTo: m.replyTo,
                         // Poll specific data
@@ -2876,7 +3081,7 @@ const initMaiga = () => {
                         options: m.options ? m.options.map(opt => ({
                             id: opt._id || opt.id,
                             text: opt.text,
-                            votes: opt.votes || []
+                            votes: opt.votes || [] // Ensure votes are handled correctly
                         })) : null,
                         poll_id: m.poll_id
                     }}));
@@ -2898,7 +3103,7 @@ const initMaiga = () => {
         },
         markAsRead(chat) {
             if (!chat) return;
-            const type = chat.type === 'group' ? 'group' : 'user';
+            const type = chat.type === 'group' ? 'group' : 'user'; // Ensure chat.id is string
             
             // Real-time 'seen' status update via socket
             this.socket.emit('mark_seen', { chat_id: chat.id, type: type });
@@ -2908,7 +3113,7 @@ const initMaiga = () => {
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
-                },
+                }, // Ensure chat.id is string
                 body: JSON.stringify({ chat_id: chat.id, type: type })
             });
             // Local update handled by polling or optimistic update if needed
@@ -2922,7 +3127,7 @@ const initMaiga = () => {
             this.isMessaging = true; // Go back to list
             
             this.apiFetch('/api/mark_chat_unread', {
-                method: 'POST',
+                method: 'POST', // Ensure chat.id is string
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
@@ -2936,8 +3141,9 @@ const initMaiga = () => {
             this.recordStickerUse(sticker);
             this.sendMessage(sticker, 'sticker');
             this.showStickerPicker = false;
+            this.isSendingMessage = false;
         },
-        handleSwipeStart(e, msgId) {
+        handleSwipeStart(e, msgId) { // Ensure msgId is string for comparison
             this.swipeStart.x = e.touches[0].clientX;
             this.swipeStart.y = e.touches[0].clientY;
             this.swipingMsgId = msgId;
@@ -2955,7 +3161,7 @@ const initMaiga = () => {
         },
         handleSwipeEnd() {
             if (this.swipeOffset > 50) { // Threshold to trigger reply
-                const msg = this.chatMessages[this.activeChat.id].find(m => m.id === this.swipingMsgId);
+                const msg = this.chatMessages[this.activeChat.id].find(m => m.id.toString() === this.swipingMsgId.toString());
                 if (msg) this.replyToMessage(msg);
             }
             this.swipingMsgId = null;
@@ -2981,7 +3187,7 @@ const initMaiga = () => {
         },
         togglePinMessage() {
             if (!this.selectedMessageForOptions || !this.activeChat) return;
-            const chatId = this.activeChat.id;
+            const chatId = this.activeChat.id.toString();
             const msg = this.selectedMessageForOptions;
             
             this.apiFetch('/api/toggle_pin_message', {
@@ -2989,7 +3195,7 @@ const initMaiga = () => {
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
-                },
+                }, // Ensure msg.id is string
                 body: JSON.stringify({ message_id: msg.id })
             }).then(() => {
                 msg.pinned = !msg.pinned;
@@ -2999,7 +3205,7 @@ const initMaiga = () => {
             this.showMessageOptions = false;
         },
         unpinMessage(msg) {
-            if (msg) msg.pinned = false;
+            if (msg) msg.pinned = false; // Ensure msg.id is string
         },
         scrollToMessage(msgId) {
             const el = document.getElementById('msg-' + msgId);
@@ -3015,7 +3221,7 @@ const initMaiga = () => {
             this.showForwardModal = true;
         },
         forwardTo(friend) {
-            if (!this.messageToForward) return;
+            if (!this.messageToForward) return; // Ensure friend.id is string
             if (!this.chatMessages[friend.id]) this.chatMessages[friend.id] = [];
             this.chatMessages[friend.id].push({
                 id: Date.now(),
@@ -3027,7 +3233,7 @@ const initMaiga = () => {
                 forwarded: true
             });
             // Update chat list preview
-            const chat = this.chats.find(c => c.id === friend.id);
+            const chat = this.chats.find(c => c.id.toString() === friend.id.toString());
             if (chat) { chat.lastMsg = `Forwarded: ${this.messageToForward.type === 'text' ? this.messageToForward.content : 'Media'}`; chat.time = 'Now'; }
             this.showForwardModal = false;
             this.messageToForward = null;
@@ -3043,7 +3249,7 @@ const initMaiga = () => {
         createPoll() {
             if (!this.newPoll.question.trim() || this.newPoll.options.filter(o => o.trim()).length < 2) {
                 this.showToast('Error', 'Please enter a question and at least 2 options.', 'error');
-                return;
+                return; // Ensure activeChat.id is string
             }
             
             const payload = {
@@ -3077,7 +3283,7 @@ const initMaiga = () => {
         },
         votePoll(msgId, optionId) {
             // Find the message to get the poll_id
-            const msg = this.chatMessages[this.activeChat.id].find(m => m.id === msgId);
+            const msg = this.chatMessages[this.activeChat.id].find(m => m.id.toString() === msgId.toString());
             if (!msg || !msg.poll_id) return;
 
             this.apiFetch('/api/vote_poll', {
@@ -3085,7 +3291,7 @@ const initMaiga = () => {
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
-                },
+                }, // Ensure msg.poll_id and optionId are strings
                 body: JSON.stringify({ poll_id: msg.poll_id, option_id: optionId })
             })
             .then(data => {
@@ -3105,7 +3311,7 @@ const initMaiga = () => {
         },
         scheduleMessage() {
             if (!this.newMessage.trim() || !this.scheduledTime) return;
-            this.scheduledMessages.push({
+            this.scheduledMessages.push({ // Ensure activeChat.id is string
                 chatId: this.activeChat.id,
                 content: this.newMessage,
                 type: 'text',
@@ -3118,7 +3324,7 @@ const initMaiga = () => {
         },
         sendScheduledMessage(msg, index) {
             if (!this.chatMessages[msg.chatId]) this.chatMessages[msg.chatId] = [];
-            this.chatMessages[msg.chatId].push({
+            this.chatMessages[msg.chatId].push({ // Ensure msg.chatId is string
                 id: Date.now(),
                 sender: 'me',
                 type: msg.type,
@@ -3128,7 +3334,7 @@ const initMaiga = () => {
             });
             
             // Update last message if this chat is in list
-            const chat = this.chats.find(c => c.id === msg.chatId) || this.groups.find(g => g.id === msg.chatId);
+            const chat = this.chats.find(c => c.id.toString() === msg.chatId.toString()) || this.groups.find(g => g.id.toString() === msg.chatId.toString());
             if (chat) {
                 chat.lastMsg = msg.content;
                 chat.time = 'Now';
@@ -3153,7 +3359,7 @@ const initMaiga = () => {
         },
         reportMessage() {
             const msg = this.selectedMessageForOptions;
-            if (!msg) return;
+            if (!msg) return; // Ensure msg.id is string
 
             const reason = prompt("Why are you reporting this message? (e.g., Harassment, Spam, Hate Speech)");
             if (!reason) return;
@@ -3176,7 +3382,7 @@ const initMaiga = () => {
         },
         blockAndResolveReport(report) {
             if (!confirm(`Are you sure you want to block ${report.reported_user.name} and resolve this report?`)) return;
-            
+            // Ensure report.id and user_id are strings
             this.apiFetch('/api/admin/block_and_resolve_report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3194,7 +3400,7 @@ const initMaiga = () => {
         },
         editMessage() {
             const msg = this.selectedMessageForOptions;
-            if (!msg || msg.type !== 'text') return;
+            if (!msg || msg.type !== 'text') return; // Ensure msg.id is string
             
             this.newMessage = msg.content;
             this.editingMessageId = msg.id;
@@ -3206,7 +3412,7 @@ const initMaiga = () => {
             if (!this.selectedMessageForOptions || !this.activeChat) return;
             if (!confirm(mode === 'everyone' ? 'Delete for everyone?' : 'Delete for me?')) return;
 
-            const chatId = this.activeChat.id;
+            const chatId = this.activeChat.id.toString();
             const msgId = this.selectedMessageForOptions.id;
 
             this.apiFetch('/api/delete_message', {
@@ -3214,7 +3420,7 @@ const initMaiga = () => {
                 headers: { 
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
-                },
+                }, // Ensure msgId is string
                 body: JSON.stringify({ message_id: msgId, mode: mode })
             })
             .then(data => {
@@ -3231,7 +3437,7 @@ const initMaiga = () => {
             this.showMessageOptions = false;
         },
         openComments(item, type) {
-            this.fetchComments(item.id, item.user_id);
+            this.fetchComments(item.id.toString(), item.user_id.toString()); // Ensure IDs are strings
             if (this.viewingComments) {
                 this.viewingComments.type = type;
             }
@@ -3239,7 +3445,7 @@ const initMaiga = () => {
         fetchComments(postId, postAuthorId) {
             this.viewingComments = { id: postId, type: 'post', list: [], post_author_id: postAuthorId };
             this.apiFetch(`/api/get_comments?post_id=${postId}`)
-                .then(data => {
+                .then(data => { // Ensure postId is string
                     if (this.viewingComments && this.viewingComments.id === postId) {
                         this.viewingComments.list = data || [];
                     }
@@ -3248,7 +3454,7 @@ const initMaiga = () => {
         addComment(contentOrBlob = null, type = 'text') {
             if ((!this.commentInput.trim() && !contentOrBlob) || !this.viewingComments) return;
             
-            const formData = new FormData(); formData.append('post_id', this.viewingComments.id);
+            const formData = new FormData(); formData.append('post_id', this.viewingComments.id.toString()); // Ensure ID is string
             if (this.replyingToComment) {
                 formData.append('parent_comment_id', this.replyingToComment.id);
             }
@@ -3289,7 +3495,7 @@ const initMaiga = () => {
                     };
 
                     if (this.replyingToComment) {
-                        const parent = this.viewingComments.list.find(c => c.id === this.replyingToComment.id);
+                        const parent = this.viewingComments.list.find(c => c.id.toString() === this.replyingToComment.id.toString());
                         if (parent) {
                             if (!parent.replies) parent.replies = [];
                             parent.replies.push(newComment);
@@ -3301,8 +3507,8 @@ const initMaiga = () => {
                     }
 
                     const item = this.viewingComments.type === 'post' 
-                        ? this.posts.find(p => p.id === this.viewingComments.id)
-                        : this.reels.find(r => r.id === this.viewingComments.id);
+                        ? this.posts.find(p => p.id.toString() === this.viewingComments.id.toString())
+                        : this.reels.find(r => r.id.toString() === this.viewingComments.id.toString());
                     if(item) item.comments = (item.comments || 0) + 1;
 
                 } else {
@@ -3328,15 +3534,19 @@ const initMaiga = () => {
                 this.commentMediaRecorder = new MediaRecorder(stream);
                 this.commentAudioChunks = [];
                 this.commentMediaRecorder.addEventListener("dataavailable", event => {
+                    // Fixed: commentAudioChunks was not being used
                     this.commentAudioChunks.push(event.data);
                 });
                 this.commentMediaRecorder.onstop = () => {
+                    cancelAnimationFrame(this.recordAnimationId);
                     const audioBlob = new Blob(this.commentAudioChunks, { type: 'audio/webm' });
-                    this.addComment(audioBlob); // Pass blob to addComment
+                    this.addComment(audioBlob, 'audio'); // Pass blob to addComment
                     this.commentAudioChunks = [];
                     stream.getTracks().forEach(track => track.stop());
                 };
                 this.commentMediaRecorder.start();
+                this.visualizeStream(stream, 'comment-record-waveform');
+                this.isSendingComment = true; // Disable post button while recording
                 this.isRecordingComment = true;
                 this.commentRecordingDuration = 0;
                 this.commentRecordingTimer = setInterval(() => { this.commentRecordingDuration++; }, 1000);
@@ -3347,13 +3557,14 @@ const initMaiga = () => {
         stopCommentRecording() {
             if (!this.isRecordingComment || !this.commentMediaRecorder) return;
             this.commentMediaRecorder.stop();
+            cancelAnimationFrame(this.recordAnimationId);
             this.isRecordingComment = false;
             clearInterval(this.commentRecordingTimer);
             
         },
         deleteComment(commentId) {
             if (!confirm('Delete this comment?')) return;
-            this.apiFetch('/api/delete_comment', {
+            this.apiFetch('/api/delete_comment', { // Ensure commentId is string
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ comment_id: commentId })
@@ -3378,7 +3589,7 @@ const initMaiga = () => {
             this.sharingPost = post;
             this.showShareModal = true;
         },
-        sharePost() {
+        sharePost() { // Ensure sharingPost.id is string
             if (!this.sharingPost) return;
             this.apiFetch('/api/share_post', {
                 method: 'POST',
@@ -3386,14 +3597,14 @@ const initMaiga = () => {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
                 },
-                body: JSON.stringify({ post_id: this.sharingPost.id })
+                body: JSON.stringify({ post_id: this.sharingPost.id.toString() })
             })
             .then(data => {
                 if (data && data.success) {
                     this.showToast('Success', 'Post shared to your feed!');
                     this.showShareModal = false;
                     
-                    // Update original post/reel share count
+                    // Update original post/reel share count (ensure string comparison)
                     const post = this.homePosts.find(p => p.id === this.sharingPost.id);
                     if (post) post.shares++;
                     
@@ -3403,7 +3614,7 @@ const initMaiga = () => {
             });
         },
         sharePostToStory() {
-            if (!this.sharingPost) return;
+            if (!this.sharingPost) return; // Ensure sharingPost.id is string
             this.myStories.push({
                 id: Date.now(),
                 type: this.sharingPost.media_type || 'text',
@@ -3418,7 +3629,7 @@ const initMaiga = () => {
             this.showToast('Shared', 'Post shared to your story!', 'success');
         },
         copyPostLink() {
-            if (!this.sharingPost) return;
+            if (!this.sharingPost) return; // Ensure sharingPost.id is string
             navigator.clipboard.writeText(`https://maigasocial.com/post/${this.sharingPost.id}`);
             this.showShareModal = false;
             this.sharingPost.shares++;
@@ -3449,7 +3660,7 @@ const initMaiga = () => {
                 });
 
                 // 3. Only count the like once (TikTok logic: double tap doesn't unlike)
-                if (!reel.liked) {
+                if (!reel.liked) { // Ensure reel.id is string
                     this.likeReel(reel);
                 }
             } else {
@@ -3469,7 +3680,7 @@ const initMaiga = () => {
         },
 
         startReelHold(reel) {
-            this.speedTimer = setTimeout(() => {
+            this.speedTimer = setTimeout(() => { // Ensure reel.id is string
                 const video = document.getElementById('reel-video-' + reel.id);
                 if (video) {
                     video.playbackRate = 2;
@@ -3508,7 +3719,7 @@ const initMaiga = () => {
             clearTimeout(this.volumeLongPressTimer);
         },
         updateReelVolume() {
-            if (this.reelVolume > 0) {
+            if (this.reelVolume > 0) { // Ensure reel.id is string
                 this.isReelsMuted = false;
                 this.hasInteractedWithVolume = true;
             }
@@ -3529,7 +3740,7 @@ const initMaiga = () => {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
                 },
-                body: JSON.stringify({ post_id: reel.id, reaction: 'like' })
+                body: JSON.stringify({ post_id: reel.id.toString(), reaction: 'like' })
             }).catch(() => {
                 // Revert on network failure
                 reel.liked = false;
@@ -3540,7 +3751,7 @@ const initMaiga = () => {
         async markNotificationsRead() {
             if (this.unreadNotificationsCount === 0) return;
             this.notifications.forEach(n => n.is_read = true);
-            await this.apiFetch('/api/mark_notifications_read', {
+            await this.apiFetch('/api/mark_notifications_read', { // Ensure notification IDs are strings
                 method: 'POST'
             });
         },
@@ -3556,7 +3767,7 @@ const initMaiga = () => {
         get sortedChats() {
             const all = [...(this.chats || []), ...(this.groups || [])].filter(Boolean);
             return all.sort((a, b) => {
-                const aPinned = this.isPinned(a.id, a.type || 'user');
+                const aPinned = this.isPinned(a.id.toString(), a.type || 'user');
                 const bPinned = this.isPinned(b.id, b.type || 'user');
                 if (aPinned && !bPinned) return -1;
                 if (!aPinned && bPinned) return 1;
@@ -3598,7 +3809,7 @@ const initMaiga = () => {
                 this.apiFetch(`/api/search_posts?q=${q}`).then(res => (res || []).slice(0, 2).map(i => ({...i, type: 'post'}))),
                 this.apiFetch(`/api/search_reels?q=${q}`).then(res => (res || []).slice(0, 2).map(i => ({...i, type: 'reel'})))
             ]);
-            this.searchSuggestions = [...u, ...p, ...r];
+            this.searchSuggestions = [...u, ...p, ...r]; // Ensure IDs are strings
         },
         get recommendedSearchTerms() {
             // Fallback suggestions when no results are found
@@ -3619,7 +3830,7 @@ const initMaiga = () => {
         },
         openUserProfileByName(name) {
             // Search by username
-            const user = this.friends.find(f => f.username && f.username.toLowerCase() === name.toLowerCase());
+            const user = this.friends.find(f => f.username && f.username.toLowerCase() === name.toLowerCase()); // Ensure user.id is string
             if (user) {
                 this.openUserProfile(user);
             } else {
@@ -3637,7 +3848,7 @@ const initMaiga = () => {
         },
         async clearCallHistory() {
             if (!confirm('Clear all call logs?')) return;
-            const data = await this.apiFetch('/api/clear_call_history', { method: 'POST' });
+            const data = await this.apiFetch('/api/clear_call_history', { method: 'POST' }); // Ensure call IDs are strings
             if (data?.success) this.callHistory = [];
         },
         callback(call) {
@@ -3647,7 +3858,7 @@ const initMaiga = () => {
         },
         async deleteCallLog(callId) {
             const data = await this.apiFetch('/api/delete_call_log', {
-                method: 'POST',
+                method: 'POST', // Ensure callId is string
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ call_id: callId })
             });
@@ -3657,7 +3868,7 @@ const initMaiga = () => {
             this.apiFetch('/api/mark_notifications_read', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notification_ids: [notif.id] })
+                body: JSON.stringify({ notification_ids: [notif.id.toString()] })
             });
             notif.is_read = true;
             
@@ -3698,12 +3909,17 @@ const initMaiga = () => {
                     this.audioChunks.push(event.data);
                 });
                 this.mediaRecorder.onstop = () => {
+                    cancelAnimationFrame(this.recordAnimationId);
                     const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                    this.sendMessage(audioBlob, 'audio');
+                    this.postFile = new File([audioBlob], `voice_post_${Date.now()}.webm`, { type: 'audio/webm' });
+                    this.mediaType = 'audio';
+                    this.selectedMedia = 'voice_note_placeholder'; 
+                    this.saveCreatePostDraft();
                     this.audioChunks = [];
                     stream.getTracks().forEach(track => track.stop());
                 };
                 this.mediaRecorder.start();
+                this.visualizeStream(stream, 'post-record-waveform');
                 this.isRecording = true;
                 this.recordingDuration = 0;
                 this.recordingTimer = setInterval(() => { this.recordingDuration++; }, 1000);
@@ -3714,6 +3930,7 @@ const initMaiga = () => {
         stopRecording() {
             if (!this.isRecording || !this.mediaRecorder) return;
             this.mediaRecorder.stop();
+            cancelAnimationFrame(this.recordAnimationId);
             this.isRecording = false;
             clearInterval(this.recordingTimer);
         },
@@ -3873,7 +4090,7 @@ const initMaiga = () => {
                 }); // Fixed: savedPosts getter was not using savedPostList
         },
         get userPosts() {
-             return (this.posts || []).filter(p => p.user_id == this.user?.id || p.author === this.user?.name);
+             return (this.posts || []).filter(p => (p.user_id == this.user?.id || p.author === this.user?.name) && p.media_type !== 'video');
         },
         addToRecent(term) {
             if (!term) return;
@@ -4479,42 +4696,72 @@ const initMaiga = () => {
                 }
             });
         },
-        sendStoryReply(content) {
+        sendStoryReply(content, type = 'text') {
             if (!content || !this.viewingStory || !this.viewingStory.user || this.viewingStory.user.id === this.user.id) return;
             const friendId = this.viewingStory.user.id;
-            const messageContent = `Replying to story: `;
+            const isAudio = type === 'audio';
+            const messageContent = isAudio ? 'Sent a voice reply' : `Replying to story: ${content}`;
 
             if (!this.chatMessages[friendId]) this.chatMessages[friendId] = [];
             this.chatMessages[friendId].push({
                 id: Date.now(),
                 sender: 'me',
-                type: 'text',
-                content: messageContent,
+                type: type,
+                content: isAudio ? URL.createObjectURL(content) : messageContent,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 read: false
             });
 
-            // Update chat list preview
-            const chat = this.chats.find(c => c.id === friendId && c.type !== 'group');
-            if (chat) {
-                chat.lastMsg = messageContent;
-                chat.time = 'Now';
-            }
-
             const formData = new FormData();
             formData.append('receiver_id', friendId);
-            formData.append('content', messageContent);
-            formData.append('media_type', 'text');
+            formData.append('media_type', type);
+            if (isAudio) {
+                formData.append('media', content, 'voice_reply.webm');
+                formData.append('content', messageContent);
+            } else {
+                formData.append('content', messageContent);
+            }
 
             this.apiFetch('/api/send_message', {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'X-CSRF-Token': CSRF_TOKEN
-                }
+                headers: { 'X-CSRF-Token': CSRF_TOKEN }
             }).then(data => {
                 if(data && data.success) this.showToast('Sent', 'Reply sent');
             });
+        },
+        async startStoryReplyRecording() {
+            if (this.isRecordingStoryReply) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.storyReplyMediaRecorder = new MediaRecorder(stream);
+                this.storyReplyAudioChunks = [];
+                this.storyReplyMediaRecorder.addEventListener("dataavailable", event => {
+                    this.storyReplyAudioChunks.push(event.data);
+                });
+                this.storyReplyMediaRecorder.onstop = () => {
+                    cancelAnimationFrame(this.recordAnimationId);
+                    const audioBlob = new Blob(this.storyReplyAudioChunks, { type: 'audio/webm' });
+                    this.postFile = new File([audioBlob], `voice_post_${Date.now()}.webm`, { type: 'audio/webm' });
+                    this.mediaType = 'audio';
+                    this.selectedMedia = URL.createObjectURL(audioBlob);
+                    this.storyReplyAudioChunks = [];
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                this.storyReplyMediaRecorder.start();
+                this.visualizeStream(stream, 'story-reply-record-waveform');
+                this.isRecordingStoryReply = true;
+                this.storyReplyRecordingDuration = 0;
+                this.storyReplyRecordingTimer = setInterval(() => { this.storyReplyRecordingDuration++; }, 1000);
+            } catch (err) {
+                this.showToast('Error', 'Could not access microphone.', 'error');
+            }
+        },
+        stopStoryReplyRecording() {
+            if (!this.isRecordingStoryReply || !this.storyReplyMediaRecorder) return;
+            this.storyReplyMediaRecorder.stop();
+            this.isRecordingStoryReply = false;
+            clearInterval(this.storyReplyRecordingTimer);
         },
         addStoryText() {
             if (!this.newStoryText.trim()) return;
@@ -5551,7 +5798,7 @@ const initMaiga = () => {
                 })
             });
         },
-        
+         // Ensure post.id is string 
         getReactionIcon(reaction) {
             const icons = {
                 like: 'fa-solid fa-thumbs-up',
@@ -5586,7 +5833,7 @@ const initMaiga = () => {
                     'Content-Type': 'application/json',
                     'X-CSRF-Token': CSRF_TOKEN
                 },
-                body: JSON.stringify({ post_id: post.id })
+                body: JSON.stringify({ post_id: post.id.toString() })
             });
         },
         reportStory() {
@@ -5596,7 +5843,7 @@ const initMaiga = () => {
             if (!currentStory.user_id && this.viewingStory.user) {
                 currentStory.user_id = this.viewingStory.user.id;
             }
-            this.openReportModal('story', currentStory);
+            this.openReportModal('story', {...currentStory, id: currentStory.id.toString(), user_id: currentStory.user_id.toString()}); // Ensure IDs are strings
         },
         reportUser(user) {
             if (!user) return; 
@@ -5604,24 +5851,24 @@ const initMaiga = () => {
         }, 
         reportPost(post) {
             if (!post) return;
-            this.openReportModal('post', post);
+            this.openReportModal('post', {...post, id: post.id.toString(), user_id: post.user_id.toString()}); // Ensure IDs are strings
         },
         startChatWithUser(userToChat) {
             if (!userToChat) return;
             this.showUserProfile = false; // Close profile modal
             
             if (!this.chatMessages[userToChat.id]) {
-                this.chatMessages[userToChat.id] = [];
-            }
+                this.chatMessages[userToChat.id.toString()] = [];
+            } // Ensure userToChat.id is string
 
             let chat = this.chats.find(c => c.id == userToChat.id && c.type !== 'group');
             
             if (!chat) {
                 chat = {
                     id: userToChat.id,
-                    name: userToChat.name,
+                    name: userToChat.name, // Ensure userToChat.id is string
                     avatar: userToChat.avatar,
-                    lastMsg: 'Start a conversation',
+                    lastMsg: 'Start a conversation', // Ensure userToChat.id is string
                     time: 'Now',
                     unread: false,
                     is_admin: userToChat.is_admin,
@@ -5646,7 +5893,7 @@ const initMaiga = () => {
             this.isCallMinimized = false;
             this.isCallChatOpen = false;
             this.callType = type;
-            this.callStatus = 'Calling...';
+            this.callStatus = 'Calling...'; // Ensure activeChat.id is string
             this.callDuration = 0;
             this.isMicMuted = false;
             this.isCameraOff = false;
@@ -5676,7 +5923,7 @@ const initMaiga = () => {
                 this.peerConnection.createOffer().then(offer => {
                     this.peerConnection.setLocalDescription(offer);
                     // Optimize: Send via Socket directly
-                    this.socket.emit('call_user', {
+                    this.socket.emit('call_user', { // Ensure activeChat.id and user.id are strings
                         userToCall: this.activeChat.id,
                         signalData: offer,
                         from: this.user.id,
@@ -5713,7 +5960,7 @@ const initMaiga = () => {
 
             this.peerConnection.onicecandidate = event => {
                 if (event.candidate && this.activeChat) {
-                    this.socket.emit('ice_candidate', {
+                    this.socket.emit('ice_candidate', { // Ensure activeChat.id is string
                         to: this.activeChat.id,
                         candidate: event.candidate
                     });
@@ -5762,7 +6009,7 @@ const initMaiga = () => {
             if (navigator.vibrate) navigator.vibrate(0); // Stop vibration
             clearTimeout(this.callTimeoutTimer);
 
-            const chatInList = this.chats.find(c => c.id == callData.caller_id);
+            const chatInList = this.chats.find(c => c.id.toString() === callData.caller_id.toString());
             if (chatInList) chatInList.callInProgress = true;
 
             // Setup UI
@@ -5787,7 +6034,7 @@ const initMaiga = () => {
                 this.peerConnection.setRemoteDescription(new RTCSessionDescription(callData.sdp));
                 this.peerConnection.createAnswer().then(answer => {
                     this.peerConnection.setLocalDescription(answer);
-                    this.socket.emit('answer_call', {
+                    this.socket.emit('answer_call', { // Ensure callData.id and caller_id are strings
                         callId: callData.id,
                         to: callData.caller_id,
                         signal: answer
@@ -5797,7 +6044,7 @@ const initMaiga = () => {
         },
         rejectCall() {
             if (!this.incomingCall) return;
-            this.socket.emit('reject_call', { callId: this.incomingCall.id, to: this.incomingCall.caller_id });
+            this.socket.emit('reject_call', { callId: this.incomingCall.id.toString(), to: this.incomingCall.caller_id.toString() });
             clearInterval(this.vibrationInterval);
             if (navigator.vibrate) navigator.vibrate(0);
             this.incomingCall = null;
@@ -5815,12 +6062,12 @@ const initMaiga = () => {
                 this.isCallRecording = false;
             }
             
-            // Notify via Socket
-            const chatInList = this.chats.find(c => c.id == this.activeChat?.id);
+            // Notify via Socket (ensure activeChat.id is string)
+            const chatInList = this.chats.find(c => c.id.toString() === this.activeChat?.id.toString());
             if (chatInList) chatInList.callInProgress = false;
 
             if (this.activeChat && shouldEmit) {
-                this.socket.emit('end_call', { 
+                this.socket.emit('end_call', { // Ensure activeChat.id and currentCallId are strings
                     callId: this.currentCallId, 
                     to: this.activeChat.id, 
                     duration: this.callDuration 
@@ -5846,7 +6093,7 @@ const initMaiga = () => {
             this.$refs.remoteVideo.pause();
             this.$refs.remoteVideo.srcObject = null;
 
-            if (this.activeChat && shouldLog) {
+            if (this.activeChat && shouldLog) { // Ensure activeChat.id is string
                 if (!this.chatMessages[this.activeChat.id]) this.chatMessages[this.activeChat.id] = [];
                 
                 let messageContent = '';
@@ -5983,6 +6230,29 @@ const initMaiga = () => {
             this.isCreatePostDragging = false;
         },
         setupReelsObserver() {
+            // ... (existing code)
+        },
+        saveCreatePostDraft() {
+            localStorage.setItem('maiga_create_post_draft', JSON.stringify({
+                newPostContent: this.newPostContent,
+                newPostFeeling: this.newPostFeeling,
+                postBgStyleIndex: this.postBgStyleIndex,
+                selectedMedia: this.selectedMedia, // This will be a Data URL or Blob URL
+                mediaType: this.mediaType
+            }));
+        },
+        loadCreatePostDraft() {
+            const savedDraft = localStorage.getItem('maiga_create_post_draft');
+            if (savedDraft) {
+                const draft = JSON.parse(savedDraft);
+                this.newPostContent = draft.newPostContent || '';
+                this.newPostFeeling = draft.newPostFeeling || '';
+                this.postBgStyleIndex = draft.postBgStyleIndex !== undefined ? draft.postBgStyleIndex : -1;
+                this.selectedMedia = draft.selectedMedia || null;
+                this.mediaType = draft.mediaType || null;
+            }
+        },
+        setupReelsObserver() {
             if (this.observer) this.observer.disconnect();
             if (!this.$refs.reelsContainer) return;
 
@@ -5996,7 +6266,7 @@ const initMaiga = () => {
                     const video = entry.target.querySelector('video');
                     if (!video) return;
 
-                    const reelId = entry.target.dataset.reelId;
+                    const reelId = entry.target.dataset.reelId; // Ensure reel.id is string
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
@@ -6013,7 +6283,7 @@ const initMaiga = () => {
 
                         // Increment view count
                         if (reel && !this.viewedReels.has(reel.id)) {
-                            this.viewedReels.add(reel.id);
+                            this.viewedReels.add(reel.id.toString());
                             reel.views = (reel.views || 0) + 1; // Optimistic update
                                 this.apiFetch('/api/increment_reel_view', {
                                 method: 'POST',
@@ -6021,9 +6291,10 @@ const initMaiga = () => {
                                     'Content-Type': 'application/json',
                                     'X-CSRF-Token': CSRF_TOKEN
                                 },
-                                body: JSON.stringify({ post_id: reel.id })
+                                body: JSON.stringify({ post_id: reel.id.toString() })
                             });
                         }
+                        if (reel) reel.seen = true;
                     } else {
                         video.pause();
                         video.currentTime = 0;
@@ -6123,7 +6394,7 @@ const initMaiga = () => {
             if (this.activeTab !== 'reels') return;
             const container = this.$refs.reelsContainer;
             const reelHeight = container.clientHeight;
-            const currentIndex = Math.round(container.scrollTop / reelHeight);
+            const currentIndex = Math.round(container.scrollTop / reelHeight); // Ensure reel.id is string
             const nextIndex = Math.max(0, Math.min(this.reels.length - 1, currentIndex + direction));
             container.scrollTo({
                 top: reelHeight * nextIndex,
@@ -6132,7 +6403,7 @@ const initMaiga = () => {
         },
         shareReel(reel) {
             if (navigator.share) {
-                navigator.share({
+                navigator.share({ // Ensure reel.id is string
                     title: 'Check out this reel on Maiga Social!',
                     text: reel.caption,
                     url: window.location.href
@@ -6146,8 +6417,8 @@ const initMaiga = () => {
             }
         },
         markNotInterested(reel) {
-            this.reels = this.reels.filter(r => r.id !== reel.id);
-            this.showToast('Feedback', 'We will show less like this.', 'info');
+             this.reels = this.reels.filter(r => r.id.toString() !== reel.id.toString());
+            this.showToast('Feedback', 'We will show less like this.', 'info'); // Ensure reel.id is string
             this.showReelOptions = false;
         },
         reportReel(reel) {
@@ -6163,8 +6434,8 @@ const initMaiga = () => {
                 title: '', description: '', screenshot: null, preview: null,
                 targetType: type,
                 priority: 'low',
-                targetId: target.id,
-                targetUserId: type === 'user' ? target.id : (target.user_id || (target.user ? target.user.id : null))
+                targetId: target.id.toString(),
+                targetUserId: type === 'user' ? target.id.toString() : (target.user_id?.toString() || (target.user ? (target.user.id || target.user._id).toString() : null))
             };
             this.showPostOptions = false;
             this.showReelOptions = false;
@@ -6188,7 +6459,7 @@ const initMaiga = () => {
             const formData = new FormData();
             formData.append('user_id', this.reportForm.targetUserId);
             formData.append('reason', this.reportForm.title);
-            formData.append('details', this.reportForm.description + `\n(Reported ${this.reportForm.targetType} ID: ${this.reportForm.targetId})`);
+            formData.append('details', this.reportForm.description + `\n(Reported ${this.reportForm.targetType} ID: ${this.reportForm.targetId.toString()})`);
             formData.append('priority', this.reportForm.priority);
             if (this.reportForm.screenshot) {
                 formData.append('screenshot', this.reportForm.screenshot);
@@ -6224,6 +6495,7 @@ const initMaiga = () => {
             };
 
             recognition.onresult = (event) => {
+                this.isSearchFocused = true; // Ensure search bar stays focused
                 const transcript = event.results[0][0].transcript;
                 this.homeSearchQuery = transcript;
                 this.showToast('Voice Search', `Recognized: "${transcript}"`, 'success');

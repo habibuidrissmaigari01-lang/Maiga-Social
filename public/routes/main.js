@@ -48,6 +48,10 @@ const checkR2FileExists = async (key) => {
 const formatTime = (date) => {
     const now = new Date();
     const past = new Date(date);
+
+    if (!date || isNaN(past.getTime())) {
+        return ''; // Return empty string for invalid or missing dates
+    }
     const diff = Math.floor((now - past) / 1000);
 
     if (diff < 0) return 'Just now'; 
@@ -200,7 +204,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const limit = 10;
         const skip = (page - 1) * limit;
         
-        const baseQuery = { media_type: { $ne: 'video' }, viewed_by: { $ne: req.session.userId } };
+        const baseQuery = { media_type: { $ne: 'video' } };
         if (req.query.hashtag) {
             baseQuery.content = { $regex: new RegExp('#' + req.query.hashtag, 'i') };
         }
@@ -273,14 +277,16 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
 router.post('/create_post', isAuthenticated, upload.single('media'), async (req, res) => {
     let mediaUrl = null;
     if (req.file) {
-        const folder = req.file.mimetype.startsWith('video') ? 'reels' : 'posts';
+        const folder = req.file.mimetype.startsWith('video') ? 'reels' : 
+                      (req.file.mimetype.startsWith('audio') ? 'voice_notes' : 'posts');
         mediaUrl = await uploadToR2(req.file, folder);
     }
     const post = new Post({
         user: req.session.userId,
         content: req.body.content,
         media: mediaUrl,
-        media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 'image') : null,
+        media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 
+                               (req.file.mimetype.startsWith('audio') ? 'audio' : 'image')) : null,
         feeling: req.body.feeling,
     });
 
@@ -492,7 +498,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
         const totalPostsCount = await Post.countDocuments({ user: user._id });
-        const posts = await Post.find({ user: user._id }).sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
+        const posts = await Post.find({ user: user._id, media_type: { $ne: 'video' } }).sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
 
         res.json({
             id: user._id,
@@ -1033,10 +1039,10 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
-        const query = { media_type: 'video', viewed_by: { $ne: req.session.userId } };
+        const query = { media_type: 'video' };
         if (req.query.user_id) query.user = req.query.user_id;
 
-        console.log("Fetching reels with query:", query); // Debugging
+        // Fetching reels
         let reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
         
         // Randomize and interleave reels to avoid author clustering
@@ -1067,10 +1073,41 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
             saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
             myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
-            user_id: r.user?._id // Ensure user_id is returned for reels to correctly filter in profile
+            user_id: r.user?._id, // Ensure user_id is returned for reels to correctly filter in profile
+            seen: r.viewed_by.some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        // Fetch reels with high engagement from the last 7 days
+        const reels = await Post.find({
+            media_type: 'video',
+            createdAt: { $gte: lastWeek }
+        })
+        .populate('user', 'name avatar')
+        .sort({ views: -1, 'likes.length': -1 })
+        .limit(10);
+
+        res.json(reels.map(r => ({
+            id: r._id,
+            user_id: r.user?._id,
+            author: r.user?.name || 'User',
+            avatar: r.user?.avatar,
+            media: r.media,
+            caption: r.content,
+            likes: r.likes.length,
+            views: r.views || 0,
+            seen: r.viewed_by.some(id => id && id.toString() === userId?.toString())
+        })));
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch trending reels' });
     }
 });
 

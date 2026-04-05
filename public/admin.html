@@ -299,7 +299,7 @@
                                     <td class="p-4 font-bold" x-text="ban.name"></td>
                                     <td class="p-4 text-gray-600 dark:text-gray-400" x-text="ban.ban_reason"></td>
                                     <td class="p-4 text-blue-600 font-medium" x-text="ban.banned_by"></td>
-                                    <td class="p-4 text-gray-400" x-text="new Date(ban.banned_at).toLocaleDateString()"></td>
+                                    <td class="p-4 text-gray-400" x-text="ban.banned_at ? new Date(ban.banned_at).toLocaleDateString() : 'N/A'"></td>
                                 </tr>
                             </template>
                         </tbody>

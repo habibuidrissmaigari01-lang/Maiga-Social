@@ -93,14 +93,31 @@ router.post('/send-reg-otp', otpRequestLimiter, async (req, res) => {
     const existingUser = await User.findOne({ $or: [{ email: identity.toLowerCase() }, { phone: identity }] });
     if (existingUser) return res.status(400).json({ success: false, message: 'Account already exists.' });
 
-    // Check for cooldown (60 seconds)
     const existingOtp = await Otp.findOne({ identity: identity.toLowerCase(), type: 'registration' });
-    if (existingOtp && (Date.now() - existingOtp.createdAt.getTime() < 60000)) {
-        return res.status(429).json({ success: false, message: 'Please wait 60 seconds before requesting a new code.' });
+    const now = Date.now();
+    const threeMinutes = 3 * 60 * 1000; // 3 minutes
+    const tenMinutes = 10 * 60 * 1000; // 10 minutes
+
+    if (existingOtp) {
+        const timePassed = now - existingOtp.createdAt.getTime();
+        // Case 1: Still within the initial 3-minute cooldown
+        if (timePassed < threeMinutes) {
+            const remaining = Math.ceil((threeMinutes - timePassed) / 1000);
+            return res.status(429).json({ success: false, message: 'Please wait before requesting a new code.', remaining });
+        }
+
+        // Case 2: More than 3 attempts and within the 10-minute extended cooldown
+        if (existingOtp.attempts >= 3 && (timePassed < tenMinutes)) {
+            const remaining = Math.ceil((tenMinutes - timePassed) / 1000);
+            return res.status(429).json({ success: false, message: 'Too many OTP requests. Please try again later.', remaining });
+        }
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await Otp.findOneAndUpdate({ identity: identity.toLowerCase(), type: 'registration' }, { otp, attempts: 0, createdAt: new Date() }, { upsert: true });
+    let updateData = { otp, createdAt: new Date() };
+    updateData.attempts = existingOtp && (now - existingOtp.createdAt.getTime() < tenMinutes) ? existingOtp.attempts + 1 : 1;
+
+    await Otp.findOneAndUpdate({ identity: identity.toLowerCase(), type: 'registration' }, updateData, { upsert: true, new: true });
     await sendEmail(identity, 'Maiga Verification Code', `Your verification code is: ${otp}`);
     res.json({ success: true, message: 'Verification code sent.' });
 });
@@ -203,8 +220,18 @@ router.post('/login', loginLimiter, async (req, res) => {
 
 router.get('/check_username', async (req, res) => {
     try {
-        const user = await User.findOne({ username: req.query.username });
-        res.json({ available: !user });
+        const { username } = req.query;
+        const user = await User.findOne({ username });
+        
+        let suggestions = [];
+        if (user) {
+            // Generate 3 simple suggestions
+            suggestions.push(`${username}${Math.floor(Math.random() * 99)}`);
+            suggestions.push(`${username}_${Math.floor(Math.random() * 999)}`);
+            suggestions.push(`the_${username}`);
+        }
+
+        res.json({ available: !user, suggestions });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Database check failed' });
     }
