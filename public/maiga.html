@@ -1310,7 +1310,7 @@
                 </div>
                 <div class="flex items-center space-x-3 min-w-0">
                     <canvas id="story-reply-record-waveform" class="w-16 h-6" x-show="isRecordingStoryReply"></canvas>
-                    <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm">
+                    <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
                     <button @click="toggleStoryLike()" class="text-white p-2">
                         <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
                     </button>
@@ -2159,7 +2159,7 @@
                 <div class="relative flex-1">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors" :class="isSearchFocused ? 'text-blue-600' : ''"></i>
                 <input x-ref="searchInput" type="text" x-model="homeSearchQuery" 
-                       @focus="isSearchFocused = true" @input.debounce.300ms="searchUsers()"
+                       @focus="isSearchFocused = true; showSuggestions = true" @input.debounce.300ms="searchUsers()"
                        @blur="setTimeout(() => isSearchFocused = false, 200)"
                        :placeholder="'Search ' + (user.account_type === 'ysu' ? 'Ysu Social' : 'Maiga Social') + '...'" class="w-full bg-white dark:bg-gray-800 parallelogram-sm py-3 pl-12 pr-20 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
                 

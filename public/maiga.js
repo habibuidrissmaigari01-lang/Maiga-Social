@@ -1303,6 +1303,8 @@ const initMaiga = () => {
         isSendingComment: false,
         isRecordingPost: false,
         postRecordingDuration: 0,
+        isSendingPost: false, // Added to fix ReferenceError
+        showSuggestions: false, // Added to fix ReferenceError
         postMediaRecorder: null,
         isRecordingStoryReply: false,
         storyReplyMediaRecorder: null,
@@ -3917,6 +3919,7 @@ const initMaiga = () => {
                     this.saveCreatePostDraft();
                     this.audioChunks = [];
                     stream.getTracks().forEach(track => track.stop());
+                    this.isSendingPost = false; // Reset after recording stops
                 };
                 this.mediaRecorder.start();
                 this.visualizeStream(stream, 'post-record-waveform');
@@ -3924,12 +3927,14 @@ const initMaiga = () => {
                 this.recordingDuration = 0;
                 this.recordingTimer = setInterval(() => { this.recordingDuration++; }, 1000);
             } catch (err) {
+                this.isSendingPost = false; // Ensure reset on error
                 this.showToast('Error', 'Could not access microphone. Check permissions.', 'error');
             }
         },
         stopRecording() {
             if (!this.isRecording || !this.mediaRecorder) return;
             this.mediaRecorder.stop();
+            this.isSendingPost = false; // Reset after recording stops
             cancelAnimationFrame(this.recordAnimationId);
             this.isRecording = false;
             clearInterval(this.recordingTimer);
@@ -4751,15 +4756,18 @@ const initMaiga = () => {
                 this.storyReplyMediaRecorder.start();
                 this.visualizeStream(stream, 'story-reply-record-waveform');
                 this.isRecordingStoryReply = true;
+                this.isSendingStoryReply = true; // Set to true when recording starts
                 this.storyReplyRecordingDuration = 0;
                 this.storyReplyRecordingTimer = setInterval(() => { this.storyReplyRecordingDuration++; }, 1000);
             } catch (err) {
+                this.isSendingStoryReply = false; // Ensure reset on error
                 this.showToast('Error', 'Could not access microphone.', 'error');
             }
         },
         stopStoryReplyRecording() {
             if (!this.isRecordingStoryReply || !this.storyReplyMediaRecorder) return;
             this.storyReplyMediaRecorder.stop();
+            this.isSendingStoryReply = false; // Reset after recording stops
             this.isRecordingStoryReply = false;
             clearInterval(this.storyReplyRecordingTimer);
         },

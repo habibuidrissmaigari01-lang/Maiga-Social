@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
+const webpush = require('web-push');
 // Variable to hold the Socket.io instance for real-time broadcasts
 let ioInstance;
 
@@ -13,6 +14,14 @@ const s3Client = new S3Client({
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     },
+});
+
+// VAPID details for push notifications
+const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
+const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
+if (publicVapidKey && privateVapidKey) {
+    const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social';
+    webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
 });
 
 // --- Mongoose 8 Global Plugin ---
@@ -283,8 +292,9 @@ messageSchema.post('save', async function(doc) {
     if (!ioInstance) return;
 
     const populatedMsg = await doc.populate([
-        { path: 'sender', select: 'name first_name surname avatar' },
-        { path: 'group', select: 'name avatar' }
+        { path: 'sender', select: 'name first_name surname avatar' }, // Sender for notification icon/name
+        { path: 'receiver', select: 'name first_name surname avatar push_subscription' }, // Receiver for direct message
+        { path: 'group', select: 'name avatar members' } // Group for group messages
     ]);
     const msgData = {
         id: doc._id,
@@ -299,9 +309,66 @@ messageSchema.post('save', async function(doc) {
         created_at: doc.createdAt
     };
 
+    // --- Socket.io Real-time Update ---
     const target = doc.group ? `group_${doc.group}` : (doc.receiver ? doc.receiver.toString() : null);
     if (target) {
         ioInstance.to(target).emit('receive_message', msgData);
+    }
+
+    // --- Web Push Notification Logic ---
+    let recipients = [];
+    if (doc.receiver) {
+        // Direct message: recipient is the receiver
+        recipients.push(populatedMsg.receiver);
+    } else if (doc.group) {
+        // Group message: recipients are all group members except the sender
+        // We need to re-populate group members to get their push_subscription and blocked_users
+        const groupWithMembers = await mongoose.model('Group').findById(doc.group)
+            .populate({
+                path: 'members.user',
+                select: 'push_subscription blocked_users'
+            });
+
+        if (groupWithMembers) {
+            recipients = groupWithMembers.members
+                .filter(member => member.user && member.user._id.toString() !== doc.sender._id.toString()) // Exclude sender
+                .filter(member => member.user && !member.user.blocked_users.includes(doc.sender._id)) // Exclude blocked users
+                .map(member => member.user);
+        }
+    }
+
+    for (const recipient of recipients) {
+        if (recipient && recipient.push_subscription) {
+            const notificationTitle = doc.group
+                ? `New Message in ${populatedMsg.group.name}`
+                : `New Message from ${populatedMsg.sender.full_name}`;
+            const notificationBody = doc.media_type === 'text'
+                ? doc.content.substring(0, 100) + (doc.content.length > 100 ? '...' : '')
+                : `Sent a ${doc.media_type}`;
+            const notificationUrl = doc.group
+                ? `/home?chatId=${doc.group._id}`
+                : `/home?chatId=${doc.sender._id}`; // For direct message, receiver goes to chat with sender
+
+            const payload = JSON.stringify({
+                title: notificationTitle,
+                body: notificationBody,
+                url: notificationUrl,
+                icon: populatedMsg.sender.avatar, // Use sender's avatar as notification icon
+                badge: '/img/logo.png' // Small icon for status bar
+            });
+
+            try {
+                await webpush.sendNotification(recipient.push_subscription, payload);
+            } catch (error) {
+                // Handle push notification errors (e.g., subscription expired, 404/410)
+                if (error.statusCode === 410 || error.statusCode === 404) {
+                    // Subscription is no longer valid, remove it from the user
+                    await mongoose.model('User').findByIdAndUpdate(recipient._id, { $unset: { push_subscription: 1 } });
+                } else {
+                    console.error('Error sending push notification:', error);
+                }
+            }
+        }
     }
 });
 
