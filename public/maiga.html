@@ -1284,30 +1284,6 @@
                     <button @click="sendStoryReply('😢')" class="text-3xl hover:scale-125 transition-transform">😢</button>
                     <button @click="sendStoryReply('👏')" class="text-3xl hover:scale-125 transition-transform">👏</button>
                 </div>
-                <div class="flex items-center space-x-3">
-                    <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
-                    <button x-show="!replyContent.trim()" @mousedown="startStoryReplyRecording()" @mouseup="stopStoryReplyRecording()" @touchstart.prevent="startStoryReplyRecording()" @touchend.prevent="stopStoryReplyRecording()" class="p-2 text-white disabled:opacity-30" :disabled="isSendingStoryReply">
-                        <i class="fa-solid text-xl" :class="isRecordingStoryReply ? 'fa-stop text-red-500' : 'fa-microphone'"></i>
-                    </button>
-                    <button @click="toggleStoryLike()" class="text-white p-2">
-                        <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
-                    </button>
-                    <button @click="sendStoryReply(replyContent); replyContent = ''" class="text-white p-2"><i class="fa-solid fa-paper-plane text-xl"></i></button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Story Reply & Reactions -->
-        <div class="absolute bottom-0 left-0 right-0 p-4 z-30 bg-gradient-to-t from-black/90 to-transparent" x-show="viewingStory?.user?.id !== user.id">
-            <div class="flex flex-col space-y-4">
-                 <div class="flex justify-between px-2">
-                    <button @click="sendStoryReply('🔥')" class="text-3xl hover:scale-125 transition-transform">🔥</button>
-                    <button @click="sendStoryReply('😂')" class="text-3xl hover:scale-125 transition-transform">😂</button>
-                    <button @click="sendStoryReply('😍')" class="text-3xl hover:scale-125 transition-transform">😍</button>
-                    <button @click="sendStoryReply('😮')" class="text-3xl hover:scale-125 transition-transform">😮</button>
-                    <button @click="sendStoryReply('😢')" class="text-3xl hover:scale-125 transition-transform">😢</button>
-                    <button @click="sendStoryReply('👏')" class="text-3xl hover:scale-125 transition-transform">👏</button>
-                </div>
                 <div class="flex items-center space-x-3 min-w-0">
                     <canvas id="story-reply-record-waveform" class="w-16 h-6" x-show="isRecordingStoryReply"></canvas>
                     <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
@@ -2339,7 +2315,7 @@
             </div>
         </div>
         <!-- Stories -->
-        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 space-x-4 overflow-x-auto no-scrollbar mt-2">
+        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 space-x-2 overflow-x-auto no-scrollbar mt-2">
             <div @click="isCreatingStory = true" class="flex-shrink-0 cursor-pointer group">
                 <div class="p-1 bg-gray-200 dark:bg-gray-700 parallelogram rounded-2xl">
                     <div class="w-28 h-48 parallelogram overflow-hidden relative bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -3503,12 +3479,17 @@
                 </div>
 
                 <!-- Top Action Bar -->
-                <div x-show="!isConfirmingCapture" class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent">
+                <div x-show="!isConfirmingCapture" class="absolute top-0 left-0 right-0 p-6 flex justify-between items-center bg-gradient-to-b from-black/70 to-transparent z-[70]">
                     <button @click="closeCamera()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all">
                         <i class="fa-solid fa-xmark text-2xl"></i>
                     </button>
                     
                     <div class="flex gap-4">
+                        <template x-if="isScanning && hasFlashlight">
+                            <button @click="toggleFlashlight()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all" :class="isFlashOn ? 'bg-yellow-500 !text-black' : ''">
+                                <i class="fa-solid" :class="isFlashOn ? 'fa-bolt-lightning' : 'fa-bolt'"></i>
+                            </button>
+                        </template>
                         <button @click="showMusicPicker = true; musicPickerSource = 'camera'" 
                                 class="p-3 text-white hover:bg-white/20 rounded-full transition-all"
                                 :class="cameraMusic ? 'bg-indigo-600' : ''">
@@ -3538,7 +3519,7 @@
                 </div>
 
                 <!-- Bottom Interface -->
-                <div class="absolute bottom-0 left-0 right-0 pb-12 pt-20 flex flex-col items-center bg-gradient-to-t from-black/90 to-transparent">
+                <div x-show="!isScanning" class="absolute bottom-0 left-0 right-0 pb-12 pt-20 flex flex-col items-center bg-gradient-to-t from-black/90 to-transparent z-50">
                     <!-- Mode Selector Carousel -->
                     <div class="flex gap-6 mb-8 items-center justify-center w-full">
                         <template x-for="mode in ['photo', '15s', '30s', '60s']">
@@ -3732,6 +3713,37 @@
         </div>
     </div>
 
+    <!-- MAIN VIEW: SECURITY CHECK -->
+    <main x-show="activeTab === 'security'" class="animate-fadeIn">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
+            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3 class="font-black text-xl">Security Check</h3>
+        </div>
+        <div class="p-4 space-y-4">
+            <p class="text-xs text-gray-500 px-2 font-medium">Review devices where you're currently logged in.</p>
+            <div class="space-y-2">
+                <template x-for="session in loginSessions" :key="session.id">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
+                                <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm" x-text="session.browser + ' on ' + session.device"></p>
+                                <p class="text-[10px] text-gray-500" x-text="session.location + ' • ' + session.ip"></p>
+                                <p class="text-[9px] text-blue-600 font-bold uppercase mt-1" x-text="'Last active: ' + new Date(session.last_active).toLocaleString()"></p>
+                            </div>
+                        </div>
+                        <button class="text-xs font-bold text-red-500 hover:underline">Log Out</button>
+                    </div>
+                </template>
+                <template x-if="loginSessions.length === 0">
+                    <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <!-- Right Sidebar (Desktop) -->
     <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300">
         <div class="p-4 flex items-center border-b dark:border-gray-800" :class="isRightSidebarCollapsed ? 'justify-center' : 'justify-between'">
@@ -3867,33 +3879,3 @@
             </div>
         </div>
     </div>
-    <!-- MAIN VIEW: SECURITY CHECK -->
-    <main x-show="activeTab === 'security'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
-            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
-            <h3 class="font-black text-xl">Security Check</h3>
-        </div>
-        <div class="p-4 space-y-4">
-            <p class="text-xs text-gray-500 px-2 font-medium">Review devices where you're currently logged in.</p>
-            <div class="space-y-2">
-                <template x-for="session in loginSessions" :key="session.id">
-                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
-                        <div class="flex items-center space-x-4">
-                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
-                                <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
-                            </div>
-                            <div>
-                                <p class="font-bold text-sm" x-text="session.browser + ' on ' + session.device"></p>
-                                <p class="text-[10px] text-gray-500" x-text="session.location + ' • ' + session.ip"></p>
-                                <p class="text-[9px] text-blue-600 font-bold uppercase mt-1" x-text="'Last active: ' + new Date(session.last_active).toLocaleString()"></p>
-                            </div>
-                        </div>
-                        <button class="text-xs font-bold text-red-500 hover:underline">Log Out</button>
-                    </div>
-                </template>
-                <template x-if="loginSessions.length === 0">
-                    <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
-                </template>
-            </div>
-        </div>
-    </main>

@@ -122,6 +122,9 @@ const initMaiga = () => {
         // UI Controls
         isMessaging: false,
         isSideMenuOpen: false,
+        isFlashOn: false,
+        hasFlashlight: false,
+        isConfirmingCapture: false,
         isReporting: false,
         isCreatingPost: false,
         isCreatingStory: false,
@@ -738,6 +741,14 @@ const initMaiga = () => {
             this.isCreatingStory = false;
             this.isScanning = (source === 'scan');
 
+            // Auto-switch to back camera for scanning
+            if (this.isScanning) {
+                this.facingMode = 'environment';
+                this.cameraMode = 'scan';
+            } else {
+                this.facingMode = 'user';
+            }
+
             if ('BarcodeDetector' in window) {
                 this.qrDetector = new BarcodeDetector({ formats: ['qr_code'] });
             }
@@ -784,10 +795,33 @@ const initMaiga = () => {
                     canvas.height = video.videoHeight;
                     canvas.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
                     this.startCanvasLoop();
+
+                    // Detect flashlight capability
+                    const track = stream.getVideoTracks()[0];
+                    if (track && track.getCapabilities) {
+                        const capabilities = track.getCapabilities();
+                        this.hasFlashlight = !!capabilities.torch;
+                    }
                 };
             } catch (err) {
                 this.showToast('Camera Error', 'Could not access camera. Please check permissions.', 'error');
                 this.isCameraOpen = false;
+            }
+        },
+
+        async toggleFlashlight() {
+            if (!this.cameraStream) return;
+            const track = this.cameraStream.getVideoTracks()[0];
+            if (!track) return;
+
+            try {
+                this.isFlashOn = !this.isFlashOn;
+                await track.applyConstraints({
+                    advanced: [{ torch: this.isFlashOn }]
+                });
+            } catch (err) {
+                this.isFlashOn = false;
+                this.showToast('Flashlight Error', 'Could not toggle flashlight.', 'error');
             }
         },
 
@@ -950,7 +984,8 @@ const initMaiga = () => {
                     if (codes.length > 0) {
                         const raw = codes[0].rawValue;
                         if (raw.includes('/user/')) {
-                            const username = raw.split('/user/').pop();
+                            // Sanitize username (handle trailing slashes or query params)
+                            const username = raw.split('/user/')[1].split('/')[0].split('?')[0];
                             this.closeCamera();
                             this.openUserProfileByName(username);
                             if (navigator.vibrate) navigator.vibrate(100);
@@ -1026,6 +1061,7 @@ const initMaiga = () => {
             }
             if (this.recordingTimer) clearInterval(this.recordingTimer);
             this.isCameraOpen = false;
+            this.isFlashOn = false;
             this.isCameraRecording = false;
             if (this.cameraSource === 'post') this.isCreatingPost = true;
             if (this.cameraSource === 'story') this.isCreatingStory = true;
