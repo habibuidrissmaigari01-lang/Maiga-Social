@@ -2315,7 +2315,7 @@
             </div>
         </div>
         <!-- Stories -->
-        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 space-x-4 overflow-x-auto no-scrollbar mt-2">
+        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 space-x-2 overflow-x-auto no-scrollbar mt-2">
             <div @click="isCreatingStory = true" class="flex-shrink-0 cursor-pointer group">
                 <div class="p-1 bg-gray-200 dark:bg-gray-700 parallelogram rounded-2xl">
                     <div class="w-28 h-48 parallelogram overflow-hidden relative bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -3813,10 +3813,12 @@
             </template>
         </div>
     </aside>
-
+    </div>
+    </div>
+    </div>
 
     <!-- Bottom Nav -->
-    <nav x-show="!activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[env(safe-area-inset-bottom,0px)] z-[350] shadow-2xl lg:hidden">
+    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[env(safe-area-inset-bottom,0px)] z-[350] shadow-2xl lg:hidden">
         <!-- Fluid Indicator Bar -->
         <div class="absolute top-0 h-1 bg-blue-600 rounded-full z-10"
              :style="getIndicatorStyle()"
@@ -3824,9 +3826,11 @@
 
         <button @click="activeTab = 'home'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-house-chimney text-xl"></i>
+            <span class="text-[10px] font-bold mt-1">Home</span>
         </button>
         <button @click="activeTab = 'friends'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'friends' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-users text-xl"></i>
+            <span class="text-[10px] font-bold mt-1">Friends</span>
         </button>
         <div class="flex-1 flex justify-center -mt-8 relative z-30">
             <button @click="isCreatingPost = true" class="bg-blue-600 text-white w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-4 border-white dark:border-gray-900 active:scale-90 transition-all hover:rotate-12">
@@ -3835,9 +3839,11 @@
         </div>
         <button @click="activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-video text-xl"></i>
+            <span class="text-[10px] font-bold mt-1">Reels</span>
         </button>
         <button @click="activeTab = 'profile'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-circle-user text-xl"></i>
+            <span class="text-[10px] font-bold mt-1">Profile</span>
         </button>
     </nav>
 

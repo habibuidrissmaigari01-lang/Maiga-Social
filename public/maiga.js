@@ -90,7 +90,7 @@ const initMaiga = () => {
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
         isSocketConnected: false,
         currentTime: Date.now(),
-        typingUsers: {},
+        typingUsers: [],
         drafts: {},
         toasts: [],
         recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
@@ -394,12 +394,10 @@ const initMaiga = () => {
             return searchIndex === query.length;
         },
         getTypingUserName(userId) {
-            if (!this.activeChat || !this.typingUsers[this.activeChat.id]) return '';
-            const users = this.typingUsers[this.activeChat.id];
-            if (users.length === 0) return '';
-            if (users.length === 1) return `${users[0]} is typing...`;
-            if (users.length === 2) return `${users[0]} and ${users[1]} are typing...`;
-            return `${users[0]} and ${users.length - 1} others are typing...`;
+           if (this.typingUsers.length === 0) return '';
+            if (this.typingUsers.length === 1) return `${this.typingUsers[0]} is typing...`;
+            if (this.typingUsers.length === 2) return `${this.typingUsers[0]} and ${this.typingUsers[1]} are typing...`;
+            return `${this.typingUsers[0]} and ${this.typingUsers.length - 1} others are typing...`;
         },
 
 
@@ -2014,20 +2012,6 @@ const initMaiga = () => {
                 this.showToast('Info', 'Call ended.');
             });
 
-            // Listen for typing events
-            this.socket.on('display_typing', (data) => {
-                if (data.sender_id.toString() === this.user.id.toString()) return;
-                if (!this.typingUsers[data.chat_id]) this.typingUsers[data.chat_id] = [];
-                if (!this.typingUsers[data.chat_id].includes(data.sender_name)) {
-                    this.typingUsers[data.chat_id].push(data.sender_name);
-                }
-                // Clear after 3 seconds of inactivity
-                clearTimeout(this[`typing_timeout_${data.chat_id}_${data.sender_id}`]);
-                this[`typing_timeout_${data.chat_id}_${data.sender_id}`] = setTimeout(() => {
-                    this.typingUsers[data.chat_id] = this.typingUsers[data.chat_id].filter(name => name !== data.sender_name);
-                }, 3000);
-            });
-
             this.socket.on('message_deleted', (data) => {
                 // Look through all chat buckets to find and remove the deleted message
                 for (let chatId in this.chatMessages) {
@@ -2222,13 +2206,13 @@ const initMaiga = () => {
 
                 // Update active chat header (only if not current user)
                 if (this.activeChat && this.activeChat.id.toString() === data.chat_id.toString() && data.sender_id.toString() !== this.user.id.toString()) {
-                    if (!this.typingUsers.includes(data.sender_id)) {
-                        this.typingUsers.push(data.sender_id);
+                    if (!this.typingUsers.includes(data.sender_name)) {
+                        this.typingUsers.push(data.sender_name);
                     }
                     // Clear typing status after a delay if no new typing event
                     clearTimeout(this.typingIndicatorTimeout);
                     this.typingIndicatorTimeout = setTimeout(() => {
-                        this.typingUsers = this.typingUsers.filter(id => id !== data.sender_id);
+                        this.typingUsers = this.typingUsers.filter(name => name !== data.sender_name);
                     }, 3000);
                 }
             });
