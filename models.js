@@ -22,7 +22,7 @@ const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
 if (publicVapidKey && privateVapidKey) {
     const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social';
     webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
-});
+}
 
 // --- Mongoose 8 Global Plugin ---
 // This ensures that validation runs on all update operations by default.
