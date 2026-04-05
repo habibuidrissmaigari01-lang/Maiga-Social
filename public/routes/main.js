@@ -619,6 +619,49 @@ router.post('/mark_messages_read', isAuthenticated, async (req, res) => {
     res.json({ success: true });
 });
 
+router.get('/get_message_reactions', isAuthenticated, async (req, res) => {
+    try {
+        const { message_id } = req.query;
+        const message = await Message.findById(message_id)
+            .populate('reactions.user', 'name avatar username');
+        if (!message) return res.status(404).json({ error: 'Message not found' });
+        res.json(message.reactions);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch reactions' });
+    }
+});
+
+router.post('/react_message', isAuthenticated, async (req, res) => {
+    try {
+        const { message_id, emoji } = req.body;
+        const userId = req.session.userId;
+        const message = await Message.findById(message_id);
+        if (!message) return res.status(404).json({ error: 'Message not found' });
+
+        // Remove existing reaction by this user
+        const existingIndex = message.reactions.findIndex(r => r.user.toString() === userId.toString());
+        
+        if (existingIndex > -1) {
+            if (message.reactions[existingIndex].emoji === emoji) {
+                message.reactions.splice(existingIndex, 1); // Toggle off
+            } else {
+                message.reactions[existingIndex].emoji = emoji; // Change emoji
+            }
+        } else {
+            message.reactions.push({ user: userId, emoji });
+        }
+
+        await message.save();
+        
+        const target = message.group ? `group_${message.group}` : (message.receiver ? message.receiver.toString() : message.sender.toString());
+        req.io.to(target).emit('message_reacted', { message_id, reactions: message.reactions });
+
+        res.json({ success: true, reactions: message.reactions });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to react' });
+    }
+});
+
 router.post('/toggle_pin_message', isAuthenticated, async (req, res) => {
     const { message_id } = req.body;
     const msg = await Message.findById(message_id);
@@ -668,6 +711,42 @@ router.get('/get_starred_messages', isAuthenticated, async (req, res) => {
         .populate('sender', 'name avatar')
         .sort({ createdAt: -1 });
     res.json(messages);
+});
+
+router.post('/mark_all_messages_read', isAuthenticated, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const user = await User.findById(userId);
+        const firstName = user.first_name || user.name || 'User';
+
+        // Mark all 1-on-1 messages as read
+        await Message.updateMany(
+            { receiver: userId, is_read: false },
+            { 
+                $set: { is_read: true },
+                $addToSet: { read_by: { user: userId, first_name: firstName } } 
+            }
+        );
+
+        // For groups, mark the user as having read all messages they haven't seen yet
+        await Message.updateMany(
+            { group: { $ne: null }, 'read_by.user': { $ne: userId } },
+            { $addToSet: { read_by: { user: userId, first_name: firstName } } }
+        );
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to mark all as read' });
+    }
+});
+
+router.post('/admin/dismiss_all_reports', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        await Report.updateMany({ status: 'open' }, { $set: { status: 'dismissed' } });
+        res.json({ success: true, message: 'All open reports dismissed.' });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to dismiss all reports.' });
+    }
 });
 
 router.post('/mark_chat_unread', isAuthenticated, async (req, res) => {
@@ -1128,11 +1207,17 @@ router.post('/leave_group', isAuthenticated, async (req, res) => {
 
 router.get('/friends/suggestions', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
     const suggestions = await User.find({ 
         _id: { $nin: [req.session.userId, ...user.following] },
         blocked: false 
-    }).limit(10).select('name username avatar dept online');
-    res.json(suggestions.map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept, online: u.online })));
+    }).skip(skip).limit(limit + 1).select('name username avatar dept online'); // Fetch one extra to check for more
+    res.json({
+        users: suggestions.slice(0, limit).map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept, online: u.online })),
+        hasMore: suggestions.length > limit
+    });
 });
 
 router.get('/get_connections', isAuthenticated, async (req, res) => {

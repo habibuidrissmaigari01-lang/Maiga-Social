@@ -62,6 +62,9 @@
         }
     </script>
     <style>
+        html {
+            font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
+        }
         .logo-grayscale { filter: grayscale(100%); }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
     </style>
@@ -362,20 +365,35 @@
         <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
                 <button @click="isMessaging = false" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
-                <h3 class="text-lg font-black flex-1 text-center">Messages</h3>
+                <div class="flex-1 flex flex-col items-center">
+                    <h3 class="text-lg font-black">Messages</h3>
+                    <button @click="markAllMessagesAsRead()" class="text-[9px] font-black text-blue-600 uppercase hover:underline tracking-widest">Mark all read</button>
+                </div>
                 <button @click="isCreatingGroup = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
             </div>
             <!-- Message Tabs UI Improvement -->
             <div class="flex p-2 bg-gray-50 dark:bg-gray-800/50 mx-4 my-2 rounded-xl">
-                <button @click="activeMessageTab = 'all'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'all' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">All</button> 
-                <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Group</button>
-                <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Forum</button>
+                <button @click="activeMessageTab = 'all'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'all' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span>All</span>
+                    <span x-show="totalUnreadChats > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="totalUnreadChats"></span>
+                </button> 
+                <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span>Group</span>
+                    <span x-show="unreadGroupsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadGroupsCount"></span>
+                </button>
+                <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span>Forum</span>
+                    <span x-show="unreadForumsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadForumsCount"></span>
+                </button>
                 <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
                 <button @click="activeMessageTab = 'calls'; fetchCallHistory()" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'calls' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>Calls</span>
                     <span x-show="missedCallsCount > 0" class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-3 h-3 flex items-center justify-center rounded-full font-bold" x-text="missedCallsCount"></span>
                 </button>
-                <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Reports</button>
+                <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span>Reports</span>
+                    <span x-show="unreadReportsCount > 0" class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadReportsCount"></span>
+                </button>
             </div>
             <div class="flex-1 overflow-y-auto">
                 <!-- All Chats -->
@@ -536,6 +554,9 @@
                 <!-- Reports View -->
                 <div x-show="activeMessageTab === 'reports'" class="p-4 space-y-3">
                     <template x-for="report in reports" :key="report.id">
+                    <div x-show="user.is_admin && reports.length > 0" class="px-3 py-2 border-b dark:border-gray-800 flex justify-end">
+                        <button @click="clearAllReports()" class="text-[10px] font-black text-red-500 uppercase hover:underline tracking-widest">Clear All Reports</button>
+                    </div>
                         <div @click="startReportChat(report)" class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border dark:border-gray-700 cursor-pointer hover:border-red-500 transition-all">
                             <div class="flex justify-between items-start">
                                 <div class="flex-1">
@@ -682,15 +703,15 @@
                          <div :id="'msg-' + msg.id" class="flex flex-col group relative transition-colors duration-500" :class="msg.sender === 'me' ? 'items-end' : 'items-start'">                            
 
 
-                            <!-- Swipe Reply Indicator -->
+                            <!-- Message Bubble -->
                             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 transition-opacity duration-200 z-0" :class="msg.sender === 'me' ? 'right-full mr-4' : 'left-full ml-4'" :style="swipingMsgId === msg.id && Math.abs(swipeOffset) > 40 ? 'opacity: 1' : 'opacity: 0'">
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[90%] overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm' : 'chat-bubble-them shadow-sm'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1')]">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[85%] lg:max-w-[60%] overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm' : 'chat-bubble-them shadow-sm'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
-                                    <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
+                                    <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 max-w-[85%] lg:max-w-[60%]" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
                                         <p class="font-bold opacity-80" x-text="msg.replyTo.author"></p>
                                         <p class="truncate opacity-70" x-text="msg.replyTo.content"></p>
                                     </div>
@@ -700,7 +721,7 @@
                                     <p class="text-xs font-bold mb-1" :class="getUserColor(msg.sender_id)" x-text="msg.author"></p>
                                 </template>
                                 
-                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-[14px] leading-normal break-words" x-text="msg.content"></p></template>
+                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-sm leading-normal break-words whitespace-pre-wrap" x-text="msg.content"></p></template>
                                 <template x-if="msg.type === 'image'"><img :src="msg.content" class="rounded-lg max-h-60 w-full object-cover"></template>
                                 <template x-if="msg.type === 'video'"><video :src="msg.content" controls class="rounded-lg max-h-60 w-full"></video></template>
                                 <template x-if="msg.type === 'audio'"><div class="flex items-center space-x-3 p-3 min-w-[200px]"><button class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors" @click="toggleAudio('msg-audio-' + msg.id)"><i class="fa-solid" :class="activeAudioId === 'msg-audio-' + msg.id ? 'fa-pause' : 'fa-play'"></i></button><div class="flex items-center space-x-1 h-8 flex-1 opacity-80"><template x-for="i in 12"><div class="w-1 bg-current rounded-full" :class="activeAudioId === 'msg-audio-' + msg.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%; animation-duration: ${0.4 + Math.random() * 0.5}s`"></div></template></div><audio :id="'msg-audio-' + msg.id" :src="msg.content" class="hidden" @play="handleAudioPlay('msg-audio-' + msg.id)" @pause="handleAudioPause('msg-audio-' + msg.id)" @ended="handleAudioPause('msg-audio-' + msg.id)"></audio></div></template>
@@ -708,6 +729,14 @@
                                 <template x-if="msg.type === 'poll'"><div class="p-2 min-w-[200px]"><p class="font-bold text-sm mb-2" x-text="msg.question"></p><div class="space-y-2"><template x-for="opt in msg.options" :key="opt.id"><div @click="votePoll(msg.id, opt.id)" class="relative rounded-lg overflow-hidden cursor-pointer border border-gray-200 dark:border-gray-600 h-8"><div class="absolute inset-0 bg-gray-100 dark:bg-gray-700"></div><div class="absolute inset-0 bg-blue-200 dark:bg-blue-900/50 transition-all duration-500" :style="`width: ${getPollPercentage(msg, opt.id)}%`"></div><div class="absolute inset-0 flex items-center justify-between px-3 z-10"><span class="text-xs font-bold truncate" x-text="opt.text"></span><span class="text-[10px] font-bold" x-text="opt.votes.length"></span></div></div></template></div><p class="text-[10px] opacity-60 mt-2 text-right" x-text="getTotalVotes(msg) + ' votes'"></p></div></template>
                                 <template x-if="msg.type === 'sticker'"><div class="text-6xl hover:scale-110 transition-transform" :class="msg.content === '👋' ? 'animate-wave' : ''" x-text="msg.content"></div></template>
                                 <template x-if="msg.type === 'file'"><div class="flex items-center space-x-3 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg min-w-[200px]"><div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center text-blue-600"><i class="fa-solid fa-file-lines text-xl"></i></div><div class="flex-1 min-w-0"><p class="text-xs font-bold truncate">Document</p><a :href="msg.content" download class="text-[10px] text-blue-500 hover:underline">Download</a></div></div></template>
+                                 
+                                <!-- Reactions Display -->
+                               <div x-show="msg.reactions?.length > 0" @click.stop="openReactionsView(msg)" class="absolute -bottom-2 right-0 flex -space-x-1 bg-white dark:bg-gray-800 rounded-full px-1 py-0.5 shadow-sm border dark:border-gray-700 scale-90 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                    <template x-for="reaction in msg.reactions.slice(0, 3)" :key="reaction._id">
+                                        <span class="text-[10px]" x-text="reaction.emoji"></span>
+                                    </template>
+                                    <span x-show="msg.reactions.length > 3" class="text-[8px] font-bold text-gray-500 ml-1" x-text="'+' + (msg.reactions.length - 3)"></span>
+                                </div>
                             </div>
                             <div class="flex items-center space-x-1 mt-1 px-1 opacity-60">
                                 <span class="text-[9px]" x-text="msg.time"></span>
@@ -1112,9 +1141,18 @@
     <!-- Message Options Modal -->
     <div x-show="showMessageOptions" x-cloak class="fixed inset-0 z-[950] flex items-center justify-center bg-black/50 backdrop-blur-sm" @click="showMessageOptions = false">
         <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-80 animate-fadeIn">
-            <h3 class="font-bold text-lg mb-4">Message Options</h3>
+            <!-- Emoji Reaction Quick Bar -->
+            <div class="flex justify-between mb-6 pb-4 border-b dark:border-gray-700">
+                <template x-for="emoji in ['👍', '❤️', '😂', '😮', '😢', '🙏']">
+                    <button @click="reactToMessage(emoji)" class="text-2xl hover:scale-125 transition-transform" x-text="emoji"></button>
+                </template>
+            </div>
             <div class="space-y-2">
                 <button @click="replyToMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-reply text-blue-500 w-5"></i><span>Reply</span></button>
+                <!-- Seen By Button (Only for own messages or in groups) -->
+                <template x-if="selectedMessageForOptions?.sender === 'me' || activeChat?.type === 'group'">
+                    <button @click="openMessageInfo(selectedMessageForOptions)" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-eye text-blue-500 w-5"></i><span>Seen By</span></button>
+                </template>
                 <button @click="toggleStarMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-star text-yellow-500 w-5"></i><span x-text="selectedMessageForOptions?.starred ? 'Unstar' : 'Star'"></span></button>
                 <button @click="openForwardModal()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-share text-green-500 w-5"></i><span>Forward</span></button>
                 <button @click="togglePinMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-thumbtack text-yellow-500 w-5"></i><span x-text="selectedMessageForOptions?.pinned ? 'Unpin' : 'Pin'"></span></button>
@@ -1130,6 +1168,30 @@
                     <button @click="reportMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-flag w-5"></i><span>Report Message</span></button>
                 </template>
                 <button @click="deleteMessage('me')" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-trash w-5"></i><span>Delete for Me</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Reactions Modal -->
+    <div x-show="showReactionsModal" x-cloak class="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div @click.away="showReactionsModal = false" class="bg-white dark:bg-gray-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-fadeIn flex flex-col max-h-[60vh]">
+            <div class="p-4 border-b dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+                <h3 class="font-black text-lg">Reactions</h3>
+                <button @click="showReactionsModal = false" class="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors text-gray-500"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2">
+                <template x-for="reaction in messageReactions" :key="reaction._id">
+                    <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl cursor-pointer" @click="openUserProfile(reaction.user.id); showReactionsModal = false">
+                        <div class="flex items-center space-x-3">
+                            <img :src="reaction.user.avatar" class="w-10 h-10 rounded-full object-cover border dark:border-gray-700">
+                            <div>
+                                <p class="font-bold text-sm" x-text="reaction.user.name"></p>
+                                <p class="text-xs text-gray-500" x-text="'@' + reaction.user.username"></p>
+                            </div>
+                        </div>
+                        <span class="text-2xl" x-text="reaction.emoji"></span>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
@@ -2460,6 +2522,14 @@
                 </div>
             </div>
         </template>
+
+        <!-- Loading Spinner for Load More Posts -->
+        <div x-show="isLoadingMore" x-cloak class="flex justify-center items-center py-4">
+            <div class="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-full shadow-sm border dark:border-gray-700">
+                <i class="fa-solid fa-spinner fa-spin text-blue-600 text-lg"></i>
+                <span class="text-sm font-bold text-gray-600 dark:text-gray-300">Loading more posts...</span>
+            </div>
+        </div>
     </main>
 
     <!-- MAIN VIEW: REELS -->
@@ -2749,7 +2819,6 @@
         <div x-show="activeTab === 'friends' && friendsTab === 'suggestions'" class="space-y-3" x-cloak>
             <div class="flex items-center justify-between">
                 <h3 class="font-black text-lg">People you may know</h3>
-                <button class="text-blue-600 text-xs font-bold">See All</button>
             </div>
             <template x-for="friend in filteredFriendsList" :key="friend.id">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center space-x-4 shadow-sm border dark:border-gray-700">
@@ -2779,6 +2848,15 @@
                     </div>
                 </div>
             </template>
+
+            <!-- Pagination Trigger -->
+            <div x-show="hasMoreFriends" class="mt-4 pb-4">
+                <button @click="loadMoreFriends()" :disabled="isLoadingMoreFriends" 
+                        class="w-full py-3 rounded-2xl bg-white dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 text-gray-500 font-bold text-sm hover:border-blue-500 hover:text-blue-600 transition-all flex items-center justify-center gap-2 shadow-sm">
+                    <template x-if="isLoadingMoreFriends"><i class="fa-solid fa-circle-notch fa-spin"></i></template>
+                    <span x-text="isLoadingMoreFriends ? 'Searching for more...' : 'Load More Suggestions'"></span>
+                </button>
+            </div>
         </div>
 
         <!-- Following List -->
@@ -2982,6 +3060,19 @@
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
+                <!-- New Font Size Setting -->
+                <div class="w-full flex items-center justify-between p-4 border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-font"></i></div>
+                        <span class="font-bold text-sm">Font Size</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button @click="appFontSize = 'small'" class="px-3 py-1 rounded-full text-xs font-bold" :class="appFontSize === 'small' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'">Small</button>
+                        <button @click="appFontSize = 'medium'" class="px-3 py-1 rounded-full text-xs font-bold" :class="appFontSize === 'medium' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'">Medium</button>
+                        <button @click="appFontSize = 'large'" class="px-3 py-1 rounded-full text-xs font-bold" :class="appFontSize === 'large' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'">Large</button>
+                    </div>
+                </div>
+                <!-- End New Font Size Setting -->
                 <button @click="darkMode = !darkMode" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-yellow-600"><i class="fa-solid fa-moon"></i></div>

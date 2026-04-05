@@ -88,6 +88,9 @@ const initMaiga = () => {
         isRefreshing: false,
         isOffline: !navigator.onLine,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
+        friendsPage: 1,
+        friendsLimit: 10,
+        isLoadingMoreFriends: false,
         isSocketConnected: false,
         currentTime: Date.now(),
         typingUsers: {},
@@ -121,6 +124,9 @@ const initMaiga = () => {
 
         // UI Controls
         isMessaging: false,
+        showReactionsModal: false,
+        messageReactions: [],
+        hasMorePosts: true,
         isSideMenuOpen: false,
         isFlashOn: false,
         hasFlashlight: false,
@@ -1546,6 +1552,7 @@ const initMaiga = () => {
         isOffline: !navigator.onLine,
         isSocketConnected: false,
         isRefreshing: false,
+        hasMoreFriends: false,
         handlePullStart(e) {
             if (this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
                 this.pullStartY = e.touches[0].clientY;
@@ -1637,9 +1644,10 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_chats').then(data => { if (Array.isArray(data)) this.chats = data; }),
                 this.apiFetch('/api/get_groups').then(data => { if (Array.isArray(data)) this.groups = data; }),
                 this.apiFetch('/api/get_stories').then(data => this.processStories(Array.isArray(data) ? data : [])),
-                this.apiFetch('/api/friends/suggestions').then(data => { 
-                    if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } 
+                this.apiFetch(`/api/friends/suggestions?page=1&limit=${this.friendsLimit}`).then(data => { 
+                    if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem('maiga_friends_cache', JSON.stringify(data.users)); } 
                 }),
+                this.friendsPage = 1, // Reset page for suggestions
                 this.apiFetch('/api/get_trending').then(data => { if (Array.isArray(data)) this.trendingTopics = data; })
         
             ];
@@ -2052,6 +2060,17 @@ const initMaiga = () => {
                 }
             });
 
+            this.appFontSize = localStorage.getItem('appFontSize') || 'medium'; // 'small', 'medium', 'large'
+            this.socket.on('message_reacted', (data) => {
+                for (let chatId in this.chatMessages) {
+                    const msg = this.chatMessages[chatId].find(m => m.id.toString() === data.message_id.toString());
+                    if (msg) {
+                        msg.reactions = data.reactions;
+                        break;
+                    }
+                }
+            });
+
             this.socket.on('hide_typing', (data) => {
                 const cid = data.chat_id.toString();
                 if (!this.typingUsers[cid]) return;
@@ -2179,6 +2198,14 @@ const initMaiga = () => {
                 localStorage.setItem('maiga_fullscreen', value);
             });
             
+            // Watch for appFontSize changes
+            this.$watch('appFontSize', (value) => {
+                localStorage.setItem('appFontSize', value);
+                let basePx = 16; // Default base font size in px
+                if (value === 'small') basePx = 14;
+                else if (value === 'large') basePx = 18;
+                document.documentElement.style.fontSize = `${basePx}px`;
+            });
             // Watch for dark mode changes
             this.$watch('darkMode', (value) => {
                 localStorage.setItem('darkMode', value);
@@ -2391,6 +2418,13 @@ const initMaiga = () => {
                     if (chat) this.activeChat = chat;
                 }
 
+                // Trigger initial font size application
+                this.$nextTick(() => {
+                    let basePx = 16;
+                    if (this.appFontSize === 'small') basePx = 14;
+                    else if (this.appFontSize === 'large') basePx = 18;
+                    document.documentElement.style.fontSize = `${basePx}px`;
+                });
                 // Join group rooms for real-time updates after data is loaded
                 if (this.socket && this.socket.connected) {
                     this.groups.forEach(g => this.socket.emit('join_group', g.id));
@@ -2404,12 +2438,13 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_animated_stickers').then(d => { if(Array.isArray(d)) this.animatedStickers = d; incrementProgress(); });
                 this.apiFetch('/api/get_stories').then(d => { this.processStories(Array.isArray(d) ? d : []); incrementProgress(); });
                 this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; incrementProgress(); });
-                this.apiFetch('/api/friends/suggestions').then(data => { 
-                    if (Array.isArray(data)) { this.friends = data; localStorage.setItem('maiga_friends_cache', JSON.stringify(data)); } incrementProgress();
+                this.apiFetch(`/api/friends/suggestions?page=${this.friendsPage}&limit=${this.friendsLimit}`).then(data => { 
+                    if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem('maiga_friends_cache', JSON.stringify(data.users)); } incrementProgress();
                 });
+
                 this.apiFetch('/api/get_muted_chats').then(d => { if (Array.isArray(d)) this.mutedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
-                this.apiFetch('/api/get_reels?page=1&limit=5').then(d => { 
+                this.apiFetch('/api/get_reels?page=1&limit=10').then(d => { 
                     this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver()); incrementProgress();
                 });
@@ -3137,6 +3172,10 @@ const initMaiga = () => {
                     }}));
                     this.chatMessages[chat.id] = formattedMessages;
                     
+                    data.forEach((m, idx) => {
+                        this.chatMessages[chat.id][idx].reactions = m.reactions || [];
+                    });
+
                     if (forceScroll) {
                         this.$nextTick(() => {
                             const container = document.getElementById('messageContainer');
@@ -3169,6 +3208,26 @@ const initMaiga = () => {
             // Local update handled by polling or optimistic update if needed
             chat.unread = false;
             chat.unreadCount = 0;
+        },
+        appFontSize: localStorage.getItem('appFontSize') || 'medium', // 'small', 'medium', 'large'
+        async reactToMessage(emoji) {
+            const msg = this.selectedMessageForOptions;
+            if (!msg) return;
+            this.showMessageOptions = false;
+
+            const data = await this.apiFetch('/api/react_message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message_id: msg.id, emoji })
+            });
+            if (data?.success) msg.reactions = data.reactions;
+        },
+        async openReactionsView(msg) {
+            const data = await this.apiFetch(`/api/get_message_reactions?message_id=${msg.id}`);
+            if (data) {
+                this.messageReactions = data;
+                this.showReactionsModal = true;
+            }
         },
         markAsUnread(chat) {
             if (!chat) return;
@@ -6346,6 +6405,11 @@ const initMaiga = () => {
                             if (this.activeTab === 'reels') this.showSwipeHint = true;
                         }, 15000); // Show hint after 15 seconds
 
+                        // Endless Reels Logic: Trigger load more when reaching the last element
+                        if (entry.target === this.$refs.reelsContainer.lastElementChild) {
+                            this.loadMoreReels();
+                        }
+
                         // Increment view count
                         if (reel && !this.viewedReels.has(reel.id)) {
                             this.viewedReels.add(reel.id.toString());
@@ -6408,7 +6472,7 @@ const initMaiga = () => {
             }).catch(() => this.isRefreshing = false);
         },
         loadMorePosts() {
-            if (this.isLoadingMore) return;
+            if (this.isLoadingMore || !this.hasMorePosts) return;
             this.isLoadingMore = true;
             this.page++;
             let url = `/api/get_posts?page=${this.page}`;
@@ -6418,8 +6482,11 @@ const initMaiga = () => {
 
             this.apiFetch(url)
                 .then(data => {
-                    if (data.length > 0) {
+                    if (data && data.length > 0) {
                         this.posts = [...this.posts, ...data];
+                        if (data.length < 10) this.hasMorePosts = false;
+                    } else {
+                        this.hasMorePosts = false;
                     }
                     this.isLoadingMore = false;
                 });
@@ -6439,6 +6506,25 @@ const initMaiga = () => {
                     this.isLoadingMoreReels = false;
                 });
         },
+        async loadMoreFriends() {
+            if (this.isLoadingMoreFriends || !this.hasMoreFriends) return;
+            this.isLoadingMoreFriends = true;
+            this.friendsPage++;
+
+            const data = await this.apiFetch(`/api/friends/suggestions?page=${this.friendsPage}&limit=${this.friendsLimit}`);
+            
+            if (data && Array.isArray(data.users)) {
+                this.friends = [...this.friends, ...data.users];
+                this.hasMoreFriends = data.hasMore;
+                localStorage.setItem('maiga_friends_cache', JSON.stringify(this.friends));
+            } else {
+                this.friendsPage--; // Revert page number on error
+                this.showToast('Error', 'Failed to load more suggestions.', 'error');
+            }
+
+            this.isLoadingMoreFriends = false;
+        },
+
         async fetchSecurityData() {
             const data = await this.apiFetch('/api/get_security_data');
             if (data) this.loginSessions = data;

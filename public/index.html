@@ -537,7 +537,9 @@
 
     <!-- Welcome Popup -->
     <div id="welcomePopup" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
-        <div class="glass-card p-6 md:p-8 max-w-sm w-11/12 mx-auto text-center transform transition-all scale-100 shadow-2xl">
+        <div class="glass-card p-6 md:p-8 max-w-sm w-11/12 mx-auto text-center transform transition-all scale-100 shadow-2xl"
+             x-data="{ installPrompt: null, installProgress: 0, isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream }"
+             x-init="window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $nextTick(() => { const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.remove('hidden'); }); }); window.addEventListener('appinstalled', () => { installPrompt = null; installProgress = 0; const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.add('hidden'); });">
             <div class="flex flex-col items-center mb-6">
                 <img src="img/logo.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social">
                 <h2 class="text-xl font-black text-gray-800">Maiga Social App</h2>
@@ -549,11 +551,29 @@
                     <p class="text-xs text-blue-600 leading-tight">Tap the <i class="fa-solid fa-arrow-up-from-bracket mx-1"></i> share icon and select <span class="font-black">"Add to Home Screen"</span> <i class="fa-solid fa-plus-square mx-1"></i></p>
                 </div>
 
-                <button id="pwaInstallBtn" class="btn-primary shimmer-btn flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform hidden">
+                <button id="pwaInstallBtn"
+                        @click="
+                            if (installPrompt) {
+                                installProgress = 10;
+                                installPrompt.prompt();
+                                const { outcome } = await installPrompt.userChoice;
+                                if (outcome === 'accepted') {
+                                    installProgress = 100;
+                                    setTimeout(() => { installProgress = 0; closeWelcomePopup(); }, 1000);
+                                    installPrompt = null;
+                                } else {
+                                    installProgress = 0;
+                                }
+                            } else { console.log('Installation not available.'); }"
+                        class="btn-primary shimmer-btn flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform relative overflow-hidden" :class="{'hidden': !installPrompt && !isIOS}">
                     <i class="fa-solid fa-download"></i>
-                    <span>Download App</span>
+                    <span x-show="installProgress === 0">Download App</span>
+                    <span x-show="installProgress > 0 && installProgress < 100" x-text="installProgress + '%'" class="ml-2"></span>
+                    <span x-show="installProgress === 100" class="ml-2">Installed!</span>
+                    <div x-show="installProgress > 0 && installProgress < 100" class="absolute inset-0 bg-blue-500/50" :style="`width: ${installProgress}%`"></div>
                 </button>
                 <button onclick="toggleFullScreen()" class="w-full p-3 bg-white border-2 border-indigo-100 text-indigo-600 rounded-xl font-bold hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 active:scale-95">
+
                     <i class="fa-solid fa-expand"></i>
                     <span>Fullscreen Mode</span>
                 </button>
@@ -1430,6 +1450,7 @@
         }
 
         function closeWelcomePopup() {
+            const popup = document.getElementById('welcomePopup');
             popup.classList.add('hidden');
         }
     </script>

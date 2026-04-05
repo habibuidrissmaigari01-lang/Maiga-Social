@@ -252,7 +252,11 @@ const messageSchema = new mongoose.Schema({
         question: String,
         options: [{ text: String, votes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }] }]
     },
-    starred_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
+    starred_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    reactions: [{
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        emoji: String
+    }]
 }, schemaOptions);
 
 // Indexes for poll voting and starred messages
