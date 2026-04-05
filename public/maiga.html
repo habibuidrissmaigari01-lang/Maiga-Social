@@ -2721,7 +2721,6 @@
                     </div>
                 </template>
             </div>
-        </div>
 
         <!-- "Did you mean" Hint -->
         <div x-show="didYouMeanFriend" x-transition x-cloak class="px-2 py-1">
@@ -2734,7 +2733,7 @@
         <div>
             <h3 class="font-black text-lg mb-3">Trending Now</h3>
             <div class="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
-                <template x-for="trend in trendingTopics" :key="trend.id" x-cloak>
+                <template x-for="trend in trendingTopics" :key="trend.id">
                     <div class="flex-shrink-0 bg-gradient-to-br from-blue-600 to-purple-700 text-white p-3 parallelogram min-w-[130px] relative overflow-hidden cursor-pointer hover:scale-105 transition-transform shadow-md">
                         <div class="absolute top-0 right-0 p-2 opacity-20"><i class="fa-solid fa-arrow-trend-up text-3xl"></i></div>
                         <div x-show="trend.isLive" class="absolute top-2 right-2 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded animate-pulse shadow-sm">LIVE</div>
@@ -2749,7 +2748,7 @@
         <!-- Most Active Users Section -->
         <div>
             <h3 class="font-black text-lg mb-3">Most Active Users</h3>
-            <div class="flex space-x-3 overflow-x-auto no-scrollbar pb-2" x-cloak>
+            <div class="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
                 <template x-for="activeUser in mostActiveUsers" :key="activeUser.id">
                     <div @click="openUserProfile(activeUser.id)" class="flex-shrink-0 bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border dark:border-gray-700 flex flex-col items-center justify-center min-w-[120px] cursor-pointer hover:border-blue-500 transition-all">
                         <img :src="activeUser.avatar" class="w-16 h-16 rounded-full object-cover mb-2">
