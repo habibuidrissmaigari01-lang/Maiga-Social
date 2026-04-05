@@ -2237,7 +2237,7 @@
                         <!-- Posts Results -->
                         <template x-if="homeSearchTab === 'posts'">
                             <div class="divide-y dark:divide-gray-700">
-                                <template x-for="post in searchPostsResults" :key="post.id">
+                                <template x-for="post in searchPostsResults" :key="post.id"> 
                                     <div @click="viewingPost = post; homeSearchQuery = ''" class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
                                         <div class="flex items-center gap-2 mb-1">
                                             <img :src="post.avatar" class="w-5 h-5 rounded-full">
@@ -2253,7 +2253,7 @@
                         <!-- Reels Results -->
                         <template x-if="homeSearchTab === 'reels'">
                             <div class="grid grid-cols-2 gap-2 p-2">
-                                <template x-for="reel in searchReelsResults" :key="reel.id">
+                                <template x-for="reel in searchReelsResults" :key="reel.id"> 
                                     <div @click="selectedReel = reel; activeTab = 'reels'; homeSearchQuery = ''" class="relative aspect-[9/16] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 group cursor-pointer">
                                         <video :src="reel.media" class="w-full h-full object-cover"></video>
                                         <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-2">
@@ -2933,7 +2933,7 @@
                 <div x-show="profileTab === 'media'" x-cloak class="grid grid-cols-3 gap-2 mt-4">
                     <template x-for="reel in userMediaPosts" :key="reel.id">
                         <div @click="selectedReel = reel; showReelOptions = true" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden relative group cursor-pointer">
-                            <div class="w-full h-full">
+                            <div class="w-full h-full"> 
                                 <video :src="reel.media" class="w-full h-full object-cover"></video>
                             </div>
                             <div class="absolute bottom-1 left-1 flex items-center space-x-1 text-white text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
@@ -3256,7 +3256,7 @@
              <div class="flex-1 flex flex-col relative">
                 <!-- Story Preview Area -->
                 <div x-ref="storyPreviewArea" @click="$refs.storyTextarea.focus()" class="w-full h-full bg-gray-200 dark:bg-gray-800 overflow-hidden relative flex items-center justify-center cursor-text">
-                    <!-- Background Preview -->
+                    <!-- Background Preview --> 
                     <div x-show="!storyFile" class="absolute inset-0 transition-all" :style="`background: ${textStoryStyles[textStoryStyleIndex].background}`"></div>
                     <!-- Media Preview -->
                     <template x-if="storyMediaPreview">
@@ -3264,7 +3264,7 @@
                         <template x-if="storyMediaType === 'video'"><video :src="storyMediaPreview" class="w-full h-full object-cover" autoplay muted loop></video></template>
                     </template>
                     <!-- Centered Text Input Overlay (Direct writing on background) -->
-                    <div class="absolute inset-0 flex items-center justify-center p-8 z-30 pointer-events-none">
+                    <div class="absolute inset-0 flex items-center justify-center p-8 z-30 pointer-events-none"> 
                         <textarea x-ref="storyTextarea" x-model="newStoryContent" 
                                   class="bg-transparent border-none text-3xl font-black text-center focus:ring-0 placeholder-white/40 w-full resize-none leading-tight overflow-hidden drop-shadow-lg pointer-events-auto" 
                                   :style="`color: ${textStoryStyles[textStoryStyleIndex].color}; font-family: ${editorFonts[textStoryFontIndex]}`"

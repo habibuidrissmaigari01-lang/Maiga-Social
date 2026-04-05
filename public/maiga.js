@@ -766,6 +766,7 @@ const initMaiga = () => {
                 });
                 this.cameraStream = Alpine.raw(stream);
                 this.$refs.cameraFeed.srcObject = stream;
+                this.$refs.cameraFeed.muted = true; // Prevent audio feedback loop during preview
 
                 // Setup Lip Sync Analyser
                 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1307,6 +1308,7 @@ const initMaiga = () => {
         showSuggestions: false, // Added to fix ReferenceError
         postMediaRecorder: null,
         isRecordingStoryReply: false,
+        isSendingStoryReply: false,
         storyReplyMediaRecorder: null,
         storyReplyRecordingDuration: 0,
         commentAudioChunks: [],
@@ -3532,7 +3534,7 @@ const initMaiga = () => {
         async startCommentRecording() {
             if (this.isRecordingComment) return;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
                 this.commentMediaRecorder = new MediaRecorder(stream);
                 this.commentAudioChunks = [];
                 this.commentMediaRecorder.addEventListener("dataavailable", event => {
@@ -3904,7 +3906,7 @@ const initMaiga = () => {
         async startRecording() {
             if (this.isRecording || !this.activeChat || this.isBlocked(this.activeChat.id)) return;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
                 this.mediaRecorder = Alpine.raw(new MediaRecorder(stream));
                 this.audioChunks = [];
                 this.mediaRecorder.addEventListener("dataavailable", event => {
@@ -4738,7 +4740,7 @@ const initMaiga = () => {
         async startStoryReplyRecording() {
             if (this.isRecordingStoryReply) return;
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
                 this.storyReplyMediaRecorder = new MediaRecorder(stream);
                 this.storyReplyAudioChunks = [];
                 this.storyReplyMediaRecorder.addEventListener("dataavailable", event => {
@@ -5918,6 +5920,7 @@ const initMaiga = () => {
                 this.localStream = Alpine.raw(stream);
                 if (type === 'video') {
                     this.$refs.localVideo.srcObject = stream;
+                    this.$refs.localVideo.muted = true; // Local preview should be silent to avoid echo
                 }
                 
                 // Update mic/camera state based on initial stream
@@ -6034,7 +6037,10 @@ const initMaiga = () => {
                 audio: true
             }).then(stream => {
                 this.localStream = Alpine.raw(stream);
-                if (this.callType === 'video') this.$refs.localVideo.srcObject = stream;
+                if (this.callType === 'video') {
+                    this.$refs.localVideo.srcObject = stream;
+                    this.$refs.localVideo.muted = true; // Mute local preview
+                }
                 
                 this.setupPeerConnection();
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
