@@ -90,7 +90,7 @@ const initMaiga = () => {
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
         isSocketConnected: false,
         currentTime: Date.now(),
-        typingUsers: [],
+        typingUsers: {},
         drafts: {},
         toasts: [],
         recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
@@ -125,6 +125,7 @@ const initMaiga = () => {
         isFlashOn: false,
         hasFlashlight: false,
         isConfirmingCapture: false,
+        showCameraFlash: false,
         isReporting: false,
         isCreatingPost: false,
         isCreatingStory: false,
@@ -636,6 +637,7 @@ const initMaiga = () => {
         cameraRecorder: null,
         cameraChunks: [],
         beautyFilter: 'none',
+        activeCameraFilter: 'none',
         brightnessIntensity: 100,
         contrastIntensity: 100,
         dollyZoomScale: 1,
@@ -692,6 +694,7 @@ const initMaiga = () => {
         toggleBeautyFilter() {
             this.filterIndex = (this.filterIndex + 1) % this.filters.length;
             this.beautyFilter = this.filters[this.filterIndex].value;
+            this.activeCameraFilter = this.filters[this.filterIndex].value;
             this.showToast('Filter', `Applied: ${this.filters[this.filterIndex].name}`, 'info');
         },
 
@@ -1087,6 +1090,10 @@ const initMaiga = () => {
         },
 
         takeCameraPhoto() {
+            this.showCameraFlash = true;
+            setTimeout(() => { this.showCameraFlash = false; }, 100);
+            document.getElementById('shutter-sound')?.play().catch(() => {});
+
             const dataUrl = this.$refs.cameraCanvas.toDataURL('image/jpeg', 0.9);
             
             // Capture frame for Ghost Mode
