@@ -2012,6 +2012,21 @@ const initMaiga = () => {
                 this.showToast('Info', 'Call ended.');
             });
 
+            // Listen for typing events
+            this.socket.on('display_typing', (data) => {
+                if (data.sender_id.toString() === this.user.id.toString()) return;
+                const cid = data.chat_id.toString();
+                if (!this.typingUsers[cid]) this.typingUsers[cid] = [];
+                if (!this.typingUsers[cid].includes(data.sender_name)) {
+                    this.typingUsers[cid].push(data.sender_name);
+                }
+                // Clear after 3 seconds of inactivity
+                clearTimeout(this[`typing_timeout_${cid}_${data.sender_id}`]);
+                this[`typing_timeout_${cid}_${data.sender_id}`] = setTimeout(() => {
+                    this.typingUsers[cid] = (this.typingUsers[cid] || []).filter(name => name !== data.sender_name);
+                }, 3000);
+            });
+
             this.socket.on('message_deleted', (data) => {
                 // Look through all chat buckets to find and remove the deleted message
                 for (let chatId in this.chatMessages) {
@@ -2031,8 +2046,9 @@ const initMaiga = () => {
             });
 
             this.socket.on('hide_typing', (data) => {
-                if (!this.typingUsers[data.chat_id]) return;
-                this.typingUsers[data.chat_id] = this.typingUsers[data.chat_id].filter(name => name !== data.sender_name);
+                const cid = data.chat_id.toString();
+                if (!this.typingUsers[cid]) return;
+                this.typingUsers[cid] = this.typingUsers[cid].filter(name => name !== data.sender_name);
             });
 
             this.socket.on('disappearing_mode_changed', (data) => {
@@ -2212,6 +2228,7 @@ const initMaiga = () => {
                     // Clear typing status after a delay if no new typing event
                     clearTimeout(this.typingIndicatorTimeout);
                     this.typingIndicatorTimeout = setTimeout(() => {
+                        this.typingUsers = this.typingUsers.filter(id => id !== data.sender_id);
                         this.typingUsers = this.typingUsers.filter(name => name !== data.sender_name);
                     }, 3000);
                 }
@@ -2332,13 +2349,12 @@ const initMaiga = () => {
 
                 const [userData, postsData, chatsData, groupsData, connectionsData] = await criticalDataFetch;
 
-                if (userData) {
+                if (userData && userData.id) {
                     this.user = { ...this.user, ...userData };
                     this.editUser = { ...this.user };
-                    if (userData.privacy_settings) this.privacySettings = { ...userData.privacy_settings };
-                    if (userData.language) this.selectedLanguage = userData.language;
-                    if (userData.recent_stickers) this.recentlyUsedStickers = userData.recent_stickers;
-
+                    this.privacySettings = userData.privacy_settings || this.privacySettings;
+                    this.selectedLanguage = userData.language || this.selectedLanguage;
+                    this.recentlyUsedStickers = userData.recent_stickers || this.recentlyUsedStickers;
                 }
 
             // Restore Create Post Modal state if draft exists
@@ -2566,16 +2582,17 @@ const initMaiga = () => {
                 if (String(story.user_id) === String(this.user.id)) {
                     fetchedMyStories.push(storyObj); // Ensure story.id is string
                 } else {
-                    if (!storiesByUser.has(story.user_id)) {
-                        storiesByUser.set(story.user_id, {
-                            id: story.user_id,
+                    const uid = story.user_id.toString();
+                    if (!storiesByUser.has(uid)) {
+                        storiesByUser.set(uid, {
+                            id: uid,
                             name: (story.first_name || 'User') + ' ' + (story.surname || ''),
                             // Use story.avatar from DB, fallback to dicebear if missing
-                            avatar: story.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${story.user_id}`,
+                            avatar: story.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
                             stories: []
                         });
                     }
-                    storiesByUser.get(story.user_id).stories.push(storyObj);
+                    storiesByUser.get(uid).stories.push(storyObj);
                 }
             });
 

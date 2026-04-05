@@ -603,11 +603,8 @@
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <p class="font-bold text-sm" x-text="activeChat?.name"></p>
                     <p class="text-xs text-gray-500"> 
-                        <span x-show="typingUsers.length > 0" x-transition class="text-green-600 font-medium">
-                            <template x-if="typingUsers.length === 1">
-                                <span x-text="typingUsers[0] === user.id ? 'You are typing...' : (activeChat.type === 'group' ? getTypingUserName(typingUsers[0]) + ' is typing...' : 'Typing...')"></span>
-                            </template>
-                            <template x-if="typingUsers.length > 1">
+                        <span x-show="(typingUsers[activeChat?.id] || []).length > 0" x-transition class="text-green-600 font-medium">
+                            <template x-if="(typingUsers[activeChat?.id] || []).length >= 1">
                                 <span>Multiple users typing...</span>
                             </template>
                         </span>
@@ -2335,15 +2332,15 @@
                 <div @click="viewStory(myStories)" class="flex-shrink-0 cursor-pointer group">
                     <div class="p-1 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram rounded-2xl">
                         <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-800">
-                            <template x-if="myStories[myStories.length-1].type === 'image'"><img :src="myStories[myStories.length-1].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
-                            <template x-if="myStories[myStories.length-1].type === 'video'"><video :src="myStories[myStories.length-1].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted></video></template>
+                            <template x-if="myStories[0].type === 'image'"><img :src="myStories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
+                            <template x-if="myStories[0].type === 'video'"><video :src="myStories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted></video></template>
                             
                             <div x-show="loading" class="absolute inset-0 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-500"></i></div>
 
                             <template x-if="!loading">
                                 <div>
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
-                                    <div class="absolute top-3 left-3 w-10 h-10 border-2 p-0.5 rounded-xl" :class="myStories[myStories.length-1].audience === 'close_friends' ? 'border-green-500' : 'border-blue-500'">
+                                    <div class="absolute top-3 left-3 w-10 h-10 border-2 p-0.5 rounded-xl" :class="myStories[0].audience === 'close_friends' ? 'border-green-500' : 'border-blue-500'">
                                         <img :src="user.avatar" class="w-full h-full parallelogram-sm object-cover">
                                     </div>
                                     <span class="absolute bottom-3 left-3 text-white font-bold text-xs drop-shadow-md">Your Story</span>
@@ -3558,9 +3555,7 @@
             </div>
         </div>
     </template>
-    </div>
-    </div>
-    </div>
+    
 
     <!-- User Profile Modal -->
     <div x-show="showUserProfile" x-cloak class="fixed inset-0 z-[650] flex flex-col justify-end lg:justify-center lg:items-center">
