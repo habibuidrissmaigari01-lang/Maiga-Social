@@ -6099,6 +6099,7 @@ const initMaiga = () => {
             if (navigator.vibrate) navigator.vibrate(0);
             this.incomingCall = null;
             document.getElementById('ringing-sound')?.pause();
+            this.activeChat = null; // Restore bottom nav visibility
         },
         endCall(shouldLog = true, shouldEmit = true) {
             if (!this.isCalling && !this.incomingCall) return;
@@ -6160,6 +6161,10 @@ const initMaiga = () => {
             this.callStatus = '';
             this.callDuration = 0;
             this.isCallMinimized = false;
+            
+            if (!this.isMessaging) {
+                this.activeChat = null; // Restore bottom nav if not in Messaging tab
+            }
             this.isCallChatOpen = false;
             this.minimizedCallTransform = { x: 0, y: 0 };
         },
