@@ -289,6 +289,7 @@ const initMaiga = () => {
                     clearTimeout(timeoutId);
                     
                     if (response.status === 401) {
+                        localStorage.removeItem('maiga_session_active');
                         window.location.href = '/';
                         return null;
                     }
@@ -1414,6 +1415,7 @@ const initMaiga = () => {
             await this.apiFetch('/api/logout');
 
             // Clear local application storage
+            localStorage.removeItem('maiga_session_active');
             localStorage.clear();
             sessionStorage.clear();
 

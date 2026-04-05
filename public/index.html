@@ -610,6 +610,12 @@
 
         // Initialize page based on session
         document.addEventListener('DOMContentLoaded', () => {
+            // Auto-redirect if a persistent session is likely active
+            if (localStorage.getItem('maiga_session_active') === 'true') {
+                window.location.replace('/home');
+                return;
+            }
+
             showPage('page-login');
 
             // Restore registration progress if it exists and is less than 60 mins old
@@ -1271,9 +1277,11 @@
 
                 if (endpoint === '/api/register') {
                     // After successful registration, switch to login view
+                    localStorage.setItem('maiga_session_active', 'true');
                     setTimeout(() => showLogin(), 2000);
                 } else if (endpoint === '/api/login') {
                     // On successful login, redirect to a new page
+                    localStorage.setItem('maiga_session_active', 'true');
                     showMessage('Redirecting to your Maiga...', 'success');
                     setTimeout(() => {
                         // In a real app, you would redirect to the main application page
