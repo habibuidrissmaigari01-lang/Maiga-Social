@@ -749,7 +749,7 @@
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[85%] lg:max-w-[60%] overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm' : 'chat-bubble-them shadow-sm'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[85%] lg:max-w-[60%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm min-w-[3.5rem]' : 'chat-bubble-them shadow-sm min-w-[3.5rem]'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
                                     <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 max-w-[85%] lg:max-w-[60%]" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
@@ -762,7 +762,7 @@
                                     <p class="text-xs font-bold mb-1" :class="getUserColor(msg.sender_id)" x-text="msg.author"></p>
                                 </template>
                                 
-                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-sm leading-normal break-words whitespace-pre-wrap" x-text="msg.content"></p></template>
+                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-sm leading-normal break-words whitespace-pre-wrap w-full" x-text="msg.content"></p></template>
                                 <template x-if="msg.type === 'image'"><img :src="msg.content" class="rounded-lg max-h-60 w-full object-cover"></template>
                                 <template x-if="msg.type === 'video'"><video :src="msg.content" controls class="rounded-lg max-h-60 w-full"></video></template>
                                 <template x-if="msg.type === 'audio'"><div class="flex items-center space-x-3 p-3 min-w-[200px]"><button class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors" @click="toggleAudio('msg-audio-' + msg.id)"><i class="fa-solid" :class="activeAudioId === 'msg-audio-' + msg.id ? 'fa-pause' : 'fa-play'"></i></button><div class="flex items-center space-x-1 h-8 flex-1 opacity-80"><template x-for="i in 12"><div class="w-1 bg-current rounded-full" :class="activeAudioId === 'msg-audio-' + msg.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%; animation-duration: ${0.4 + Math.random() * 0.5}s`"></div></template></div><audio :id="'msg-audio-' + msg.id" :src="msg.content" class="hidden" @play="handleAudioPlay('msg-audio-' + msg.id)" @pause="handleAudioPause('msg-audio-' + msg.id)" @ended="handleAudioPause('msg-audio-' + msg.id)"></audio></div></template>
@@ -3025,6 +3025,14 @@
                             </button>
                         </div>
                     </template>
+                <template x-if="hasMoreMyPosts">
+                    <div class="col-span-3 text-center py-4">
+                        <button @click="loadMoreMyPosts()" :disabled="isLoadingMoreMyPosts" class="text-blue-600 font-bold text-sm">
+                            <template x-if="isLoadingMoreMyPosts"><i class="fa-solid fa-spinner fa-spin mr-2"></i></template>
+                            Load More Posts
+                        </button>
+                    </div>
+                </template>
                 </div>
                 <div x-show="profileTab === 'media'" x-cloak class="grid grid-cols-3 gap-2 mt-4">
                     <template x-for="reel in userMediaPosts" :key="reel.id">
@@ -3041,6 +3049,14 @@
                             </div>
                         </div>
                     </template>
+                <template x-if="hasMoreMyReels">
+                    <div class="col-span-3 text-center py-4">
+                        <button @click="loadMoreMyReels()" :disabled="isLoadingMoreMyReels" class="text-blue-600 font-bold text-sm">
+                            <template x-if="isLoadingMoreMyReels"><i class="fa-solid fa-spinner fa-spin mr-2"></i></template>
+                            Load More Media
+                        </button>
+                    </div>
+                </template>
                 </div>
                 <div x-show="profileTab === 'likes'" x-cloak class="space-y-2 mt-4">
                     <template x-for="post in userLikedPosts" :key="post.id">

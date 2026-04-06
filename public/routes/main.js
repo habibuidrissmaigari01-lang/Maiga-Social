@@ -440,6 +440,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
                 lastMsgId: m._id,
                 lastMsgByMe: isMe,
                 lastMsgIsRead: m.is_read,
+                lastMsgTimestamp: m.createdAt,
                 time: formatTime(m.createdAt),
                 unread: unreadMap.has(otherId),
                 unreadCount: unreadMap.get(otherId) || 0
@@ -480,6 +481,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
                 lastMsgId: lastMessage?._id,
                 lastMsgByMe: isMe,
                 lastMsgIsRead: lastMessage ? lastMessage.is_read : false,
+                lastMsgTimestamp: lastMessage ? lastMessage.createdAt : null,
                 time: lastMessage ? formatTime(lastMessage.createdAt) : '',
                 unread: groupUnreadMap.has(g._id.toString()),
                 unreadCount: groupUnreadMap.get(g._id.toString()) || 0

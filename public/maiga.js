@@ -115,7 +115,14 @@ const initMaiga = () => {
 
         // Feature Lists
         posts: [],
+        myPosts: [],
+        myPostsPage: 1,
+        hasMoreMyPosts: true,
+        isLoadingMoreMyPosts: false,
         reels: [],
+         myReelsPage: 1,
+        hasMoreMyReels: true,
+        isLoadingMoreMyReels: false,
         trendingReels: [],
         groups: [],
         chats: [],
@@ -1909,6 +1916,7 @@ const initMaiga = () => {
                         lastMsgId: data.id,
                         lastMsgByMe: false,
                         lastMsgIsRead: false,
+                    lastMsgTimestamp: Date.now(),
                         time: 'Just now',
                         unread: true,
                         unreadCount: 1,
@@ -2299,6 +2307,17 @@ const initMaiga = () => {
                 }
                 if (newId) {
                     this.initPushNotifications();
+                    // Fetch reels if already on profile page during load
+                    if (this.activeTab === 'profile' && this.myReels.length === 0) {
+                        this.apiFetch(`/api/get_reels?user_id=${newId}&page=1&limit=12`).then(d => { 
+                            if (Array.isArray(d)) { this.myReels = d; this.hasMoreMyReels = d.length === 12; }
+                        });
+                    }
+                    if (this.activeTab === 'profile' && this.myPosts.length === 0) {
+                        this.apiFetch(`/api/get_posts?user_id=${newId}&page=1&limit=12`).then(d => { 
+                            if (Array.isArray(d)) { this.myPosts = d; this.hasMoreMyPosts = d.length === 12; }
+                        });
+                    }
                 }
             }, { immediate: true }); // Ensure this runs immediately if user.id is already set
             
@@ -2308,8 +2327,15 @@ const initMaiga = () => {
                 if (newTab === 'saved' && this.savedPostList.length === 0) {
                     this.fetchSavedPosts();
                 }
-                if (newTab === 'profile' && this.myReels.length === 0) {
-                    this.apiFetch(`/api/get_reels?user_id=${this.user.id}`).then(d => { if (Array.isArray(d)) this.myReels = d; });
+                if (newTab === 'profile' && this.myReels.length === 0 && this.user.id !== 0) {
+                    this.apiFetch(`/api/get_reels?user_id=${this.user.id}&page=1&limit=12`).then(d => { 
+                        if (Array.isArray(d)) { this.myReels = d; this.hasMoreMyReels = d.length === 12; }
+                    });
+                }
+                if (newTab === 'profile' && this.myPosts.length === 0 && this.user.id !== 0) {
+                    this.apiFetch(`/api/get_posts?user_id=${this.user.id}&page=1&limit=12`).then(d => { 
+                        if (Array.isArray(d)) { this.myPosts = d; this.hasMoreMyPosts = d.length === 12; }
+                    });
                 }
                 // Add other tab-specific loading here if needed
             });
@@ -2531,6 +2557,37 @@ const initMaiga = () => {
             }
 
             this.viewingUser.isLoadingMoreProfilePosts = false;
+        },
+        async loadMoreMyPosts() {
+            if (this.isLoadingMoreMyPosts || !this.hasMoreMyPosts || this.user.id === 0) return;
+            this.isLoadingMoreMyPosts = true;
+            this.myPostsPage++;
+            
+            const data = await this.apiFetch(`/api/get_posts?user_id=${this.user.id}&page=${this.myPostsPage}&limit=12`);
+            if (Array.isArray(data)) {
+                this.myPosts = [...this.myPosts, ...data];
+                this.hasMoreMyPosts = data.length === 12;
+            } else {
+                this.myPostsPage--;
+                this.showToast('Error', 'Failed to load more posts.', 'error');
+            }
+            this.isLoadingMoreMyPosts = false;
+        },
+        async loadMoreMyReels() {
+            if (this.isLoadingMoreMyReels || !this.hasMoreMyReels || this.user.id === 0) return;
+            this.isLoadingMoreMyReels = true;
+            this.myReelsPage++;
+            
+            const data = await this.apiFetch(`/api/get_reels?user_id=${this.user.id}&page=${this.myReelsPage}&limit=12`);
+            if (Array.isArray(data)) {
+                const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                this.myReels = [...this.myReels, ...mapped];
+                this.hasMoreMyReels = data.length === 12;
+            } else {
+                this.myReelsPage--;
+                this.showToast('Error', 'Failed to load more reels.', 'error');
+            }
+            this.isLoadingMoreMyReels = false;
         },
         updateLastSeen() {
             if (this.socket && this.socket.connected) {
@@ -2969,6 +3026,7 @@ const initMaiga = () => {
                 chatInList.lastMsgId = messagePayload.id;
                 chatInList.lastMsgByMe = true;
                 chatInList.lastMsgIsRead = false;
+                    chatInList.lastMsgTimestamp = now;
                 chatInList.time = 'Just now';
                 chatInList.lastMsgTimestamp = now;
                 chatInList.pending = !navigator.onLine;
@@ -2981,6 +3039,7 @@ const initMaiga = () => {
                     lastMsgId: messagePayload.id,
                     lastMsgByMe: true,
                     lastMsgIsRead: false,
+                    lastMsgTimestamp: now,
                     time: 'Just now',
                     lastMsgTimestamp: now,
                     unread: false,
@@ -3126,6 +3185,7 @@ const initMaiga = () => {
 
             this.apiFetch(url)
                 .then(async data => {
+                    if (!data) return;
                     const formattedMessages = await Promise.all(data.map(async m => {
                         let content = m.media || m.content;
                         let msgType = m.media_type || 'text';
@@ -3936,15 +3996,20 @@ const initMaiga = () => {
                 const bPinned = this.isPinned(b.id, b.type || 'user');
                 if (aPinned && !bPinned) return -1;
                 if (!aPinned && bPinned) return 1;
-
-                const aTime = this.getChatTimestamp(a);
-                const bTime = this.getChatTimestamp(b);
-                if (aTime !== bTime) return bTime - aTime;
-
-                return 0;
+            
+                // Prioritize unread messages
+                if (a.unread && !b.unread) return -1;
+                if (!a.unread && b.unread) return 1;
+            
+                // Then sort by timestamp
+                const aTimestamp = this.getChatTimestamp(a);
+                const bTimestamp = this.getChatTimestamp(b);
+                return bTimestamp - aTimestamp;
             });
         },
         get onlineContacts() {
+            // Sort online contacts by last message timestamp to show most active first
+            // Filter out groups from online contacts
             return (this.chats || []).filter(chat => chat.status === 'online' && chat.type !== 'group').slice(0, 10);
         },
         searchUsers() {
@@ -4285,8 +4350,14 @@ const initMaiga = () => {
                     if (Array.isArray(data)) this.savedPostList = data;
                 }); // Fixed: savedPosts getter was not using savedPostList
         },
+        fetchCallHistory() {
+            this.apiFetch('/api/get_call_history')
+                .then(data => {
+                    if (Array.isArray(data)) this.callHistory = data;
+                });
+        },
         get userPosts() {
-             return (this.posts || []).filter(p => (p.user_id == this.user?.id || p.author === this.user?.name) && p.media_type !== 'video');
+            return this.myPosts;
         },
         addToRecent(term) {
             if (!term) return;
@@ -5243,6 +5314,14 @@ const initMaiga = () => {
                 if (data && data.success) {
                     this.posts = this.posts.filter(p => p.id !== postId);
                     this.savedPostList = this.savedPostList.filter(p => p.id !== postId);
+                    this.myPosts = this.myPosts.filter(p => p.id !== postId);
+                    this.reels = this.reels.filter(r => r.id !== postId);
+                    this.myReels = this.myReels.filter(r => r.id !== postId);
+                    if (this.viewingUser) {
+                        if (this.viewingUser.posts) this.viewingUser.posts = this.viewingUser.posts.filter(p => p.id !== postId);
+                        if (this.viewingUser.reels) this.viewingUser.reels = this.viewingUser.reels.filter(r => r.id !== postId);
+                    }
+                    this.user.total_posts_count = Math.max(0, this.user.total_posts_count - 1);
                     if (this.viewingPost && this.viewingPost.id === postId) {
                         this.viewingPost = null;
                     }
