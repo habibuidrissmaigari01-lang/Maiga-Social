@@ -76,9 +76,11 @@ app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    rolling: true, // Renew session on each request
     store: MongoStore.create({
         mongoUrl: MONGO_URI,
         collectionName: 'sessions',
+        ttl: 60 * 60 * 24 * 7, // 1 week in seconds
         stringify: false,
         autoRemove: 'interval'
     }),
@@ -86,7 +88,7 @@ app.use(session({
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 365 // Persist for 1 year by default
+        maxAge: 1000 * 60 * 60 * 24 * 7 // Persist for 1 week
     }
 }));
 

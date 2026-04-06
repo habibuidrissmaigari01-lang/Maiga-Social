@@ -735,10 +735,10 @@
                                  
                                 <!-- Reactions Display -->
                                <div x-show="msg.reactions?.length > 0" @click.stop="openReactionsView(msg)" class="absolute -bottom-2 right-0 flex -space-x-1 bg-white dark:bg-gray-800 rounded-full px-1 py-0.5 shadow-sm border dark:border-gray-700 scale-90 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                                    <template x-for="reaction in msg.reactions.slice(0, 3)" :key="reaction._id">
+                                    <template x-for="reaction in msg.reactions?.slice(0, 3) ?? []" :key="reaction._id">
                                         <span class="text-[10px]" x-text="reaction.emoji"></span>
                                     </template>
-                                    <span x-show="msg.reactions.length > 3" class="text-[8px] font-bold text-gray-500 ml-1" x-text="'+' + (msg.reactions.length - 3)"></span>
+                                    <span x-show="msg.reactions?.length > 3" class="text-[8px] font-bold text-gray-500 ml-1" x-text="'+' + ((msg.reactions?.length || 0) - 3)"></span>
                                 </div>
                             </div>
                             <div class="flex items-center space-x-1 mt-1 px-1 opacity-60">

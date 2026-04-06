@@ -79,7 +79,13 @@ const initMaiga = () => {
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
-        activeTab: localStorage.getItem('maiga_active_tab') || 'home',
+        activeTab: (function() {
+            if (!sessionStorage.getItem('maiga_session_initialized')) {
+                sessionStorage.setItem('maiga_session_initialized', 'true');
+                return 'home'; // Force home on first visit/login
+            }
+            return localStorage.getItem('maiga_active_tab') || 'home';
+        })(),
         activeMessageTab: 'all',
         isLoading: true,
         dataLoaded: false,
@@ -1347,7 +1353,6 @@ const initMaiga = () => {
             // Clear local application storage
             localStorage.removeItem('maiga_session_active');
             localStorage.clear();
-            sessionStorage.clear();
 
             // Force clear browser cache storage (Service Worker caches)
             if ('caches' in window) {
@@ -1453,6 +1458,8 @@ const initMaiga = () => {
         mediaPreviewType: null,
         incomingCall: null,
         peerConnection: null,
+        pendingRemoteDescription: null,
+        pendingIceCandidates: [],
         currentCallId: null,
         archivedChats: [],
         activeHashtag: null,
@@ -1930,18 +1937,37 @@ const initMaiga = () => {
                 document.getElementById('ringing-sound')?.play().catch(()=>{});
             });
 
-            this.socket.on('call_accepted', (signal) => {
+            this.socket.on('call_accepted', async (signal) => {
                 clearTimeout(this.callTimeoutTimer);
                 this.callStatus = 'Connecting...';
-                document.getElementById('ringing-sound').pause();
-                this.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-                clearInterval(this.connectionInterval); // Stop any fallback polling
+                document.getElementById('ringing-sound')?.pause();
+
+                this.pendingRemoteDescription = signal;
+
+                if (!this.peerConnection) {
+                    console.warn('call_accepted received before peerConnection was created; initializing peer connection now.');
+                    this.setupPeerConnection();
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
+                    }
+                }
+
+                if (!this.peerConnection) {
+                    console.error('Unable to process call_accepted: peerConnection unavailable.');
+                    return;
+                }
+
+                await this.processPendingSignaling();
             });
 
             this.socket.on('ice_candidate', (candidate) => {
-                if (this.peerConnection) {
-                    this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>{});
+                if (!this.peerConnection || !this.peerConnection.remoteDescription?.type) {
+                    this.pendingIceCandidates.push(candidate);
+                    return;
                 }
+                this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+                    console.warn('Failed to add ICE candidate immediately:', e);
+                });
             });
 
             this.socket.on('call_busy', () => {
@@ -2133,6 +2159,11 @@ const initMaiga = () => {
             this.$watch('isLeftSidebarCollapsed', (value) => {
                 localStorage.setItem('maiga_sidebar_collapsed', value);
             });
+
+            // Watch for user profile modal closure
+            this.$watch('showUserProfile', (val) => {
+                if (!val) localStorage.removeItem('maiga_viewing_user_id');
+            });
             
             // Background activity heartbeat and local time update
             setInterval(() => {
@@ -2310,20 +2341,6 @@ const initMaiga = () => {
                     this.recentlyUsedStickers = userData.recent_stickers || this.recentlyUsedStickers;
                 }
 
-            // Restore Create Post Modal state if draft exists
-            const postDraft = localStorage.getItem('maiga_create_post_draft');
-            if (postDraft) {
-                this.isCreatingPost = true;
-                // Reconstruct postFile if selectedMedia exists and is a data URL
-                if (this.selectedMedia && this.selectedMedia.startsWith('data:')) {
-                    fetch(this.selectedMedia)
-                        .then(res => res.blob())
-                        .then(blob => {
-                            this.postFile = new File([blob], `draft_${Date.now()}.jpg`, { type: blob.type });
-                        });
-                }
-            }
-
                 this.posts = Array.isArray(postsData) ? postsData : [];
                 this.chats = Array.isArray(chatsData) ? chatsData : [];
                 this.groups = Array.isArray(groupsData) ? groupsData : [];
@@ -2332,6 +2349,13 @@ const initMaiga = () => {
                 this.restoreScrollState();
 
                 this.loadCreatePostDraft();
+
+                // Restore viewing user profile if it was open before refresh
+                const savedViewingUser = localStorage.getItem('maiga_viewing_user_id');
+                if (savedViewingUser) {
+                    this.openUserProfile(savedViewingUser);
+                }
+
                 // Restore active chat after lists are loaded
                 const savedChatId = localStorage.getItem('maiga_active_chat_id');
                 if (savedChatId) {
@@ -2436,6 +2460,7 @@ const initMaiga = () => {
             this.showFollowerList = null;
             this.viewingComments = null;
             this.showGroupInfo = false;
+            localStorage.setItem('maiga_viewing_user_id', userId);
 
             this.viewingUser = null; // Show loading state
             this.showUserProfile = true;
@@ -6083,7 +6108,9 @@ const initMaiga = () => {
 
                 // Create Offer
                 this.peerConnection.createOffer().then(offer => {
-                    this.peerConnection.setLocalDescription(offer);
+                    this.peerConnection.setLocalDescription(offer).then(() => {
+                        this.processPendingSignaling();
+                    });
                     // Optimize: Send via Socket directly
                     this.socket.emit('call_user', { // Ensure activeChat.id and user.id are strings
                         userToCall: this.activeChat.id,
@@ -6117,8 +6144,13 @@ const initMaiga = () => {
             });
         },
         setupPeerConnection() {
+            if (this.peerConnection) {
+                return;
+            }
+
             const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
             this.peerConnection = new RTCPeerConnection(servers);
+            this.pendingIceCandidates = this.pendingIceCandidates || [];
 
             this.peerConnection.onicecandidate = event => {
                 if (event.candidate && this.activeChat) {
@@ -6159,6 +6191,39 @@ const initMaiga = () => {
                         break;
                 }
             };
+
+            this.processPendingSignaling();
+        },
+        async processPendingSignaling() {
+            if (!this.peerConnection) {
+                return;
+            }
+
+            if (this.pendingRemoteDescription) {
+                const remoteType = this.pendingRemoteDescription.type;
+                const localType = this.peerConnection.localDescription?.type;
+                const shouldApplyRemote = remoteType === 'offer' || (remoteType === 'answer' && localType === 'offer');
+
+                if (shouldApplyRemote) {
+                    try {
+                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingRemoteDescription));
+                        this.pendingRemoteDescription = null;
+                        clearInterval(this.connectionInterval);
+                    } catch (error) {
+                        console.error('Failed to apply queued remote description:', error);
+                    }
+                }
+            }
+
+            if (this.peerConnection.remoteDescription?.type && this.pendingIceCandidates?.length) {
+                const queuedCandidates = [...this.pendingIceCandidates];
+                this.pendingIceCandidates = [];
+                for (const candidate of queuedCandidates) {
+                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => {
+                        console.warn('Failed to add queued ICE candidate:', error);
+                    });
+                }
+            }
         },
         pollCallStatus() {
             // Polling deprecated in favor of Socket events (call_accepted, call_ended)
@@ -6255,6 +6320,8 @@ const initMaiga = () => {
             this.localStream = null;
             if (this.peerConnection) this.peerConnection.close();
             this.peerConnection = null;
+            this.pendingRemoteDescription = null;
+            this.pendingIceCandidates = [];
             this.currentCallId = null;
             this.$refs.remoteVideo.pause();
             this.$refs.remoteVideo.srcObject = null;
@@ -6420,6 +6487,19 @@ const initMaiga = () => {
                 this.postBgStyleIndex = draft.postBgStyleIndex !== undefined ? draft.postBgStyleIndex : -1;
                 this.selectedMedia = draft.selectedMedia || null;
                 this.mediaType = draft.mediaType || null;
+
+                // Only auto-open the modal if there is actual content in the draft
+                if ((this.newPostContent && this.newPostContent.trim()) || this.selectedMedia) {
+                    this.isCreatingPost = true;
+                    // Reconstruct postFile if selectedMedia exists and is a data URL
+                    if (this.selectedMedia && this.selectedMedia.startsWith('data:')) {
+                        fetch(this.selectedMedia)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                this.postFile = new File([blob], `draft_${Date.now()}.jpg`, { type: blob.type });
+                            });
+                    }
+                }
             }
         },
         setupReelsObserver() {
@@ -6614,9 +6694,7 @@ const initMaiga = () => {
             const savedActiveTab = localStorage.getItem('maiga_active_tab');
             const needReelsRestore = savedReelPage > 1 || savedReelScroll > 0;
 
-            if (savedActiveTab) {
-                this.activeTab = savedActiveTab;
-            }
+
 
             if (!this.posts.length) return;
             if (needReelsRestore && !this.reels.length) return;
