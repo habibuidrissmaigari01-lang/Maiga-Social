@@ -156,7 +156,15 @@ self.addEventListener('fetch', (event) => {
 
 // 4. Push Notification Implementation
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json() : { title: 'New Message', body: 'You have a new update.' };
+  let data = { title: 'New Message', body: 'You have a new update.' };
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (err) {
+      const text = event.data.text();
+      data = { title: 'New Message', body: text || 'You have a new update.' };
+    }
+  }
 
   const options = {
     body: data.body,

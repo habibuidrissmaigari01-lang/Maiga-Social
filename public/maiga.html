@@ -372,27 +372,27 @@
                 <button @click="isCreatingGroup = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
             </div>
             <!-- Message Tabs UI Improvement -->
-            <div class="flex p-2 bg-gray-50 dark:bg-gray-800/50 mx-4 my-2 rounded-xl">
-                <button @click="activeMessageTab = 'all'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'all' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+            <div class="flex gap-2 overflow-x-auto p-2 bg-gray-50 dark:bg-gray-800/50 mx-4 my-2 rounded-xl">
+                <button @click="activeMessageTab = 'all'" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'all' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>All</span>
-                    <span x-show="totalUnreadChats > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="totalUnreadChats"></span>
-                </button> 
-                <button @click="activeMessageTab = 'group'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                    <span x-show="totalUnreadChats > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="totalUnreadChats"></span>
+                </button>
+                <button @click="activeMessageTab = 'group'" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'group' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>Group</span>
-                    <span x-show="unreadGroupsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadGroupsCount"></span>
+                    <span x-show="unreadGroupsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadGroupsCount"></span>
                 </button>
-                <button @click="activeMessageTab = 'forum'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                <button @click="activeMessageTab = 'forum'" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'forum' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>Forum</span>
-                    <span x-show="unreadForumsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadForumsCount"></span>
+                    <span x-show="unreadForumsCount > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadForumsCount"></span>
                 </button>
-                <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="flex-1 py-1.5 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
-                <button @click="activeMessageTab = 'calls'; fetchCallHistory()" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'calls' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                <button @click="activeMessageTab = 'archived'; fetchArchivedChats()" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg" :class="activeMessageTab === 'archived' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">Archived</button>
+                <button @click="activeMessageTab = 'calls'; fetchCallHistory()" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'calls' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>Calls</span>
-                    <span x-show="missedCallsCount > 0" class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-3 h-3 flex items-center justify-center rounded-full font-bold" x-text="missedCallsCount"></span>
+                    <span x-show="missedCallsCount > 0" class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold" x-text="missedCallsCount"></span>
                 </button>
-                <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="flex-1 py-1.5 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
+                <button x-show="user.is_admin" @click="activeMessageTab = 'reports'" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'reports' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>Reports</span>
-                    <span x-show="unreadReportsCount > 0" class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadReportsCount"></span>
+                    <span x-show="unreadReportsCount > 0" class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadReportsCount"></span>
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto">
@@ -1258,7 +1258,7 @@
         <div class="p-4 flex justify-between items-center sticky top-0 z-10 bg-black/50 backdrop-blur-md">
             <div class="flex items-center space-x-2">
                 <button @click="viewingPost = null" class="p-2 rounded-full bg-white/10 text-white"><i class="fa-solid fa-xmark"></i></button>
-                <button @click="const a = document.createElement('a'); a.href = viewingPost.media; a.download = 'maiga_media'; a.click();" class="p-2 rounded-full bg-white/10 text-white" title="Download"><i class="fa-solid fa-download text-sm"></i></button>
+                <button @click="downloadMediaUrl(viewingPost.media, 'maiga_media.' + (viewingPost.mediaType === 'video' ? 'mp4' : 'jpg'))" class="p-2 rounded-full bg-white/10 text-white" title="Download"><i class="fa-solid fa-download text-sm"></i></button>
             </div>
             <span class="font-bold text-white">Post</span>
             <div class="w-8"></div>
@@ -1276,9 +1276,14 @@
             </div>
             <p class="text-sm leading-relaxed mb-4 text-gray-200 whitespace-pre-wrap" x-text="viewingPost?.content"></p>
             <template x-if="viewingPost?.media">
-                <div class="rounded-xl overflow-hidden bg-gray-900 border border-gray-800 mb-4">
-                    <template x-if="viewingPost?.mediaType !== 'video'"><img :src="viewingPost?.media" class="w-full h-auto object-contain"></template>
-                    <template x-if="viewingPost?.mediaType === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto"></video></template>
+                <div class="rounded-xl overflow-hidden bg-gray-900 border border-gray-800 mb-4"
+                     @touchstart.passive="handlePinchStart($event)"
+                     @touchmove.passive.prevent="handlePinchMove($event)"
+                     @touchend.passive="handlePinchEnd($event)"
+                     @touchcancel.passive="handlePinchEnd($event)"
+                     @dblclick.stop.prevent="zoomScale = zoomScale > 1 ? 1 : 2; lastScale = zoomScale;">
+                    <template x-if="viewingPost?.mediaType !== 'video'"><img :src="viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
+                    <template x-if="viewingPost?.mediaType === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
                 </div>
             </template>
             <template x-if="user.is_admin && viewingPost?.author !== user.name">
@@ -2537,7 +2542,7 @@
 
     <!-- MAIN VIEW: REELS -->
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 z-[50] bg-black lg:static lg:z-0 lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
-        <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()">
+        <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full snap-start relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
@@ -3049,12 +3054,15 @@
             <!-- Preferences Section -->
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
                 <div class="p-4 border-b dark:border-gray-800 font-bold text-gray-500 text-xs uppercase tracking-wider">Preferences</div>
-                <button class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <div class="flex items-center space-x-3">
+                <button @click="enablePushNotifications()" class="w-full flex flex-col items-start justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors" :class="pushPermission === 'granted' ? 'bg-green-50 dark:bg-green-900/20' : ''">
+                    <div class="flex items-center space-x-3 w-full">
                         <div class="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600"><i class="fa-solid fa-bell"></i></div>
-                        <span class="font-bold text-sm">Notifications</span>
+                        <div class="flex-1 text-left">
+                            <div class="font-bold text-sm">Notifications</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" x-text="supportsPush ? (pushPermission === 'granted' ? 'Push notifications are enabled.' : pushPermission === 'denied' ? 'Permission blocked. Open browser settings to allow.' : 'Tap to enable push notifications.') : 'Push notifications not supported on this device.'"></div>
+                        </div>
                     </div>
-                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
+                    <span class="mt-3 inline-flex items-center justify-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white" x-text="pushPermission === 'granted' ? 'Enabled' : pushPermission === 'denied' ? 'Blocked' : 'Enable'"></span>
                 </button>
                 <button @click="activeTab = 'language'" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">

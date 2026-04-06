@@ -89,6 +89,8 @@ const initMaiga = () => {
         isRefreshing: false,
         isOffline: !navigator.onLine,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
+        supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
+        pushPermission: Notification.permission || 'default',
         friendsPage: 1,
         friendsLimit: 10,
         isLoadingMoreFriends: false,
@@ -1874,6 +1876,7 @@ const initMaiga = () => {
                     chatInList.lastMsgByMe = false;
                     chatInList.lastMsgIsRead = false;
                     chatInList.time = 'Just now';
+                    chatInList.lastMsgTimestamp = Date.now();
                     if (this.activeChat?.id.toString() !== chatId) {
                         chatInList.unread = true;
                         chatInList.unreadCount = (chatInList.unreadCount || 0) + 1;
@@ -2251,11 +2254,17 @@ const initMaiga = () => {
 
             // Re-join room if user data loads after socket connects
             this.$watch('user.id', (newId) => {
-                if (newId && this.socket && this.socket.connected) this.socket.emit('join_room', newId);
+                if (newId && this.socket && this.socket.connected) {
+                    this.socket.emit('join_room', newId);
+                }
+                if (newId) {
+                    this.initPushNotifications();
+                }
             }, { immediate: true }); // Ensure this runs immediately if user.id is already set
             
             // Load tab-specific data when switching tabs
             this.$watch('activeTab', (newTab) => {
+                localStorage.setItem('maiga_active_tab', newTab);
                 if (newTab === 'saved' && this.savedPostList.length === 0) {
                     this.fetchSavedPosts();
                 }
@@ -2320,6 +2329,7 @@ const initMaiga = () => {
                 this.groups = Array.isArray(groupsData) ? groupsData : [];
                 this.updateUnreadCounts();
                 this.followingList = Array.isArray(connectionsData) ? connectionsData : [];
+                this.restoreScrollState();
 
                 this.loadCreatePostDraft();
                 // Restore active chat after lists are loaded
@@ -2348,9 +2358,11 @@ const initMaiga = () => {
 
                 this.apiFetch('/api/get_muted_chats').then(d => { if (Array.isArray(d)) this.mutedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
-                this.apiFetch('/api/get_reels?page=1&limit=10').then(d => { 
+                this.apiFetch('/api/get_reels?page=1&limit=10').then(async d => { 
                     this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
-                    this.$nextTick(() => this.setupReelsObserver()); incrementProgress();
+                    this.$nextTick(() => this.setupReelsObserver());
+                    incrementProgress();
+                    await this.restoreScrollState();
                 });
                 this.apiFetch('/api/get_trending_reels').then(d => { if (Array.isArray(d)) this.trendingReels = d; });
                 this.apiFetch('/api/get_starred_messages').then(d => { if (Array.isArray(d)) this.starredMessages = d; incrementProgress(); });
@@ -2640,7 +2652,8 @@ const initMaiga = () => {
             this.showFollowerList = type;
             this.connectionSearchQuery = '';
             this.connectionList = [];
-            this.apiFetch(`/api/get_connections?type=&user_id=${this.user.id}`)
+            const profileUserId = this.viewingUser?.id || this.user.id;
+            this.apiFetch(`/api/get_connections?type=${encodeURIComponent(type)}&user_id=${profileUserId}`)
                 .then(data => {
                     this.connectionList = Array.isArray(data) ? data : [];
                 })
@@ -2911,22 +2924,34 @@ const initMaiga = () => {
 
             // Update chat list preview with pending state
             const chatInList = this.chats.find(c => c.id.toString() === this.activeChat.id.toString()) || this.groups.find(g => g.id.toString() === this.activeChat.id.toString());
+            const now = Date.now();
+            const previewText = type === 'text' ? content : `<i>Sent a ${type}</i>`;
+
             if (chatInList) {
-                chatInList.lastMsg = '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' + (type === 'text' ? content : `<i>Sent a ${type}</i>`);
+                const prefix = this.activeChat.type === 'group'
+                    ? `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${this.user.name.split(' ')[0]}:</span> `
+                    : `<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> `;
+                chatInList.lastMsg = prefix + previewText;
                 chatInList.lastMsgId = messagePayload.id;
                 chatInList.lastMsgByMe = true;
                 chatInList.lastMsgIsRead = false;
                 chatInList.time = 'Just now';
+                chatInList.lastMsgTimestamp = now;
                 chatInList.pending = !navigator.onLine;
             } else if (this.activeChat.type !== 'group') {
                 // If it's a new chat not yet in the list, add it
-                this.chats.unshift({ 
-                    ...this.activeChat, // Ensure activeChat.id is string
-                    lastMsg: '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' + content, 
+                this.chats.unshift({
+                    ...this.activeChat,
+                    id: this.activeChat.id.toString(),
+                    lastMsg: `<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ${previewText}`,
                     lastMsgId: messagePayload.id,
                     lastMsgByMe: true,
                     lastMsgIsRead: false,
-                    time: 'Just now' 
+                    time: 'Just now',
+                    lastMsgTimestamp: now,
+                    unread: false,
+                    unreadCount: 0,
+                    pending: !navigator.onLine
                 });
             }
 
@@ -2938,12 +2963,13 @@ const initMaiga = () => {
                 }).then(data => {
                     if (data && data.success && chatInList) {
                         chatInList.lastMsgId = data.message_id.toString(); // Sync optimistic ID with DB ID
-                        document.getElementById('sent-sound')?.play().catch(()=>{});
+                        document.getElementById('sent-sound')?.play().catch(() => {});
+                    } else if (data && data.success && !chatInList) {
+                        document.getElementById('sent-sound')?.play().catch(() => {});
                     } else {
                         this.showToast('Error', 'Message failed to send.', 'error');
                     }
-                })
-                .catch(() => this.showToast('Error', 'Connection lost.', 'error'))
+                }).catch(() => this.showToast('Error', 'Connection lost.', 'error'))
                 .finally(() => { this.isSendingMessage = false; });
             } else if ('serviceWorker' in navigator && 'SyncManager' in window) {
                 // Background Sync Logic
@@ -2953,23 +2979,27 @@ const initMaiga = () => {
                     content: content,
                     media_type: type,
                     reply_to_id: this.replyingTo?.id || null,
-                    timestamp: Date.now()
+                    timestamp: now
                 };
-                
+
                 await this.crypto.savePendingMessage(pendingMsg);
                 const reg = await navigator.serviceWorker.ready;
                 await reg.sync.register('send-pending-messages');
                 this.showToast('Offline', 'Message will be sent automatically when online.', 'info');
                 this.isSendingMessage = false;
+            } else {
+                // Offline fallback when no background sync is available
+                this.isSendingMessage = false;
+                this.showToast('Offline', 'Message is pending and will be sent when you are back online.', 'info');
             }
 
             this.newMessage = '';
             this.replyingTo = null;
             // Clear draft when message is sent
-            this.isSendingMessage = false;
             if (this.activeChat) {
                 delete this.drafts[this.activeChat.id];
             }
+            this.isSendingMessage = false;
         },
         sendTypingSignal: Alpine.throttle(function() { 
             if (!this.activeChat) return;
@@ -3840,6 +3870,19 @@ const initMaiga = () => {
             const groupUnread = (this.groups || []).reduce((sum, g) => sum + (g.unreadCount || 0), 0);
             return chatUnread + groupUnread;
         },
+        getChatTimestamp(chat) {
+            if (!chat) return 0;
+            if (typeof chat.lastMsgTimestamp === 'number') return chat.lastMsgTimestamp;
+            const timeField = chat.lastMsgTimestamp || chat.last_message_time || chat.updated_at || chat.created_at || chat.time;
+            if (typeof timeField === 'number' && !isNaN(timeField)) return timeField;
+            if (typeof timeField === 'string') {
+                const normalized = timeField.trim();
+                if (normalized === 'Just now' || normalized === 'Now') return Date.now();
+                const parsed = Date.parse(normalized);
+                if (!isNaN(parsed)) return parsed;
+            }
+            return 0;
+        },
         get sortedChats() {
             const all = [...(this.chats || []), ...(this.groups || [])].filter(Boolean);
             return all.sort((a, b) => {
@@ -3847,7 +3890,12 @@ const initMaiga = () => {
                 const bPinned = this.isPinned(b.id, b.type || 'user');
                 if (aPinned && !bPinned) return -1;
                 if (!aPinned && bPinned) return 1;
-                return 0; // Keep original order (usually time based)
+
+                const aTime = this.getChatTimestamp(a);
+                const bTime = this.getChatTimestamp(b);
+                if (aTime !== bTime) return bTime - aTime;
+
+                return 0;
             });
         },
         searchUsers() {
@@ -4097,27 +4145,42 @@ const initMaiga = () => {
             this.toggleSave(post);
             this.showPostOptions = false;
         },
-        downloadReel(reel) {
-            const a = document.createElement('a');
-            a.href = reel.media;
-            a.download = `reel_${reel.id}.mp4`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            this.showReelOptions = false;
-            this.showToast('Downloading', 'Download started...', 'success');
+        async downloadMediaUrl(url, filename) {
+            if (!url) return;
+            try {
+                const response = await fetch(url, { mode: 'cors' });
+                if (!response.ok) throw new Error('Download failed');
+
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                this.showToast('Downloading', 'Download started...', 'success');
+            } catch (err) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                this.showToast('Downloading', 'Download started (fallback).', 'success');
+            }
         },
-        downloadPostMedia(post) {
-            if (!post.media) return;
-            const a = document.createElement('a');
-            a.href = post.media;
+        async downloadReel(reel) {
+            if (!reel?.media) return;
+            await this.downloadMediaUrl(reel.media, `reel_${reel.id}.mp4`);
+            this.showReelOptions = false;
+        },
+        async downloadPostMedia(post) {
+            if (!post?.media) return;
             const ext = post.mediaType === 'video' ? 'mp4' : 'jpg';
-            a.download = `post_${post.id}.${ext}`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            await this.downloadMediaUrl(post.media, `post_${post.id}.${ext}`);
             this.showPostOptions = false;
-            this.showToast('Downloading', 'Download started...', 'success');
         },
         markInterested(reel) {
             this.showToast('Feedback', 'Thanks! We will show more like this.', 'success');
@@ -6439,12 +6502,14 @@ const initMaiga = () => {
         },
         refreshHomeFeed(withAnimation = true) {
             this.page = 1;
+            this.hasMorePosts = true;
+            localStorage.setItem('maiga_home_page', '1');
             let url = '/api/get_posts?page=1';
             if (this.activeHashtag) {
                 url += `&hashtag=${encodeURIComponent(this.activeHashtag)}`;
             }
             
-            this.apiFetch(url)
+            return this.apiFetch(url)
                 .then(data => {
                     if (data) this.posts = data;
                 }).finally(() => {
@@ -6455,15 +6520,16 @@ const initMaiga = () => {
             }).catch(() => this.isRefreshing = false);
         },
         loadMorePosts() {
-            if (this.isLoadingMore || !this.hasMorePosts) return;
+            if (this.isLoadingMore || !this.hasMorePosts) return Promise.resolve();
             this.isLoadingMore = true;
             this.page++;
+            localStorage.setItem('maiga_home_page', String(this.page));
             let url = `/api/get_posts?page=${this.page}`;
             if (this.activeHashtag) {
                 url += `&hashtag=${encodeURIComponent(this.activeHashtag)}`;
             }
 
-            this.apiFetch(url)
+            return this.apiFetch(url)
                 .then(data => {
                     if (data && data.length > 0) {
                         this.posts = [...this.posts, ...data];
@@ -6471,21 +6537,26 @@ const initMaiga = () => {
                     } else {
                         this.hasMorePosts = false;
                     }
+                }).catch(() => {
+                    this.page = Math.max(1, this.page - 1);
+                }).finally(() => {
                     this.isLoadingMore = false;
                 });
         },
         loadMoreReels() {
-            if (this.isLoadingMoreReels) return;
+            if (this.isLoadingMoreReels) return Promise.resolve();
             this.isLoadingMoreReels = true;
             this.reelPage++;
-            this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
+            localStorage.setItem('maiga_reel_page', String(this.reelPage));
+            return this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
                         const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                         this.reels = [...this.reels, ...mapped];
                     }
-                    this.isLoadingMoreReels = false;
                 }).catch(() => {
+                    this.reelPage = Math.max(1, this.reelPage - 1);
+                }).finally(() => {
                     this.isLoadingMoreReels = false;
                 });
         },
@@ -6520,8 +6591,56 @@ const initMaiga = () => {
 
             this.hasScrolled = el.scrollTop > 10;
             this.showScrollTop = (el.scrollTop > 300);
+            localStorage.setItem('maiga_home_scroll', String(el.scrollTop));
             if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
                 this.loadMorePosts();
+            }
+        },
+        handleReelsScroll(el) {
+            if (!el) return;
+            localStorage.setItem('maiga_reel_scroll', String(el.scrollTop));
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+                this.loadMoreReels();
+            }
+        },
+        async restoreScrollState() {
+            if (this.restoreStateRan) return;
+
+            const savedHomeScroll = parseInt(localStorage.getItem('maiga_home_scroll') || '0', 10);
+            const savedHomePage = parseInt(localStorage.getItem('maiga_home_page') || '1', 10);
+            const savedReelScroll = parseInt(localStorage.getItem('maiga_reel_scroll') || '0', 10);
+            const savedReelPage = parseInt(localStorage.getItem('maiga_reel_page') || '1', 10);
+            const savedActiveTab = localStorage.getItem('maiga_active_tab');
+            const needReelsRestore = savedReelPage > 1 || savedReelScroll > 0;
+
+            if (savedActiveTab) {
+                this.activeTab = savedActiveTab;
+            }
+
+            if (!this.posts.length) return;
+            if (needReelsRestore && !this.reels.length) return;
+
+            this.restoreStateRan = true;
+
+            while (this.page < savedHomePage && this.hasMorePosts) {
+                await this.loadMorePosts();
+            }
+
+            this.$nextTick(() => {
+                if (this.$refs.mainContent && savedHomeScroll > 0) {
+                    this.$refs.mainContent.scrollTop = savedHomeScroll;
+                }
+            });
+
+            if (needReelsRestore) {
+                while (this.reelPage < savedReelPage) {
+                    await this.loadMoreReels();
+                }
+                this.$nextTick(() => {
+                    if (this.$refs.reelsContainer && savedReelScroll > 0) {
+                        this.$refs.reelsContainer.scrollTop = savedReelScroll;
+                    }
+                });
             }
         },
         scrollReel(direction) {
@@ -6652,38 +6771,79 @@ const initMaiga = () => {
         },
         async initPushNotifications() {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+            if (Notification.permission === 'denied') {
+                console.warn('Push notification permission has been denied by the user.');
+                return;
+            }
+
+            if (Notification.permission === 'default') {
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        console.warn('Push notification permission not granted:', permission);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('Notification permission request failed:', err);
+                    return;
+                }
+            }
 
             // Register Service Worker if not already done
             try {
                 const appType = this.user.account_type || 'maiga';
                 await navigator.serviceWorker.register(`/sw.js?app=${appType}`);
                 const registration = await navigator.serviceWorker.ready;
-                
+
                 const vapidResp = await fetch(`${API_BASE_URL}/api/vapid_public_key`);
                 if (!vapidResp.ok) {
-                    console.warn("VAPID key endpoint not found. Push notifications disabled.");
+                    console.warn('VAPID key endpoint not found. Push notifications disabled.');
                     return;
                 }
-                
+
                 const { publicKey } = await vapidResp.json();
                 if (!publicKey || publicKey.includes('REPLACE')) return;
 
                 const convertedVapidKey = this.urlBase64ToUint8Array(publicKey);
 
-                // Subscribe
-                const subscription = await registration.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: convertedVapidKey
-                });
+                let subscription = await registration.pushManager.getSubscription();
+                if (!subscription) {
+                    subscription = await registration.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: convertedVapidKey
+                    });
+                }
 
-                // Send subscription to backend
+                if (!subscription) {
+                    console.warn('Push subscription failed or was not created.');
+                    return;
+                }
+
                 await this.apiFetch('/api/subscribe', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                     body: JSON.stringify(subscription)
                 });
+
+                console.info('Push notifications are enabled for this user.');
             } catch (e) {
-                console.warn("Service Worker or Push registration failed:", e);
+                console.warn('Service Worker or Push registration failed:', e);
+            }
+        },
+        async enablePushNotifications() {
+            this.pushPermission = Notification.permission || 'default';
+            if (!this.supportsPush) {
+                this.showToast('Unsupported', 'Push notifications are not supported in this browser.', 'error');
+                return;
+            }
+            if (this.pushPermission === 'denied') {
+                this.showToast('Notifications Blocked', 'Please enable notifications in your browser settings.', 'error');
+                return;
+            }
+            await this.initPushNotifications();
+            this.pushPermission = Notification.permission || 'default';
+            if (this.pushPermission === 'granted') {
+                this.showToast('Notifications Enabled', 'You will now receive push updates.', 'success');
             }
         },
         urlBase64ToUint8Array(base64String) {
