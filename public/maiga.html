@@ -579,7 +579,10 @@
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
                 <button @click="isCreatingGroup = false; newGroup = { name: '', members: [] }" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
                 <h3 class="text-lg font-black flex-1 text-center">New Group</h3>
-                <button @click="createGroup()" :disabled="!newGroup.name.trim() || newGroup.members.length < 1" class="text-sm font-bold text-blue-600 disabled:text-gray-400 pr-2">Create</button>
+                <button @click="createGroup()" :disabled="!newGroup.name.trim() || newGroup.members.length < 1 || isSubmittingGroup" class="text-sm font-bold text-blue-600 disabled:text-gray-400 pr-2">
+                    <i x-show="isSubmittingGroup" class="fa-solid fa-spinner fa-spin mr-1"></i>
+                    <span>Create</span>
+                </button>
             </div>
             <div class="p-4 border-b dark:border-gray-800">
                 <div class="flex justify-between items-center mb-1 px-1">
@@ -3274,7 +3277,10 @@
         <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
             <button @click="isEditingProfile = false" class="text-gray-500 font-bold p-2">Cancel</button>
             <h3 class="font-black">Edit Profile</h3>
-            <button @click="saveProfile()" class="text-blue-600 font-black p-2">Done</button>
+            <button @click="saveProfile()" :disabled="isSavingProfile" class="text-blue-600 font-black p-2 disabled:opacity-50">
+                <i x-show="isSavingProfile" class="fa-solid fa-spinner fa-spin mr-1"></i>
+                <span>Done</span>
+            </button>
         </div>
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
             <div class="flex flex-col items-center">
@@ -3314,7 +3320,10 @@
             <div class="flex justify-between items-center p-4 absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-black/40 to-transparent">
                 <button @click="isCreatingStory = false" class="text-white drop-shadow-md p-2 hover:scale-110 transition-transform"><i class="fa-solid fa-xmark text-xl"></i></button>
                 <h3 class="font-black text-white drop-shadow-md">New Story</h3>
-                <button @click="createStoryAction()" class="bg-blue-600 text-white px-6 py-1.5 rounded-full font-black shadow-lg active:scale-95 transition-all">Post</button>
+                <button @click="createStoryAction()" :disabled="isPostingStory" class="bg-blue-600 text-white px-6 py-1.5 rounded-full font-black shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                    <i x-show="isPostingStory" class="fa-solid fa-spinner fa-spin mr-1"></i>
+                    <span>Post</span>
+                </button>
             </div>
              <div class="flex-1 flex flex-col relative">
                 <!-- Story Preview Area -->
