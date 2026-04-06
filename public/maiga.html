@@ -2538,7 +2538,7 @@
     <!-- MAIN VIEW: REELS -->
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 z-[50] bg-black lg:static lg:z-0 lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()">
-            <template x-for="(reel, index) in reels" :key="reel.id">
+            <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full snap-start relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
                         class="w-full h-full object-cover" 
@@ -2771,7 +2771,7 @@
         <!-- "Did you mean" Hint -->
         <div x-show="didYouMeanFriend" x-transition x-cloak class="px-2 py-1">
             <p class="text-xs text-gray-500 font-medium">
-                Did you mean: <button @click="friendsSearchQuery = didYouMeanFriend.name" class="text-blue-600 font-black italic hover:underline decoration-2" x-text="didYouMeanFriend.name"></button>?
+                Did you mean: <button @click="friendsSearchQuery = didYouMeanFriend?.name" class="text-blue-600 font-black italic hover:underline decoration-2" x-text="didYouMeanFriend?.name"></button>?
             </p>
         </div>
         
