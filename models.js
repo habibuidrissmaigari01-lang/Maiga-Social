@@ -469,6 +469,12 @@ baseNotificationSchema.post('save', function(doc) {
             } else if (populatedDoc.type === 'story' && populatedDoc.trigger_user) {
                 const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
                 content = `${name} added a new story.`;
+            } else if (populatedDoc.type === 'comment' && populatedDoc.trigger_user) {
+                const name = populatedDoc.trigger_user.first_name || populatedDoc.trigger_user.name;
+                content = `${name} commented on your post`;
+                if (populatedDoc.others_count > 0) {
+                    content += ` and ${populatedDoc.others_count} others`;
+                }
             }
 
             const notificationPayload = { ...populatedDoc.toJSON(), content: content };
@@ -509,6 +515,13 @@ Notification.discriminator('mention', new mongoose.Schema({
     post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
     trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment' } // Optional: mention in a comment
+}));
+
+// Discriminator for 'Comment' notifications
+Notification.discriminator('comment', new mongoose.Schema({
+    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
+    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    others_count: { type: Number, default: 0 }
 }));
 
 // Discriminator for 'System' notifications (just text)

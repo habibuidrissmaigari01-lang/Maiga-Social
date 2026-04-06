@@ -56,6 +56,7 @@ const initMaiga = () => {
     Alpine.data('appData', () => ({
         init() {
             this.mainInit(); 
+            this.$watch('appFontSize', (value) => localStorage.setItem('maiga_app_font_size', value));
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
@@ -69,13 +70,18 @@ const initMaiga = () => {
                 e.preventDefault();
                 this.installPrompt = e;
             });
+
+            // Show guide overlay for new users
+            if (!localStorage.getItem('guide_shown')) {
+                this.showGuideOverlay = true;
+            }
         },
         installPrompt: null,
         // Core App State
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         darkMode: localStorage.getItem('darkMode') === 'true',
-        appFontSize: localStorage.getItem('maiga_app_font_size') || 'medium',
+        appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
@@ -164,6 +170,7 @@ const initMaiga = () => {
         showReelOptions: false,
         showPostOptions: false,
         showChatOptions: false,
+        showChatMenu: false,
         showScrollTop: false,
         showGroupInfo: false,
         showMsgInfo: false,
@@ -405,7 +412,8 @@ const initMaiga = () => {
             { background: 'linear-gradient(to bottom, #f97316, #fde047)', color: '#ffffff' },
         ],
         get unreadBadgeDisplay() {
-            return (this.totalUnreadChats || 0).toString();
+            const count = this.totalUnreadChats || 0;
+            return count > 99 ? '99+' : count.toString();
         },
         hasUnviewedStory(userId) {
             if (!userId) return false;
@@ -1768,6 +1776,7 @@ const initMaiga = () => {
         // --- REACTION LOGIC ---
         activeReactionPostId: null,
         reactionTimer: null,
+        showGuideOverlay: false,
 
         startReactionTimer(postId) {
             this.reactionTimer = setTimeout(() => {
@@ -3049,6 +3058,18 @@ const initMaiga = () => {
             // Reusing the reporting modal for general support tickets
             this.openReportModal('support_ticket', { id: 'general' });
         },
+        async openSupportChat() {
+            // Create a support chat with admin
+            const supportChat = {
+                id: 'support-admin',
+                name: 'Maiga Support',
+                avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MaigaSupport',
+                type: 'support',
+                lastMsg: 'How can we help you today?'
+            };
+            this.activeChat = supportChat;
+            this.isMessaging = true;
+        },
         handleMediaSelect(event, type) {
             const file = event.target.files[0];
             if (!file) return;
@@ -3923,6 +3944,9 @@ const initMaiga = () => {
                 return 0;
             });
         },
+        get onlineContacts() {
+            return (this.chats || []).filter(chat => chat.status === 'online' && chat.type !== 'group').slice(0, 10);
+        },
         searchUsers() {
             this.searchResults = [];
             this.searchPostsResults = [];
@@ -4623,6 +4647,43 @@ const initMaiga = () => {
                 if (chatInList) chatInList.lastMsg = 'Chat cleared';
                 this.showChatOptions = false;
                 this.showToast('Success', 'Chat history deleted for both users.', 'success');
+            }
+        },
+        async deleteChat(chat) {
+            if (!chat) return;
+            if (!confirm('Are you sure you want to delete this chat? This action cannot be undone.')) return;
+
+            const type = chat.type === 'group' ? 'group' : 'user';
+            const data = await this.apiFetch('/api/delete_chat_history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                body: JSON.stringify({ chat_id: chat.id })
+            });
+
+            if (data && data.success) {
+                // Remove from chats list
+                if (type === 'group') {
+                    this.groups = this.groups.filter(g => g.id.toString() !== chat.id.toString());
+                } else {
+                    this.chats = this.chats.filter(c => c.id.toString() !== chat.id.toString());
+                }
+                
+                // Clear messages and close chat
+                delete this.chatMessages[chat.id];
+                this.activeChat = null;
+                this.showChatOptions = false;
+                this.showChatMenu = false;
+                this.showToast('Success', 'Chat deleted.', 'success');
+            } else {
+                this.showToast('Error', data?.error || 'Failed to delete chat', 'error');
+            }
+        },
+        toggleBlockUser() {
+            if (!this.activeChat) return;
+            if (this.isBlocked(this.activeChat.id)) {
+                this.unblockUser(this.activeChat.id);
+            } else {
+                this.blockUser(this.activeChat.id);
             }
         },
         toggleMute() {
@@ -6614,7 +6675,7 @@ const initMaiga = () => {
                 .then(data => {
                     if (data && data.length > 0) {
                         this.posts = [...this.posts, ...data];
-                        if (data.length < 10) this.hasMorePosts = false;
+                        if (data.length < 20) this.hasMorePosts = false; // If we got fewer than 20 posts, no more available
                     } else {
                         this.hasMorePosts = false;
                     }
@@ -6673,7 +6734,8 @@ const initMaiga = () => {
             this.hasScrolled = el.scrollTop > 10;
             this.showScrollTop = (el.scrollTop > 300);
             localStorage.setItem('maiga_home_scroll', String(el.scrollTop));
-            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+            // More aggressive loading - trigger when within 200px of bottom instead of 100px
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
                 this.loadMorePosts();
             }
         },

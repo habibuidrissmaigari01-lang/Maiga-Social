@@ -65,6 +65,7 @@
         html {
             font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
         }
+        .fixed-font { font-size: 16px !important; }
         .logo-grayscale { filter: grayscale(100%); }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
     </style>
@@ -161,6 +162,7 @@
 </head>
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
       :class="[{ 'dark': darkMode }, desktopGridCols]"
+      :style="`--app-base-font-size: ${appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px'};`"
       x-data="appData">
 
     <!-- Global Loading Screen -->
@@ -252,7 +254,7 @@
     <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0 transition-all duration-300 z-40" :class="isLeftSidebarCollapsed ? 'w-24' : 'w-72'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
             <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale">
-            <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-gray-800 dark:text-gray-200 italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-gray-800 dark:text-gray-200 italic fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
             <img :src="user.avatar" class="w-12 h-12 parallelogram-sm object-cover">
@@ -340,7 +342,7 @@
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <span class="text-2xl font-black italic" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+                <span class="text-2xl font-black italic fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
@@ -350,7 +352,7 @@
                 <span x-show="unreadNotificationsCount > 0" x-text="unreadNotificationsDisplay" class="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold"></span>
             </button>
             <button @click="isMessaging = true" class="relative p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm transition-transform active:scale-90 overflow-visible">
-                <i class="fa-solid fa-paper-plane dark:text-white"></i>
+                <i class="fa-solid fa-message dark:text-white"></i>
                 <span x-show="totalUnreadChats > 0" x-text="unreadBadgeDisplay" class="absolute top-0 right-0 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold border-2 border-white dark:border-gray-900 scale-90 translate-x-1/4 -translate-y-1/4"></span>
             </button>
         </div>
@@ -394,6 +396,21 @@
                     <span>Reports</span>
                     <span x-show="unreadReportsCount > 0" class="absolute -top-1 -right-1 bg-orange-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="unreadReportsCount"></span>
                 </button>
+            </div>
+            <!-- Online Contacts Horizontal List -->
+            <div x-show="onlineContacts.length > 0" class="px-3 py-3 border-b dark:border-gray-800">
+                <h4 class="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2 ml-1">ONLINE NOW</h4>
+                <div class="flex gap-3 overflow-x-auto no-scrollbar">
+                    <template x-for="contact in onlineContacts" :key="contact.id">
+                        <button @click="activeChat = contact; chat.unread = false; activeMessageTab = 'all'" class="flex flex-col items-center gap-1.5 shrink-0 hover:opacity-75 transition-opacity">
+                            <div class="relative">
+                                <img :src="contact.avatar" class="w-12 h-12 rounded-full border-2 dark:border-gray-700">
+                                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
+                            </div>
+                            <span class="text-[10px] font-bold truncate max-w-[48px]" x-text="contact.name"></span>
+                        </button>
+                    </template>
+                </div>
             </div>
             <div class="flex-1 overflow-y-auto">
                 <!-- All Chats -->
@@ -449,7 +466,7 @@
                                         </div>
                                     </template>
                                     <template x-if="chat.unreadCount > 0">
-                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="chat.unreadCount"></span>
+                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="chat.unreadCount > 99 ? '99+' : chat.unreadCount"></span>
                                     </template>
                                 </div>
                             </div>
@@ -490,7 +507,7 @@
                                         </div>
                                     </template>
                                     <template x-if="group.unreadCount > 0">
-                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="group.unreadCount"></span>
+                                        <span class="bg-blue-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" x-text="group.unreadCount > 99 ? '99+' : group.unreadCount"></span>
                                     </template>
                                 </div>
                             </div>
@@ -651,6 +668,27 @@
                     <button @click="isSearchingChat = !isSearchingChat; if(!isSearchingChat) { chatSearchQuery = ''; fetchMessages(activeChat); }" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-magnifying-glass text-sm"></i></button>
                     <button @click="startCall('voice')" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-phone text-sm"></i></button>
                     <button @click="startCall('video')" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-video text-sm"></i></button>
+                    <div class="relative">
+                        <button @click="showChatMenu = !showChatMenu" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><i class="fa-solid fa-ellipsis-vertical text-sm"></i></button>
+                        <div x-show="showChatMenu" @click.away="showChatMenu = false" x-transition.opacity.duration.200ms class="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-50">
+                            <button @click="toggleBlockUser(); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-left transition-colors text-red-600 dark:text-red-400">
+                                <i class="fa-solid fa-ban text-sm w-5"></i>
+                                <span class="text-sm font-bold" x-text="isBlocked(activeChat?.id) ? 'Unblock User' : 'Block User'"></span>
+                            </button>
+                            <button @click="markAsRead(activeChat); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-left transition-colors text-blue-600 dark:text-blue-400 border-t dark:border-gray-700">
+                                <i class="fa-solid fa-check-double text-sm w-5"></i>
+                                <span class="text-sm font-bold">Mark as Read</span>
+                            </button>
+                            <button @click="clearChat(); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-orange-50 dark:hover:bg-orange-900/20 text-left transition-colors text-orange-600 dark:text-orange-400 border-t dark:border-gray-700">
+                                <i class="fa-solid fa-eraser text-sm w-5"></i>
+                                <span class="text-sm font-bold">Clear Chat</span>
+                            </button>
+                            <button @click="deleteChat(activeChat); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-left transition-colors text-red-600 dark:text-red-400 border-t dark:border-gray-700">
+                                <i class="fa-solid fa-trash text-sm w-5"></i>
+                                <span class="text-sm font-bold">Delete Chat</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -798,13 +836,7 @@
                     <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-hourglass-half text-indigo-500 text-xl"></i></div>
                     <span class="text-[10px] font-bold">24h Timer</span>
                 </button>
-                <button @click="clearChat()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-trash text-red-500 text-xl"></i></div><span class="text-[10px] font-bold">Clear Chat</span></button>
-                <button @click="deleteChatHistory()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-user-xmark text-red-600 text-xl"></i></div><span class="text-[10px] font-bold">Delete History</span></button>
-                <template x-if="activeChat?.type !== 'group'">
-                    <button @click="markAsUnread(activeChat)" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-envelope text-teal-600 dark:text-teal-400 text-xl"></i></div><span class="text-[10px] font-bold">Mark Unread</span></button>
-                    <button @click="toggleArchiveChat(activeChat)" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-box-archive text-gray-600 dark:text-gray-300 text-xl"></i></div><span class="text-[10px] font-bold">Archive</span></button>
-                    <button @click="blockActiveChatUser()" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-user-slash text-red-500 text-xl"></i></div><span class="text-[10px] font-bold" x-text="isBlocked(activeChat?.id) ? 'Unblock' : 'Block'"></span></button>
-                </template>
+
             </div>
 
             <!-- Sticker Picker -->
@@ -847,7 +879,7 @@
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
                 <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
-                    <input type="text" x-model="newMessage" @keyup.enter="sendMessage()" :placeholder="isBlocked(activeChat?.id) ? 'You have blocked this user' : 'Message...'" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}">
+                    <textarea x-model="newMessage" @keyup.ctrl.enter="sendMessage()" rows="1" :placeholder="isBlocked(activeChat?.id) ? 'You have blocked this user' : 'Message... (Ctrl+Enter to send)'" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 6rem;"></textarea>
                     <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
                         <i class="fa-solid fa-face-smile text-xl"></i>
                     </button>
@@ -2267,7 +2299,7 @@
                                     <p class="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Try searching for:</p>
                                     <div class="space-y-2">
                                         <template x-for="rec in recommendedSearchTerms">
-                                            <button @click="homeSearchQuery = rec.term; searchUsers()" class="flex items-center gap-2 w-full p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors">
+                                            <button @click="homeSearchQuery = rec.term; searchUsers()" class="flex items-center gap-2 w-full p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs font-bold text-blue-600 hover:bg-blue-50 transition-colors fixed-font">
                                                 <i class="fa-solid" :class="rec.icon"></i>
                                                 <span x-text="rec.term"></span>
                                             </button>
@@ -2911,8 +2943,8 @@
                 <div @click.stop="openUserStory(notif.trigger_user_id)" class="relative flex-shrink-0 cursor-pointer" :class="getStoryRingClass(notif.trigger_user_id)">
                     <img @click.stop="if(notif.trigger_user_id) openUserProfile(notif.trigger_user_id)" :src="notif.avatar || 'https://api.dicebear.com/7.x/identicon/svg?seed=System'" class="w-12 h-12 parallelogram-sm shadow-sm cursor-pointer" :class="hasUnviewedStory(notif.trigger_user_id) ? 'border-2 border-white dark:border-gray-900' : ''">
                         <div class="absolute -bottom-1 -right-1 w-6 h-6 parallelogram-sm flex items-center justify-center border-2 border-white dark:border-gray-900" 
-                             :class="{ 'bg-rose-500': notif.type === 'like', 'bg-blue-500': notif.type === 'follow', 'bg-green-500': notif.type === 'mention', 'bg-purple-500': notif.type === 'broadcast', 'bg-orange-500': notif.type === 'system' }">
-                            <i class="fa-solid text-[10px] text-white" :class="{ 'fa-heart': notif.type === 'like', 'fa-user-plus': notif.type === 'follow', 'fa-at': notif.type === 'mention', 'fa-bullhorn': notif.type === 'broadcast', 'fa-triangle-exclamation': notif.type === 'system' }"></i>
+                             :class="{ 'bg-rose-500': notif.type === 'like', 'bg-blue-500': notif.type === 'follow', 'bg-green-500': notif.type === 'mention', 'bg-purple-500': notif.type === 'broadcast', 'bg-orange-500': notif.type === 'system', 'bg-indigo-500': notif.type === 'comment' }">
+                            <i class="fa-solid text-[10px] text-white" :class="{ 'fa-heart': notif.type === 'like', 'fa-user-plus': notif.type === 'follow', 'fa-at': notif.type === 'mention', 'fa-bullhorn': notif.type === 'broadcast', 'fa-triangle-exclamation': notif.type === 'system', 'fa-comment': notif.type === 'comment' }"></i>
                         </div>
                     </div>
                     <div class="flex-1">
@@ -3229,6 +3261,12 @@
     <!-- MAIN VIEW: HELP & SUPPORT -->
     <main x-show="activeTab === 'help'" class="animate-fadeIn">
         <div class="p-4 space-y-4">
+            <div class="flex items-center space-x-3 mb-4">
+                <button @click="activeTab = 'home'" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <i class="fa-solid fa-arrow-left text-lg text-gray-700 dark:text-gray-300"></i>
+                </button>
+                <h2 class="text-xl font-black text-gray-900 dark:text-white">Help & Support</h2>
+            </div>
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
                 <button class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left">
                     <div class="flex items-center space-x-3">
@@ -3240,12 +3278,12 @@
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
-                <button class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800 text-left">
+                <button @click="openSupportChat()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800 text-left">
                     <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600"><i class="fa-solid fa-envelope-open-text"></i></div>
+                        <div class="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600"><i class="fa-solid fa-headset"></i></div>
                         <div>
-                            <span class="font-bold text-sm">Support Inbox</span>
-                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Track your active support tickets and view responses from our administration team.</p>
+                            <span class="font-bold text-sm">Support Chat</span>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Chat directly with our support team for immediate assistance and answers to your questions.</p>
                         </div>
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
@@ -3914,7 +3952,7 @@
                                 </template>
                             </div>
                             <template x-if="chat.unreadCount > 0">
-                                <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount"></span>
+                                <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount > 99 ? '99+' : chat.unreadCount"></span>
                             </template>
                         </div>
                     </div>
@@ -3994,4 +4032,63 @@
                 <span x-text="formatRecordingTime(globalPlayer.duration)">00:00</span>
             </div>
         </div>
+    </div>    <!-- Guide Overlay for New Users -->
+    <div x-show="showGuideOverlay" x-transition class="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold">Welcome to Maiga Social!</h3>
+                <button @click="showGuideOverlay = false; localStorage.setItem('guide_shown', 'true')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">Here's a quick guide to help you get started:</p>
+            <ul class="text-sm space-y-3">
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-message text-blue-500 mt-0.5"></i>
+                    <div>
+                        <strong>Message Tab:</strong> Chat privately with friends and groups.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-bell text-yellow-500 mt-0.5"></i>
+                    <div>
+                        <strong>Notification Tab:</strong> Stay updated with likes, comments, and mentions.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-bars text-green-500 mt-0.5"></i>
+                    <div>
+                        <strong>Sidebar Menu:</strong> Access settings, profile, and more features.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-home text-purple-500 mt-0.5"></i>
+                    <div>
+                        <strong>Home Tab:</strong> View your feed and discover new content.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-search text-red-500 mt-0.5"></i>
+                    <div>
+                        <strong>Search Tab:</strong> Find users, posts, and trending topics.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-user text-indigo-500 mt-0.5"></i>
+                    <div>
+                        <strong>Profile Tab:</strong> Manage your posts, followers, and settings.
+                    </div>
+                </li>
+                <li class="flex items-start space-x-3">
+                    <i class="fa-solid fa-fire text-orange-500 mt-0.5"></i>
+                    <div>
+                        <strong>Trending Tab:</strong> Explore popular hashtags and viral content.
+                    </div>
+                </li>
+            </ul>
+            <button @click="showGuideOverlay = false; localStorage.setItem('guide_shown', 'true')" class="mt-6 w-full bg-blue-500 text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-colors">
+                Got it! Let's explore
+            </button>
+        </div>
     </div>
+</div>

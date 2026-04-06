@@ -201,7 +201,7 @@ router.post('/submit_support_ticket', isAuthenticated, async (req, res) => {
 router.get('/get_posts', isAuthenticated, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = 10;
+        const limit = 20; // Increased from 10 to 20 posts per page for better scrolling experience
         const skip = (page - 1) * limit;
         
         const baseQuery = { media_type: { $ne: 'video' } };
@@ -214,7 +214,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         // Populate 'user' and include fields needed for the 'full_name' virtual
         let posts = await Post.find(query)
             .populate('user', 'name first_name surname avatar is_verified')
-            .sort({ createdAt: -1 }).skip(skip).limit(limit);
+            .sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
 
         // Randomize the current batch and interleave to prevent consecutive posts from the same author
         if (!req.query.user_id && posts.length > 2) {
@@ -238,7 +238,10 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
             posts = interleaved;
         }
         
-        res.json(posts.map(p => ({
+        const hasMorePosts = posts.length > limit;
+        const postsToReturn = posts.slice(0, limit);
+        
+        res.json(postsToReturn.map(p => ({
             id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'User', avatar: p.user?.avatar,
             content: p.content, media: p.media, media_type: p.media_type,
             time: formatTime(p.createdAt), likes: p.likes.length,
@@ -1109,6 +1112,25 @@ router.post('/add_comment', isAuthenticated, upload.single('media'), async (req,
         });
         await comment.save();
         await Post.findByIdAndUpdate(post_id, { $inc: { comments_count: 1 } });
+
+        // Create notification for comment
+        const post = await Post.findById(post_id);
+        if (post && post.user.toString() !== req.session.userId.toString()) {
+            const Notification = mongoose.model('Notification');
+            const existingNotif = await Notification.findOne({
+                user: post.user,
+                post: post._id,
+                type: 'comment',
+                is_read: false
+            });
+
+            if (existingNotif) {
+                await Notification.updateOne({ _id: existingNotif._id }, { $set: { trigger_user: req.session.userId }, $inc: { others_count: 1 } });
+            } else {
+                await Notification.create({ type: 'comment', user: post.user, trigger_user: req.session.userId, post: post._id, others_count: 0 });
+            }
+        }
+
         res.json({ success: true, comment_id: comment._id, content, media: mediaUrl });
     } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
@@ -1221,15 +1243,43 @@ router.get('/friends/suggestions', isAuthenticated, async (req, res) => {
 });
 
 router.get('/get_connections', isAuthenticated, async (req, res) => {
-    const user = await User.findById(req.session.userId).populate('following', 'name first_name surname avatar username online dept');
-    res.json(user.following.filter(u => u != null).map(u => ({ 
-        id: u._id, 
-        name: u.full_name || u.name, 
-        avatar: u.avatar, 
-        username: u.username, 
-        online: u.online, 
-        dept: u.dept 
-    })));
+    try {
+        const { type, user_id } = req.query;
+        const targetUserId = user_id || req.session.userId;
+        
+        const user = await User.findById(targetUserId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        let connectionList = [];
+        
+        if (type === 'followers') {
+            // Get people who are following this user
+            const followers = await User.find({ following: targetUserId }).select('name first_name surname avatar username online dept _id');
+            connectionList = followers.filter(u => u != null).map(u => ({ 
+                id: u._id, 
+                name: u.full_name || u.name, 
+                avatar: u.avatar, 
+                username: u.username, 
+                online: u.online, 
+                dept: u.dept 
+            }));
+        } else {
+            // Get people this user is following (default)
+            await user.populate('following', 'name first_name surname avatar username online dept');
+            connectionList = user.following.filter(u => u != null).map(u => ({ 
+                id: u._id, 
+                name: u.full_name || u.name, 
+                avatar: u.avatar, 
+                username: u.username, 
+                online: u.online, 
+                dept: u.dept 
+            }));
+        }
+        
+        res.json(connectionList);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch connections' });
+    }
 });
 
 router.post('/toggle_story_reaction', isAuthenticated, async (req, res) => {
@@ -1366,27 +1416,14 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
         // Calculate the timestamp for 24 hours ago
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
         
-        // Fetch stories from self and people the user follows
-        const creators = [userId, ...user.following];
-        
+        // Fetch all recent stories
         const stories = await Story.find({
-            user: { $in: creators },
             createdAt: { $gte: yesterday }
         }).populate('user', 'name avatar close_friends')
           .sort({ createdAt: -1 }); // Sort newest to oldest so it starts from the latest update
 
-        // Filter stories based on privacy settings
-        const filteredStories = stories.filter(story => {
-            // Always show own stories
-            if (story.user._id.equals(userId)) return true;
-            // Public stories are visible to all followers
-            if (story.audience === 'public') return true;
-            // Close Friends stories only visible if current user is in the creator's list
-            if (story.audience === 'close_friends') {
-                return story.user.close_friends.some(cfId => cfId.toString() === userId);
-            }
-            return false;
-        });
+        // Show all stories to everyone
+        const filteredStories = stories;
 
         res.json(filteredStories.map(s => ({
             id: s._id,
