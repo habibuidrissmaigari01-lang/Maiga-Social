@@ -2895,9 +2895,15 @@
 
     <!-- MAIN VIEW: NOTIFICATIONS -->
     <main x-show="activeTab === 'notifications'" class="animate-fadeIn">
-        <div class="p-4 flex justify-between items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50">
-            <h3 class="font-black text-xl">Notifications</h3>
-            <button @click="notifications.forEach(n => n.unread = false)" class="text-blue-600 text-xs font-bold">Mark all read</button>
+        <div class="p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50 gap-3">
+            <div>
+                <h3 class="font-black text-xl">Notifications</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">Tap allow to enable browser notifications for new activity.</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button @click="notifications.forEach(n => n.unread = false)" class="text-blue-600 text-xs font-bold">Mark all read</button>
+                <button @click="enablePushNotifications()" class="rounded-full px-3 py-2 text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors" x-text="pushPermission === 'granted' ? 'Allowed' : 'Allow notifications'"></button>
+            </div>
         </div>
         <div class="divide-y dark:divide-gray-800">
             <template x-for="notif in notifications" :key="notif.id">

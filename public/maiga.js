@@ -6441,6 +6441,7 @@ const initMaiga = () => {
 
                     if (entry.isIntersecting) {
                         video.play().catch(error => {
+                            if (error && error.name === 'AbortError') return;
                             console.error(`Error playing reel ${reelId}:`, error);
                         });
 
@@ -6772,7 +6773,7 @@ const initMaiga = () => {
         async initPushNotifications() {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
             if (Notification.permission === 'denied') {
-                console.warn('Push notification permission has been denied by the user.');
+                console.info('Push notification permission has been denied by the user.');
                 return;
             }
 
@@ -6780,7 +6781,7 @@ const initMaiga = () => {
                 try {
                     const permission = await Notification.requestPermission();
                     if (permission !== 'granted') {
-                        console.warn('Push notification permission not granted:', permission);
+                        console.info('Push notification permission not granted:', permission);
                         return;
                     }
                 } catch (err) {
