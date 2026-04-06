@@ -75,6 +75,7 @@ const initMaiga = () => {
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         darkMode: localStorage.getItem('darkMode') === 'true',
+        appFontSize: localStorage.getItem('maiga_app_font_size') || 'medium',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
@@ -3813,6 +3814,22 @@ const initMaiga = () => {
             await this.apiFetch('/api/mark_notifications_read', { // Ensure notification IDs are strings
                 method: 'POST'
             });
+        },
+        get unreadNotificationsCount() {
+            return (this.notifications || []).filter(n => !n.is_read).length;
+        },
+        get missedCallsCount() {
+            return (this.callHistory || []).filter(c => c.status === 'missed' || c.is_missed || c.type === 'missed').length;
+        },
+        get activeChatPinnedMsg() {
+            const messages = this.chatMessages?.[this.activeChat?.id] || [];
+            return messages.find(m => m.pinned || m.is_pinned) || null;
+        },
+        get starredMessagesInActiveChat() {
+            return (this.chatMessages?.[this.activeChat?.id] || []).filter(m => m.starred || m.is_starred);
+        },
+        get didYouMeanFriend() {
+            return (this.searchSuggestions || []).find(item => item.type === 'user') || null;
         },
 
         get homePosts() {
