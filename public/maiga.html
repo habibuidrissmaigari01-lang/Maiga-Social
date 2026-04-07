@@ -1290,7 +1290,7 @@
         <div class="p-4 flex justify-between items-center sticky top-0 z-10 bg-black/50 backdrop-blur-md">
             <div class="flex items-center space-x-2">
                 <button @click="viewingPost = null" class="p-2 rounded-full bg-white/10 text-white"><i class="fa-solid fa-xmark"></i></button>
-                <button @click="downloadMediaUrl(viewingPost.media, 'maiga_media.' + (viewingPost.mediaType === 'video' ? 'mp4' : 'jpg'))" class="p-2 rounded-full bg-white/10 text-white" title="Download"><i class="fa-solid fa-download text-sm"></i></button>
+                <button @click="downloadMediaUrl(viewingPost.media, 'maiga_media.' + ((viewingPost.mediaType || viewingPost.media_type) === 'video' ? 'mp4' : 'jpg'))" class="p-2 rounded-full bg-white/10 text-white" title="Download"><i class="fa-solid fa-download text-sm"></i></button>
             </div>
             <span class="font-bold text-white">Post</span>
             <div class="w-8"></div>
@@ -1314,8 +1314,8 @@
                      @touchend.passive="handlePinchEnd($event)"
                      @touchcancel.passive="handlePinchEnd($event)"
                      @dblclick.stop.prevent="zoomScale = zoomScale > 1 ? 1 : 2; lastScale = zoomScale;">
-                    <template x-if="viewingPost?.mediaType !== 'video'"><img :src="viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
-                    <template x-if="viewingPost?.mediaType === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) !== 'video'"><img :src="viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
                 </div>
             </template>
             <template x-if="user.is_admin && viewingPost?.author !== user.name">
@@ -1336,10 +1336,10 @@
     <div x-show="viewingStory" x-cloak class="fixed inset-0 z-[800] bg-black flex flex-col" 
          x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100" 
          x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-90"
-         @mousedown="isPaused = true; pressStartTime = Date.now()"
-         @mouseup="isPaused = false"
-         @touchstart="isPaused = true; touchStartY = $event.changedTouches[0].screenY; pressStartTime = Date.now()"
-         @touchend="isPaused = false; if($event.changedTouches[0].screenY - touchStartY > 100) closeStory()"
+         @mousedown="if($event.target.tagName !== 'INPUT' && $event.target.tagName !== 'TEXTAREA') { isPaused = true; pressStartTime = Date.now(); }"
+         @mouseup="if(!replyContent.trim() && !isRecordingStoryReply) isPaused = false"
+         @touchstart="if($event.target.tagName !== 'INPUT' && $event.target.tagName !== 'TEXTAREA') { isPaused = true; touchStartY = $event.changedTouches[0].screenY; pressStartTime = Date.now(); }"
+         @touchend="if(!replyContent.trim() && !isRecordingStoryReply) isPaused = false; if($event.changedTouches[0].screenY - touchStartY > 80) closeStory()"
     >
         <audio x-ref="storyAudio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
         <div class="flex space-x-1 p-2 pt-4 absolute top-0 left-0 right-0 z-20">
@@ -1348,9 +1348,9 @@
             </template>
         </div>
         <div class="absolute top-6 left-0 right-0 p-4 z-20 flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 rounded-full border border-white/50">
-                <span class="text-white font-bold text-sm shadow-black drop-shadow-md" x-text="viewingStory?.user?.name === user.name ? 'Your Story' : viewingStory?.user?.name"></span>
+            <div class="flex items-center space-x-3 cursor-pointer" @click.stop="const uid = viewingStory.user.id || viewingStory.user._id; openUserProfile(uid); closeStory()">
+                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 rounded-full border border-white/50 object-cover">
+                <span class="text-white font-bold text-sm shadow-black drop-shadow-md hover:underline pointer-events-none" x-text="String(viewingStory?.user?.id || viewingStory?.user?._id) === String(user.id || user._id) ? 'Your Story' : viewingStory?.user?.name"></span>
                 <span x-show="viewingStory?.list[viewingStory.index].audience === 'close_friends'" class="bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm border border-white/20">Close Friends</span>
             </div>
             <div class="flex items-center space-x-2">
@@ -1385,7 +1385,10 @@
                 </div>
                 <div class="flex items-center space-x-3 min-w-0">
                     <canvas id="story-reply-record-waveform" class="w-16 h-6" x-show="isRecordingStoryReply"></canvas>
-                    <input type="text" x-model="replyContent" @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
+                    <input type="text" x-model="replyContent" 
+                           @focus="isPaused = true" 
+                           @blur="isPaused = false"
+                           @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
                     <button @click="toggleStoryLike()" class="text-white p-2">
                         <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
                     </button>
@@ -2252,20 +2255,6 @@
                 
                 <!-- Search Suggestions -->
                 <div x-show="homeSearchQuery.length >= 2" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[200]">
-                    <!-- Instant Global Suggestions (Google-like) -->
-                    <div x-show="searchSuggestions.length > 0" class="p-2 border-b dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5">
-                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2 mb-1">Quick Matches</p>
-                        <template x-for="sug in searchSuggestions" :key="sug.id + sug.type">
-                            <div @click="if(sug.type === 'user') openUserProfile(sug); else if(sug.type === 'post') viewingPost = sug; else if(sug.type === 'reel') { selectedReel = sug; activeTab = 'reels'; }; homeSearchQuery = ''" 
-                                 class="flex items-center gap-2 p-2 hover:bg-white dark:hover:bg-gray-700 rounded-xl cursor-pointer transition-all group">
-                                <div class="w-6 h-6 flex items-center justify-center text-gray-400 group-hover:text-blue-600">
-                                    <i class="fa-solid" :class="sug.type === 'user' ? 'fa-user' : (sug.type === 'post' ? 'fa-file-lines' : 'fa-play-circle')"></i>
-                                </div>
-                                <span class="text-xs font-bold text-gray-700 dark:text-gray-200 truncate" x-html="highlight(sug.name || (sug.content || sug.caption), homeSearchQuery)"></span>
-                            </div>
-                        </template>
-                    </div>
-
                     <!-- Video Filter Toggle -->
                     <div class="px-4 py-2 border-b dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/5 flex items-center justify-between">
                         <span class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Filter Results</span>
@@ -2414,7 +2403,7 @@
             </div>
         </div>
         <!-- Stories -->
-        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 space-x-2 overflow-x-auto no-scrollbar mt-2">
+        <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 gap-1 overflow-x-auto no-scrollbar mt-2" data-no-swipe="true">
             <div @click="isCreatingStory = true" class="flex-shrink-0 cursor-pointer group">
                 <div class="p-1 bg-gray-200 dark:bg-gray-700 parallelogram rounded-2xl">
                     <div class="w-28 h-48 parallelogram overflow-hidden relative bg-gray-100 dark:bg-gray-800 rounded-xl">
@@ -2576,7 +2565,7 @@
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 z-[50] bg-black lg:static lg:z-0 lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
-                <div class="h-full w-full snap-start relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
+                <div class="h-full w-full snap-start snap-always relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
                         class="w-full h-full object-cover" 
                         playsinline autoplay muted loop 
@@ -2777,34 +2766,33 @@
     <!-- MAIN VIEW: FRIENDS -->
     <main x-show="activeTab === 'friends'" class="p-4 space-y-4 animate-fadeIn">
         <div class="flex items-center space-x-2">
-            <div class="relative flex-1" x-data="{ showSuggestions: false }">
+            <div class="relative flex-1">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
                 <input type="text" x-model="friendsSearchQuery" 
                        @focus="showSuggestions = true"
                        @click.away="showSuggestions = false"
                        @input.debounce.300ms="showSuggestions = true"
                        placeholder="Search friends..." class="w-full bg-white dark:bg-gray-800 rounded-2xl py-3 pl-12 pr-4 shadow-sm border-none focus:ring-2 focus:ring-blue-500 transition-all">
+
+                <!-- Search Suggestions Dropdown -->
+                <div x-show="showSuggestions && friendsSearchQuery.length >= 2 && filteredFriendsList.length > 0" 
+                     class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[60] animate-fadeIn" x-cloak>
+                    <div class="p-2 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                        <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Suggestions</p>
+                    </div>
+                    <template x-for="friend in filteredFriendsList.slice(0, 5)" :key="friend.id">
+                        <div @click="openUserProfile(friend.id); showSuggestions = false; friendsSearchQuery = ''" 
+                             class="flex items-center p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors border-b last:border-0 dark:border-gray-700">
+                            <img :src="friend.avatar" class="w-8 h-8 rounded-full object-cover mr-3 border dark:border-gray-700">
+                            <span class="text-sm font-bold text-gray-700 dark:text-gray-200" x-html="highlight(friend.name, friendsSearchQuery)"></span>
+                        </div>
+                    </template>
+                </div>
             </div>
             <button @click="openCamera('scan')" class="p-3.5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-90 transition-transform">
                 <i class="fa-solid fa-qrcode"></i>
             </button>
         </div>
-
-            <!-- Search Suggestions Dropdown -->
-            <div x-show="showSuggestions && friendsSearchQuery.length >= 2 && filteredFriendsList.length > 0" 
-                 class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border dark:border-gray-700 overflow-hidden z-[60] animate-fadeIn" x-cloak>
-                <div class="p-2 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
-                    <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest px-2">Suggestions</p>
-                </div>
-                <template x-for="friend in filteredFriendsList.slice(0, 5)" :key="friend.id">
-                    <div @click="friendsSearchQuery = friend.name; showSuggestions = false" 
-                         class="flex items-center p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors border-b last:border-0 dark:border-gray-700">
-                        <i class="fa-solid fa-magnifying-glass text-gray-300 mr-3 text-xs"></i>
-                        <span class="text-sm font-bold text-gray-700 dark:text-gray-200" x-html="highlight(friend.name, friendsSearchQuery)"></span>
-                    </div>
-                </template>
-            </div>
-
         <!-- "Did you mean" Hint -->
         <div x-show="didYouMeanFriend" x-transition x-cloak class="px-2 py-1">
             <p class="text-xs text-gray-500 font-medium">
@@ -3519,7 +3507,7 @@
                       :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
         </div>
         <div class="flex justify-end px-2 py-1">
-            <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="newPostContent.length + ' / 1000'"></span>
+            <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="(1000 - newPostContent.length) + ' characters remaining'"></span>
         </div>
         
         <!-- Post Background Color Picker -->
@@ -3804,7 +3792,7 @@
 
                             <div x-show="profileTab === 'media'" class="grid grid-cols-3 gap-1">
                                 <template x-for="reel in viewingUser?.reels" :key="reel.id">
-                                    <div @click="selectedReel = reel; showReelOptions = true; showUserProfile = false; activeTab = 'reels'" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer">
+                                    <div @click="openReelFromProfile(reel)" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer">
                                         <video :src="reel.media" class="w-full h-full object-cover"></video>
                                         <div class="absolute bottom-1 left-1 flex items-center space-x-1 text-white text-[10px] font-bold bg-black/40 px-1.5 py-0.5 rounded backdrop-blur-sm">
                                             <i class="fa-solid fa-play text-[8px]"></i>

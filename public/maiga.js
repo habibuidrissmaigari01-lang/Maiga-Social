@@ -1506,6 +1506,9 @@ const initMaiga = () => {
             const deltaX = touchX - this.touchStartX;
             const deltaY = touchY - this.pullStartY;
 
+            // Prevent tab swiping if interacting with horizontal scroll areas (like stories)
+            if (e.target.closest('[data-no-swipe]') || e.target.closest('.no-scrollbar') || e.target.closest('.overflow-x-auto')) return;
+
             // Gesture Tab Navigation (Horizontal Swipe)
             // Only trigger if horizontal movement is significantly greater than vertical
             if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && Math.abs(deltaX) > 40) {
@@ -1898,6 +1901,7 @@ const initMaiga = () => {
                     chatInList.lastMsgId = data.id;
                     chatInList.lastMsgByMe = false;
                     chatInList.lastMsgIsRead = false;
+                    chatInList.lastMsgTimestamp = Date.now();
                     chatInList.time = 'Just now';
                     chatInList.lastMsgTimestamp = Date.now();
                     if (this.activeChat?.id.toString() !== chatId) {
@@ -2500,6 +2504,18 @@ const initMaiga = () => {
             this.viewingUser = null; // Show loading state
             this.showUserProfile = true;
             this.profileTab = 'posts'; // Reset tab to posts when opening a new profile
+            },
+        openReelFromProfile(reel) {
+            this.showUserProfile = false;
+            // Prepend the reel to the main reels feed if it's not already there
+            if (!this.reels.find(r => String(r.id) === String(reel.id))) {
+                this.reels.unshift({...reel, showHeart: false, liked: !!reel.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false});
+            }
+            this.activeTab = 'reels';
+            this.$nextTick(() => {
+                const el = this.$refs.reelsContainer.querySelector(`[data-reel-id="${reel.id}"]`);
+                if (el) el.scrollIntoView({ behavior: 'auto' });
+            });
 
             // Fetch full user profile from API
             this.apiFetch(`/api/get_profile?user_id=${userId}`)
@@ -3185,7 +3201,7 @@ const initMaiga = () => {
 
             this.apiFetch(url)
                 .then(async data => {
-                    if (!data) return;
+                    if (!data || !Array.isArray(data)) return;
                     const formattedMessages = await Promise.all(data.map(async m => {
                         let content = m.media || m.content;
                         let msgType = m.media_type || 'text';
@@ -3283,17 +3299,6 @@ const initMaiga = () => {
             }
             this.isSubmittingReport = false;
         },
-        async saveProfile() {
-            this.isSavingProfile = true;
-            try {
-                // Existing saveProfile logic
-            } finally {
-                this.isSavingProfile = false;
-            }
-        },
-        async createPost() {
-            // Existing createPost logic
-        },
         async reactToMessage(emoji) {
             const msg = this.selectedMessageForOptions;
             if (!msg) return;
@@ -3332,7 +3337,7 @@ const initMaiga = () => {
         },
         sendSticker(sticker) {
             this.recordStickerUse(sticker);
-            this.sendMessage(sticker, 'sticker');
+            this.sendMessage(null, 'sticker', sticker);
             this.showStickerPicker = false;
             this.isSendingMessage = false;
         },
@@ -5246,7 +5251,7 @@ const initMaiga = () => {
                 }
             });
             if (!this.viewingStory) return;
-            const currentIndex = owners.findIndex(o => o.user.name === this.viewingStory.user.name);
+            const currentIndex = owners.findIndex(o => String(o.user.id || o.user._id) === String(this.viewingStory.user.id || this.viewingStory.user._id));
             if (currentIndex !== -1 && currentIndex < owners.length - 1) {
                 const next = owners[currentIndex + 1];
                 this.viewStory(next.stories, next.user);
@@ -5362,8 +5367,19 @@ const initMaiga = () => {
         shareStoryAsPost() {
             const story = this.viewingStory.list[this.viewingStory.index];
             this.isCreatingPost = true;
-            this.newPostContent = 'Check out this story from @' + this.viewingStory.user.nickname + '!';
-            this.selectedMedia = story.media;
+            const mention = this.viewingStory.user.username || this.viewingStory.user.name;
+            this.newPostContent = story.content || `Check out this story from @${mention}!`;
+            
+            // Pre-fill media and fetch file for upload
+            if (story.media) {
+                this.selectedMedia = story.media;
+                fetch(story.media)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        this.postFile = new File([blob], `shared_story_${Date.now()}.jpg`, { type: blob.type });
+                    }).catch(() => {});
+            }
+            
             this.mediaType = story.type; // Fixed: user.nickname to user.name
             this.closeStory();
             this.showStoryShareOptions = false;

@@ -327,6 +327,15 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
 router.post('/send_message', isAuthenticated, upload.single('media'), async (req, res) => {
     const { receiver_id, group_id, content, media_type, reply_to_id } = req.body;
     
+    let targetReceiverId = receiver_id;
+    // Handle special case for 'support-admin'
+    if (receiver_id === 'support-admin') {
+        // Assuming there's a User with username 'support-admin' acting as the support agent
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetReceiverId = supportUser._id;
+    }
+    
     let mediaUrl = null;
     if (req.file) {
         // Organize R2 storage by media type
@@ -337,7 +346,7 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
 
     // Handle Disappearing Messages (24h)
     const user = await User.findById(req.session.userId);
-    const isDisappearing = user.disappearing_chats.some(c => c.chat_id.toString() === (receiver_id || group_id));
+    const isDisappearing = user.disappearing_chats.some(c => c.chat_id.toString() === (targetReceiverId || group_id));
     let expiryDate = null;
     if (isDisappearing) {
         expiryDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -345,7 +354,7 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
 
     const msg = new Message({
         sender: req.session.userId,
-        receiver: receiver_id || null,
+        receiver: targetReceiverId || null,
         group: group_id || null,
         content: content,
         media: mediaUrl,
@@ -573,6 +582,15 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
         const { chat_id, type } = req.query;
         const userId = req.session.userId;
         
+        let targetChatId = chat_id;
+        // Handle special case for 'support-admin'
+        if (chat_id === 'support-admin' && type === 'support') {
+            // Assuming there's a User with username 'support-admin' acting as the support agent
+            const supportUser = await User.findOne({ username: 'support-admin' });
+            if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+            targetChatId = supportUser._id;
+        }
+        
         const query = {
             ...(type === 'group' ? { group: chat_id } : { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] }),
             deleted_for: { $ne: userId }
@@ -612,6 +630,15 @@ router.post('/mark_messages_read', isAuthenticated, async (req, res) => {
     const { chat_id, type } = req.body;
     const userId = req.session.userId;
     const user = await User.findById(userId);
+
+    let targetChatId = chat_id;
+    // Handle special case for 'support-admin'
+    if (chat_id === 'support-admin' && type === 'support') {
+        // Assuming there's a User with username 'support-admin' acting as the support agent
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetChatId = supportUser._id;
+    }
 
     const filter = type === 'group' 
         ? { group: chat_id, 'read_by.user': { $ne: userId } }
