@@ -396,6 +396,7 @@ const initMaiga = () => {
         isUploadingPost: false,
         isUploadingStory: false,
         isUploadingReel: false,
+        isProcessingMetadata: false,
         editorTextFont: 'sans-serif',
         editorFonts: ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'Arial', 'Verdana', 'Times New Roman'],
         videoDuration: 0,
@@ -1368,6 +1369,7 @@ const initMaiga = () => {
         isReelsMuted: true,
         postAudioChunks: [],
         postRecordingTimer: null,
+        isProcessingMetadata: false,
         showWallpaperPicker: false,
         wallpaperTemplates: [],
         selectedWallpaper: null,
@@ -2464,7 +2466,6 @@ const initMaiga = () => {
                 }
 
                 this.updateUnreadCounts();
-                this.followingList = Array.isArray(connectionsData) ? connectionsData : [];
                 this.restoreScrollState();
 
                 this.loadCreatePostDraft();
@@ -3031,6 +3032,7 @@ const initMaiga = () => {
                             this.apiFetch('/api/get_reels').then(d => { if (d) this.reels = d; });
                             this.apiFetch(`/api/get_reels?user_id=${this.user.id.toString()}`).then(d => { if (Array.isArray(d)) this.myReels = d; });
                         } else {
+                        this.isProcessingMetadata = false;
                             this.activeTab = 'home';
                         }
                         this.apiFetch('/api/get_trending').then(d => { if (d) this.trendingTopics = d; });
@@ -3044,12 +3046,14 @@ const initMaiga = () => {
                 this.isUploadingPost = false;
                 this.isUploadingReel = false;
                 this.uploadProgress = 0;
+                this.isProcessingMetadata = false;
             };
 
             xhr.onerror = () => {
                 this.showToast('Error', 'Network error.', 'error');
                 this.isUploadingPost = false;
                 this.isUploadingReel = false;
+                this.isProcessingMetadata = false;
             };
 
             xhr.send(formData);
@@ -3307,26 +3311,15 @@ const initMaiga = () => {
             this.customWallpaperFile = null; // Clear custom file if a template is selected
         },
         handleCustomWallpaperUpload(event) {
-            // Fixed: handleCustomWallpaperUpload was missing
-            // This function handles custom wallpaper uploads
-            // It reads the selected file and sets it as the custom wallpaper
             const file = event.target.files[0];
             if (!file) return;
             
-            this.mediaPreviewType = type;
-            this.mediaPreviewFile = file;
-
-            if (type === 'image' || type === 'video') {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    this.mediaPreviewUrl = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            } else {
-                this.mediaPreviewUrl = 'file'; // Placeholder for non-visual files
-            }
-            this.customWallpaperFile = file;
-            this.selectedWallpaper = this.mediaPreviewUrl;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.selectedWallpaper = e.target.result;
+                this.customWallpaperFile = file;
+            };
+            reader.readAsDataURL(file);
             event.target.value = ''; // Clear input
         },
         applyWallpaper() {
@@ -3339,12 +3332,8 @@ const initMaiga = () => {
             this.showToast('Success', 'Chat wallpaper applied!', 'success');
         },
         loadSavedWallpaper() {
-            // Fixed: loadSavedWallpaper was missing
-            // This function loads the saved wallpaper and brightness from local storage
             this.selectedWallpaper = localStorage.getItem('maiga_chat_wallpaper') || 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png';
             this.wallpaperBrightness = parseInt(localStorage.getItem('maiga_chat_wallpaper_brightness') || '100', 10);
-            // Clear input so same file can be selected again
-            event.target.value = '';
         },
         closeMediaPreview() {
             this.mediaPreviewUrl = null;
