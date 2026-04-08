@@ -6,7 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const webpush = require('web-push');
 const { exec } = require('child_process');
-const { Upload } = require('@aws-sdk/lib-storage');
 const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
@@ -71,20 +70,14 @@ const uploadToR2 = async (file, folder) => {
             }
         }
 
-        const fileStream = fs.createReadStream(file.path);
-        const parallelUpload = new Upload({
-            client: s3Client,
-            params: {
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: key,
-                Body: fileStream,
-                ContentType: file.mimetype,
-            },
-            queueSize: 4,
-            partSize: 1024 * 1024 * 5,
-        });
+        const fileBuffer = fs.readFileSync(file.path);
+        await s3Client.send(new PutObjectCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Key: key,
+            Body: fileBuffer,
+            ContentType: file.mimetype,
+        }));
 
-        await parallelUpload.done();
         return `${BASE_PUBLIC_URL}/${key}`;
     } finally {
         // Always delete the temporary file from the server's disk after R2 upload completes or fails
@@ -417,7 +410,7 @@ router.post('/create_post', isAuthenticated, upload.array('media', 10), async (r
     res.json({ success: true, post: {
         id: populatedPost._id, user_id: populatedPost.user?._id, author: populatedPost.user?.full_name || 'Deleted User', avatar: populatedPost.user?.avatar,
         content: populatedPost.content, media: populatedPost.media, 
-        media_type: populatedPost.media_type || (req.file?.mimetype.startsWith('video') ? 'video' : 'image'),
+        media_type: populatedPost.media_type,
         time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null, 
         link_preview: populatedPost.link_preview, // Include link preview
         verified: populatedPost.user?.is_verified ?? false
