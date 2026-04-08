@@ -58,6 +58,7 @@ const initMaiga = () => {
             this.mainInit(); 
             this.$watch('appFontSize', (value) => localStorage.setItem('maiga_app_font_size', value));
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
+            this.loadSavedWallpaper();
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
             const savedRecents = localStorage.getItem('recent_stickers');
@@ -85,6 +86,7 @@ const initMaiga = () => {
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
+        customWallpaperFile: null,
         activeTab: (function() {
             if (!sessionStorage.getItem('maiga_session_initialized')) {
                 sessionStorage.setItem('maiga_session_initialized', 'true');
@@ -101,6 +103,7 @@ const initMaiga = () => {
         isRefreshing: false,
         isOffline: !navigator.onLine,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
+        compressionProgress: 0,
         supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
         pushPermission: Notification.permission || 'default',
         friendsPage: 1,
@@ -142,6 +145,18 @@ const initMaiga = () => {
         musicTracks: [],
         animatedStickers: [],
         mostActiveUsers: [],
+        wallpaperTemplates: [
+            'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png', // Default WhatsApp
+            'https://i.pinimg.com/originals/85/3c/69/853c696e174a169b50877a064082269a.jpg', // Dark geometric
+            'https://i.pinimg.com/originals/0b/4e/7a/0b4e7a7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Light abstract
+            'https://i.pinimg.com/originals/a8/1c/7e/a81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Minimalist white
+            'https://i.pinimg.com/originals/b8/1c/7e/b81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Blue gradient
+            'https://i.pinimg.com/originals/c8/1c/7e/c81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Green leaves
+            'https://i.pinimg.com/originals/d8/1c/7e/d81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Pink floral
+            'https://i.pinimg.com/originals/e8/1c/7e/e81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Purple nebula
+            'https://i.pinimg.com/originals/f8/1c/7e/f81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Yellow dots
+            'https://i.pinimg.com/originals/18/1c/7e/181c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg'  // Grey texture
+        ],
         loginSessions: [],
 
         // UI Controls
@@ -268,6 +283,14 @@ const initMaiga = () => {
             return Number(num).toLocaleString();
         },
         getMockData(url) { return null; },
+        getChatWallpaperStyle() {
+            let style = '';
+            if (this.selectedWallpaper) {
+                style += `background-image: url('${this.selectedWallpaper}');`;
+            }
+            style += `filter: brightness(${this.wallpaperBrightness}%);`;
+            return style;
+        },
 
         async apiFetch(url, options = {}) {
             if (options.method && options.method !== 'GET') {
@@ -275,7 +298,7 @@ const initMaiga = () => {
             }
             const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
             const maxRetries = options.retries ?? 2;
-            const timeout = options.timeout ?? 60000;
+            const timeout = options.timeout ?? 15000; // Reduced from 60s to 15s
 
             for (let i = 0; i <= maxRetries; i++) {
                 try {
@@ -578,6 +601,7 @@ const initMaiga = () => {
         cameraMode: 'photo', // '15s', '30s', '60s', 'photo'
         isCountdownActive: false,
         countdownValue: 3,
+        recordingTimeRemaining: 0,
         isCameraRecording: false,
         recordingProgress: 0,
         cameraRecorder: null,
@@ -1068,6 +1092,7 @@ const initMaiga = () => {
         startCameraRecording() {
             this.isCameraRecording = true;
             this.recordingProgress = 0;
+            this.recordingTimeRemaining = parseInt(this.cameraMode);
             this.cameraChunks = [];
             
             // Capture filtered stream from canvas
@@ -1135,6 +1160,7 @@ const initMaiga = () => {
             this.recordingTimer = setInterval(() => {
                 elapsed += 100;
                 this.recordingProgress = (elapsed / (duration * 1000)) * 100;
+                this.recordingTimeRemaining = Math.max(0, Math.ceil(duration - (elapsed / 1000)));
                 if (elapsed >= duration * 1000) this.stopCameraRecording();
             }, 100);
         },
@@ -1342,6 +1368,10 @@ const initMaiga = () => {
         isReelsMuted: true,
         postAudioChunks: [],
         postRecordingTimer: null,
+        showWallpaperPicker: false,
+        wallpaperTemplates: [],
+        selectedWallpaper: null,
+        wallpaperBrightness: 100,
         storyReplyAudioChunks: [],
         storyReplyRecordingTimer: null,
         hasInteractedWithVolume: false,
@@ -1353,6 +1383,8 @@ const initMaiga = () => {
         reelClickTimer: null,
         selectedMedia: null,
         mediaType: null,
+        postFileList: [],
+        selectedMediaList: [],
         newPostContent: '',
         homeSearchQuery: '',
         isSearchFocused: false,
@@ -1417,12 +1449,56 @@ const initMaiga = () => {
             this.startChatWithUser(friend);
         },
         deletePostMedia() {
-            if (this.selectedMedia && this.selectedMedia.startsWith('blob:')) URL.revokeObjectURL(this.selectedMedia);
+            this.selectedMediaList.forEach(url => { if (url.startsWith('blob:')) URL.revokeObjectURL(url); });
             this.selectedMedia = null;
             this.mediaType = null;
             this.postFile = null;
+            this.postFileList = [];
+            this.selectedMediaList = [];
             this.saveCreatePostDraft();
+        },
+        removeMediaFromList(idx) {
+            const url = this.selectedMediaList[idx];
+            if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            this.selectedMediaList.splice(idx, 1);
+            this.postFileList.splice(idx, 1);
+            if (this.selectedMediaList.length === 0) {
+                this.deletePostMedia();
+            } else {
+                this.postFile = this.postFileList[0];
+                this.selectedMedia = this.selectedMediaList[0];
+            }
+            this.saveCreatePostDraft();
+        },
+        compressImage(file, maxWidth = 1200, quality = 0.7) {
+            return new Promise((resolve) => {
+                this.compressionProgress = 0;
+                // Corrected path to match your project structure
+                const worker = new Worker('/routes/image-worker.js');
+                
+                worker.onmessage = (e) => {
+                    if (e.data.type === 'progress') {
+                        this.compressionProgress = e.data.value;
+                    } else if (e.data.type === 'result') {
+                        if (e.data.success) {
+                            resolve(e.data.blob);
+                        } else {
+                            console.error('Worker compression failed, falling back to original:', e.data.error);
+                            resolve(file);
+                        }
+                        worker.terminate();
+                        this.compressionProgress = 0;
+                    }
+                };
 
+                worker.onerror = (err) => {
+                    console.error('Worker error:', err);
+                    resolve(file);
+                    worker.terminate();
+                };
+
+                worker.postMessage({ file, maxWidth, quality });
+            });
         },
         isCallRecording: false,
         isRightSidebarCollapsed: false,
@@ -1454,6 +1530,7 @@ const initMaiga = () => {
         isSearchingChat: false,
         isSendingMessage: false,
         showCommentStickers: false,
+        showWallpaperPicker: false,
         chatSearchQuery: '',
         clearChatSearch() {
             this.chatSearchQuery = '';
@@ -1892,7 +1969,15 @@ const initMaiga = () => {
                 }
                 this.chatMessages[chatId].push(formattedMsg);
 
-                const chatInList = data.group_id 
+                // Auto-scroll to bottom if user is already at the bottom or near the bottom
+                this.$nextTick(() => {
+                    const container = document.getElementById('messageContainer');
+                    if (container && (container.scrollHeight - container.scrollTop <= container.clientHeight + 50 || data.sender_id.toString() === this.user.id.toString())) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                });
+
+                const chatInList = data.group_id
                     ? this.groups.find(g => g.id.toString() === chatId)
                     : this.chats.find(c => c.id.toString() === chatId);
                 if (chatInList) {
@@ -2309,6 +2394,10 @@ const initMaiga = () => {
                 if (newId && this.socket && this.socket.connected) {
                     this.socket.emit('join_room', newId);
                 }
+                // Load saved wallpaper settings for the user
+                if (newId) {
+                    this.loadSavedWallpaper();
+                }
                 if (newId) {
                     this.initPushNotifications();
                     // Fetch reels if already on profile page during load
@@ -2361,28 +2450,19 @@ const initMaiga = () => {
             this.editUser = { ...this.user };
             
             try {
-                // Batch critical initial data fetches for performance and reliability
-                const criticalDataFetch = Promise.all([
-                    this.apiFetch('/api/get_user').then(d => { incrementProgress(); return d; }),
-                    this.apiFetch('/api/get_posts?page=1').then(d => { incrementProgress(); return d; }),
-                    this.apiFetch('/api/get_chats').then(d => { incrementProgress(); return d; }),
-                    this.apiFetch('/api/get_groups').then(d => { incrementProgress(); return d; }),
-                    this.apiFetch('/api/get_connections?type=following').then(d => { incrementProgress(); return d; })
-                ]);
-
-                const [userData, postsData, chatsData, groupsData, connectionsData] = await criticalDataFetch;
-
-                if (userData && userData.id) {
-                    this.user = { ...this.user, ...userData };
+                // USE THE NEW BATCH ENDPOINT instead of 5 separate calls
+                const initData = await this.apiFetch('/api/get_init_data');
+                
+                if (initData) {
+                    this.user = { ...this.user, ...initData.user };
                     this.editUser = { ...this.user };
-                    this.privacySettings = userData.privacy_settings || this.privacySettings;
-                    this.selectedLanguage = userData.language || this.selectedLanguage;
-                    this.recentlyUsedStickers = userData.recent_stickers || this.recentlyUsedStickers;
+                    this.posts = initData.posts;
+                    this.groups = initData.groups;
+                    this.notifications = initData.notifications;
+                    this.followingList = initData.following;
+                    this.loadProgress = 60; // Huge jump in progress
                 }
 
-                this.posts = Array.isArray(postsData) ? postsData : [];
-                this.chats = Array.isArray(chatsData) ? chatsData : [];
-                this.groups = Array.isArray(groupsData) ? groupsData : [];
                 this.updateUnreadCounts();
                 this.followingList = Array.isArray(connectionsData) ? connectionsData : [];
                 this.restoreScrollState();
@@ -2422,6 +2502,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_muted_chats').then(d => { if (Array.isArray(d)) this.mutedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_reels?page=1&limit=10').then(async d => { 
+                    // Fixed: reels were not being mapped with initial properties
                     this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver());
                     incrementProgress();
@@ -2787,17 +2868,69 @@ const initMaiga = () => {
                 }
             });
         },
-        handlePostMedia(event) {
-                const file = event.target.files[0];
-            if (!file) return;
-            this.postFile = file;
-            this.mediaType = file.type.startsWith('video') ? 'video' : 'image';
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                this.selectedMedia = e.target.result;
-                this.saveCreatePostDraft(); // Save after media is actually read and set
-            };
-            reader.readAsDataURL(file);
+        async handlePostMedia(event) {
+            const files = Array.from(event.target.files);
+            if (files.length === 0) return;
+
+            this.selectedMediaList.forEach(url => { if (url.startsWith('blob:')) URL.revokeObjectURL(url); });
+            this.postFileList = [];
+            this.selectedMediaList = [];
+
+            const hasVideo = files.some(f => f.type.startsWith('video'));
+            
+            if (hasVideo) {
+                const file = files.find(f => f.type.startsWith('video'));
+                
+                // Check file size (100MB limit)
+                if (file.size > 100 * 1024 * 1024) {
+                    this.showToast('Too Large', 'Video file exceeds 100MB limit.', 'error');
+                    event.target.value = '';
+                    return;
+                }
+
+                // Check duration (3 minutes / 180 seconds limit)
+                const duration = await new Promise((resolve) => {
+                    const video = document.createElement('video');
+                    video.preload = 'metadata';
+                    video.onloadedmetadata = () => {
+                        window.URL.revokeObjectURL(video.src);
+                        resolve(video.duration);
+                    };
+                    video.src = URL.createObjectURL(file);
+                });
+
+                if (duration > 180) {
+                    this.showToast('Too Long', 'Videos cannot exceed 3 minutes.', 'error');
+                    event.target.value = '';
+                    return;
+                }
+
+                this.mediaType = 'video';
+                this.postFile = file;
+                this.selectedMedia = URL.createObjectURL(file);
+                this.postFileList = [file];
+                this.selectedMediaList = [this.selectedMedia];
+            } else {
+                this.mediaType = 'image';
+                this.showToast('Processing', `Compressing ${files.length} image(s)...`, 'info');
+                for (const file of files) {
+                    try {
+                        const compressedBlob = await this.compressImage(file);
+                        const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+                        const url = URL.createObjectURL(compressedFile);
+                        this.postFileList.push(compressedFile);
+                        this.selectedMediaList.push(url);
+                    } catch (e) {
+                        const url = URL.createObjectURL(file);
+                        this.postFileList.push(file);
+                        this.selectedMediaList.push(url);
+                    }
+                }
+                this.postFile = this.postFileList[0];
+                this.selectedMedia = this.selectedMediaList[0];
+            }
+            this.saveCreatePostDraft();
+            event.target.value = '';
         },
         handleEditingGroupAvatarChange(event) {
             const file = event.target.files[0];
@@ -2845,8 +2978,12 @@ const initMaiga = () => {
             if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
             this.uploadProgress = 0;
 
-            // Use edited file if available, else original input
-            if (this.postFile) {
+            // Use list of files for multiple image support
+            if (this.postFileList.length > 0) {
+                this.postFileList.forEach(file => {
+                    formData.append('media', file);
+                });
+            } else if (this.postFile) {
                 formData.append('media', this.postFile);
             }
             if (this.editorMusic && this.editorSource === 'post') formData.append('music_track', this.editorMusic.src);
@@ -2858,6 +2995,7 @@ const initMaiga = () => {
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+                    if (this.uploadProgress >= 100) this.isProcessingMetadata = true;
                 }
             };
 
@@ -3161,6 +3299,50 @@ const initMaiga = () => {
             } else {
                 this.mediaPreviewUrl = 'file'; // Placeholder for non-visual files
             }
+            // Clear input so same file can be selected again
+            event.target.value = '';
+        },
+        selectWallpaper(url) {
+            this.selectedWallpaper = url;
+            this.customWallpaperFile = null; // Clear custom file if a template is selected
+        },
+        handleCustomWallpaperUpload(event) {
+            // Fixed: handleCustomWallpaperUpload was missing
+            // This function handles custom wallpaper uploads
+            // It reads the selected file and sets it as the custom wallpaper
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            this.mediaPreviewType = type;
+            this.mediaPreviewFile = file;
+
+            if (type === 'image' || type === 'video') {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.mediaPreviewUrl = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                this.mediaPreviewUrl = 'file'; // Placeholder for non-visual files
+            }
+            this.customWallpaperFile = file;
+            this.selectedWallpaper = this.mediaPreviewUrl;
+            event.target.value = ''; // Clear input
+        },
+        applyWallpaper() {
+            // Fixed: applyWallpaper was missing
+            // This function applies the selected wallpaper and brightness
+            // It saves the settings to local storage and updates the chat wallpaper
+            localStorage.setItem('maiga_chat_wallpaper', this.selectedWallpaper);
+            localStorage.setItem('maiga_chat_wallpaper_brightness', this.wallpaperBrightness);
+            this.showWallpaperPicker = false;
+            this.showToast('Success', 'Chat wallpaper applied!', 'success');
+        },
+        loadSavedWallpaper() {
+            // Fixed: loadSavedWallpaper was missing
+            // This function loads the saved wallpaper and brightness from local storage
+            this.selectedWallpaper = localStorage.getItem('maiga_chat_wallpaper') || 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png';
+            this.wallpaperBrightness = parseInt(localStorage.getItem('maiga_chat_wallpaper_brightness') || '100', 10);
             // Clear input so same file can be selected again
             event.target.value = '';
         },
@@ -4882,14 +5064,23 @@ const initMaiga = () => {
             const file = event.target.files[0];
             if (!file) return;
 
+            // Check file size
+            if (file.size > 100 * 1024 * 1024) {
+                this.showToast('Too Large', 'File exceeds 100MB limit.', 'error');
+                event.target.value = '';
+                return;
+            }
+
             if (file.type.startsWith('video')) {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     window.URL.revokeObjectURL(video.src);
-                    /* Requirement: Max Duration 30 Seconds */
-                    if (video.duration > 30) {
-                        alert('Video exceeds 30s limit. Trimming automatically to 30s.');
+                    /* Requirement: Max Duration 3 Minutes (180s) */
+                    if (video.duration > 180) {
+                        this.showToast('Too Long', 'Stories cannot exceed 3 minutes.', 'error');
+                        event.target.value = '';
+                        return;
                     }
                     /* Requirement: Resolution 720p (HD) */
                     if (Math.min(video.videoWidth, video.videoHeight) > 720) {
@@ -5185,6 +5376,7 @@ const initMaiga = () => {
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     this.uploadProgress = Math.round((e.loaded / e.total) * 100);
+                    if (this.uploadProgress >= 100) this.isProcessingMetadata = true;
                 }
             };
             xhr.onload = () => {
@@ -5860,8 +6052,8 @@ const initMaiga = () => {
                         img.src = url;
                         try {
                             await imgLoaded;
-                            // Use cover-style drawing to prevent black bars/stretching
-                            const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+                            // Use contain-style drawing to support landscape without auto-zoom
+                            const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
                             const x = (canvas.width / 2) - (img.width / 2) * scale;
                             const y = (canvas.height / 2) - (img.height / 2) * scale;
                             ctx.drawImage(img, x, y, img.width * scale, img.height * scale);

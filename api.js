@@ -7,13 +7,14 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Updated paths because routes were moved into the public folder
 const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Group, Story, Call, setIo } = require('./models'); 
+const { User, Message, Post, Group, Story, Call, s3Client, setIo } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -111,18 +112,33 @@ const cleanupExpiredStories = async () => {
 
 const cleanupExpiredMessages = async () => {
     try {
-        // Calculate 30 days ago
-        const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const expiredMessages = await Message.find({ createdAt: { $lt: oneMonthAgo } });
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         
-        if (expiredMessages.length > 0) {
-            for (const msg of expiredMessages) {
-                // Triggers the 'deleteOne' hook in models.js for R2 media removal
-                await Message.deleteOne({ _id: msg._id });
+        // Find messages that are either 30 days old OR have passed their specific expires_at date
+        const query = {
+            $or: [
+                { createdAt: { $lt: thirtyDaysAgo } },
+                { expires_at: { $lt: now } }
+            ]
+        };
+
+        // 1. Find those with media to clean up R2 first
+        const expiredWithMedia = await Message.find({ ...query, media: { $exists: true, $ne: null } });
+        
+        for (const msg of expiredWithMedia) {
+            if (msg.media && msg.media.startsWith('http')) {
+                try {
+                    const url = new URL(msg.media);
+                    const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                    await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }));
+                } catch (err) { }
             }
         }
-    } catch (err) {
-    }
+
+        // 2. Perform batch delete from Database
+        await Message.deleteMany(query);
+    } catch (err) { }
 };
 
 const cleanupExpiredPosts = async () => {

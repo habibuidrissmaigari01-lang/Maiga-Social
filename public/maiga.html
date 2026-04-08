@@ -693,7 +693,7 @@
             </div>
             
             <!-- Chat Search Bar -->
-            <div x-show="isSearchingChat" x-transition class="px-4 py-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b dark:border-gray-800">
+            <div x-show="isSearchingChat" x-transition class="px-4 py-2 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b dark:border-gray-800 z-10">
                 <div class="relative"> 
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
                     <input type="text" x-model="chatSearchQuery" @input.debounce.500ms="fetchMessages(activeChat)" placeholder="Search in conversation..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-2 pl-9 pr-10 text-sm focus:ring-1 focus:ring-blue-500">
@@ -711,14 +711,14 @@
             </div>
 
             <!-- Pinned Message Bar -->
-            <div x-show="activeChatPinnedMsg" class="bg-yellow-50 dark:bg-yellow-900/20 p-2 px-4 flex justify-between items-center border-b dark:border-gray-800 cursor-pointer" @click="scrollToMessage(activeChatPinnedMsg.id)">
+            <div x-show="activeChatPinnedMsg" class="bg-yellow-50 dark:bg-yellow-900/20 p-2 px-4 flex justify-between items-center border-b dark:border-gray-800 cursor-pointer z-10" @click="scrollToMessage(activeChatPinnedMsg.id)">
                 <div class="flex flex-col overflow-hidden">
                     <span class="text-[10px] font-bold text-yellow-600 uppercase flex items-center gap-1"><i class="fa-solid fa-thumbtack"></i> Pinned Message</span>
                     <span class="text-xs truncate text-gray-700 dark:text-gray-300" x-text="activeChatPinnedMsg?.content || 'Media message'"></span>
                 </div>
                 <button @click.stop="unpinMessage(activeChatPinnedMsg)" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            
+
             <!-- Starred Messages Bar -->
             <div x-show="starredMessagesInActiveChat.length > 0" class="bg-blue-50 dark:bg-blue-900/20 p-2 px-4 flex items-center border-b dark:border-gray-800 overflow-x-auto no-scrollbar gap-2">
                 <span class="text-[10px] font-black text-blue-600 uppercase flex-shrink-0"><i class="fa-solid fa-star"></i> Starred</span>
@@ -731,7 +731,7 @@
                 </div>
             </div>
             
-            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-wallpaper">
+            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-wallpaper" :style="getChatWallpaperStyle()">
                  <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
@@ -749,10 +749,10 @@
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="max-w-[85%] lg:max-w-[60%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm min-w-[3.5rem]' : 'chat-bubble-them shadow-sm min-w-[3.5rem]'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="w-fit max-w-[90%] sm:max-w-[85%] md:max-w-[75%] lg:max-w-[60%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :style="swipingMsgId === msg.id ? `transform: translateX(${swipeOffset}px); transition: ${swipeOffset === 0 ? 'transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'}` : ''" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me shadow-sm min-w-[3.5rem]' : 'chat-bubble-them shadow-sm min-w-[3.5rem]'), msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
-                                    <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 max-w-[85%] lg:max-w-[60%]" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
+                                    <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 w-full" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
                                         <p class="font-bold opacity-80" x-text="msg.replyTo.author"></p>
                                         <p class="truncate opacity-70" x-text="msg.replyTo.content"></p>
                                     </div>
@@ -795,7 +795,7 @@
             </div>
 
 
-            <!-- Media Options Panel -->
+            <!-- Chat Options Panel -->
             <div x-show="showChatOptions" x-cloak x-transition:enter="transition transform ease-out duration-200" x-transition:enter-start="translate-y-10 opacity-0" x-transition:leave="transition transform ease-in duration-150" x-transition:leave-end="translate-y-10 opacity-0" class="absolute bottom-20 left-4 right-4 bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border dark:border-gray-700 p-6 grid grid-cols-4 gap-6 z-[450]">
                 <button @click="$refs.imgInput.click(); showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-image text-purple-500 text-xl"></i></div><span class="text-[10px] font-bold">Gallery</span></button>
                 <button @click="$refs.videoInput.click(); showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-rose-100 dark:bg-rose-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-video text-rose-500 text-xl"></i></div><span class="text-[10px] font-bold">Camera</span></button>
@@ -867,6 +867,44 @@
             <input type="file" x-ref="videoInput" accept="video/*" class="hidden" @change="handleMediaSelect($event, 'video')">
             <input type="file" x-ref="fileInput" class="hidden" @change="handleMediaSelect($event, 'file')">
 
+            <!-- Wallpaper Picker Modal -->
+            <div x-show="showWallpaperPicker" x-cloak class="fixed inset-0 z-[950] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div @click.away="showWallpaperPicker = false" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn flex flex-col max-h-[80vh]">
+                    <h3 class="font-bold text-lg mb-4">Choose Chat Wallpaper</h3>
+                    <div class="grid grid-cols-3 gap-3 mb-4 overflow-y-auto">
+                        <template x-for="(template, index) in wallpaperTemplates" :key="index">
+                            <div @click="selectWallpaper(template)" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2" :class="selectedWallpaper === template ? 'border-blue-500' : 'border-transparent'">
+                                <img :src="template" class="w-full h-full object-cover">
+                                <div x-show="selectedWallpaper === template" class="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
+                                    <i class="fa-solid fa-check-circle text-2xl"></i>
+                                </div>
+                            </div>
+                        </template>
+                        <!-- Custom Upload -->
+                        <div @click="$refs.wallpaperUploadInput.click()" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <i class="fa-solid fa-plus text-gray-400 text-2xl"></i>
+                            <input type="file" x-ref="wallpaperUploadInput" class="hidden" accept="image/*" @change="handleCustomWallpaperUpload($event)">
+                            <img x-show="customWallpaperFile" :src="selectedWallpaper" class="absolute inset-0 w-full h-full object-cover">
+                        </div>
+                    </div>
+                    
+                    <!-- Brightness Control -->
+                    <div class="mb-4">
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Brightness</label>
+                        <div class="flex items-center space-x-3">
+                            <i class="fa-solid fa-sun text-gray-400"></i>
+                            <input type="range" min="0" max="200" x-model="wallpaperBrightness" class="w-full accent-blue-500">
+                            <i class="fa-solid fa-sun text-yellow-500"></i>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-3">
+                        <button @click="showWallpaperPicker = false" class="flex-1 py-2 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+                        <button @click="applyWallpaper()" class="flex-1 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700">Apply</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Reply Preview Banner -->
             <div x-show="replyingTo" x-transition class="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-800 flex justify-between items-center">
                 <div class="text-xs border-l-4 border-blue-500 pl-2">
@@ -875,7 +913,6 @@
                 </div>
                 <button @click="replyingTo = null" class="p-1 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
                 <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
@@ -1314,8 +1351,8 @@
                      @touchend.passive="handlePinchEnd($event)"
                      @touchcancel.passive="handlePinchEnd($event)"
                      @dblclick.stop.prevent="zoomScale = zoomScale > 1 ? 1 : 2; lastScale = zoomScale;">
-                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) !== 'video'"><img :src="viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
-                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) === 'video'"><video :src="viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) !== 'video'"><img :src="Array.isArray(viewingPost?.media) ? viewingPost.media[0] : viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) === 'video'"><video :src="Array.isArray(viewingPost?.media) ? viewingPost.media[0] : viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
                 </div>
             </template>
             <template x-if="user.is_admin && viewingPost?.author !== user.name">
@@ -2505,7 +2542,7 @@
                  <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content, post.link_preview)"></p>
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
-                        <template x-if="post.mediaType !== 'video'"><img :src="post.media" class="w-full h-auto object-cover"></template>
+                        <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-auto object-cover"></template>
                         <template x-if="post.mediaType === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
                     </div>
                 </template>
@@ -2731,7 +2768,7 @@
 
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
-                        <template x-if="post.media_type === 'image' || (!post.media_type && post.media)"><img :src="post.media" class="w-full h-auto object-cover"></template>
+                        <template x-if="post.media_type === 'image' || (!post.media_type && post.media)"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-auto object-cover"></template>
                         <template x-if="post.media_type === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
                         <template x-if="post.media_type === 'audio'">
                             <div class="flex items-center space-x-3 p-4 bg-blue-50 dark:bg-blue-900/20">
@@ -2996,7 +3033,7 @@
                             <template x-if="post.media">
                                 <div class="w-full h-full">
                                     <template x-if="post.mediaType === 'video'"><video :src="post.media" class="w-full h-full object-cover"></video></template>
-                                    <template x-if="post.mediaType !== 'video'"><img :src="post.media" class="w-full h-full object-cover"></template>
+                                    <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-full object-cover"></template>
                                 </div>
                             </template>
                             <template x-if="!post.media">
@@ -3478,8 +3515,15 @@
                 <div class="h-full bg-blue-600 transition-all duration-200 ease-out" :style="`width: ${uploadProgress}%`"></div>
             </div>
             <p class="text-gray-900 dark:text-white text-sm font-black mt-4 uppercase tracking-widest">
-                <span x-text="isUploadingReel ? 'Publishing Reel' : 'Uploading Post'"></span>
-                <span class="ml-2 text-blue-600" x-text="uploadProgress + '%'"></span>
+                <template x-if="!isProcessingMetadata">
+                    <span>
+                        <span x-text="isUploadingReel ? 'Publishing Reel' : 'Uploading Post'"></span>
+                        <span class="ml-2 text-blue-600" x-text="uploadProgress + '%'"></span>
+                    </span>
+                </template>
+                <template x-if="isProcessingMetadata">
+                    <span class="animate-pulse">Processing Metadata...</span>
+                </template>
             </p>
         </div>
         <div class="flex justify-between items-center mb-6 lg:cursor-move"
@@ -3518,27 +3562,39 @@
             </template>
         </div>
 
-        <template x-if="selectedMedia">
+        <template x-if="selectedMediaList.length > 0">
+            <div class="mt-4 mb-4 space-y-2">
+                <div class="flex gap-3 overflow-x-auto no-scrollbar pb-2 px-1">
+                    <template x-for="(media, idx) in selectedMediaList" :key="idx">
+                        <div class="relative flex-shrink-0 w-48 h-48 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-sm group">
+                            <button @click.stop="removeMediaFromList(idx)" class="absolute top-2 right-2 bg-red-500/80 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center z-20 shadow-lg backdrop-blur-sm transition-all"><i class="fa-solid fa-xmark text-xs"></i></button>
+                            <div class="absolute bottom-2 left-2 flex gap-1.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button @click.stop="postFile = postFileList[idx]; selectedMedia = selectedMediaList[idx]; openMediaEditor('post')" class="bg-black/60 hover:bg-black/80 text-white p-2 rounded-full flex items-center backdrop-blur-md border border-white/10"><i class="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
+                            </div>
+                            <template x-if="postFileList[idx]?.type.startsWith('image')"><img :src="media" class="w-full h-full object-cover"></template>
+                            <template x-if="postFileList[idx]?.type.startsWith('video')"><video :src="media" class="w-full h-full object-cover" autoplay muted loop></video></template>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex justify-between items-center px-2 py-1">
+                    <p class="text-[10px] font-black text-gray-400 uppercase tracking-[0.1em]"><span x-text="selectedMediaList.length"></span> Item(s) Selected</p>
+                    <button @click="deletePostMedia()" class="text-[10px] font-black text-red-500 uppercase hover:underline tracking-widest">Clear All</button>
+                </div>
+            </div>
+        </template>
+
+        <template x-if="mediaType === 'audio' && selectedMedia">
             <div class="relative mt-4 mb-4 rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 shadow-inner p-4">
                 <button @click="deletePostMedia()" class="absolute top-3 right-3 bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center z-20 shadow-lg"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                <template x-if="mediaType === 'audio'">
-                    <div class="flex items-center space-x-4 bg-white dark:bg-gray-700 p-4 rounded-xl">
-                        <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
-                            <i class="fa-solid fa-microphone-lines text-xl"></i>
-                        </div>
-                        <div class="flex-1">
-                            <p class="text-xs font-black uppercase text-gray-400">Voice Note Draft</p>
-                            <audio :src="selectedMedia" controls class="h-8 w-full mt-1"></audio>
-                        </div>
+                <div class="flex items-center space-x-4 bg-white dark:bg-gray-700 p-4 rounded-xl">
+                    <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
+                        <i class="fa-solid fa-microphone-lines text-xl"></i>
                     </div>
-                </template>
-                <div class="absolute top-3 left-3 flex gap-2 z-10">
-                    <button @click="openMediaEditor('post')" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-wand-magic-sparkles"></i> <span>Edit</span></button>
-                    <button @click="shareFile()" class="bg-black/60 text-white px-3 py-1.5 rounded-full flex items-center space-x-2 backdrop-blur-md font-bold text-xs"><i class="fa-solid fa-download"></i> <span>Save</span></button>
+                    <div class="flex-1">
+                        <p class="text-xs font-black uppercase text-gray-400">Voice Note Draft</p>
+                        <audio :src="selectedMedia" controls class="h-8 w-full mt-1"></audio>
+                    </div>
                 </div>
-                <template x-if="mediaType === 'image'"><img :src="selectedMedia" class="w-full max-h-60 object-cover"></template>
-                <template x-if="mediaType === 'image'"><img :src="selectedMedia" class="w-full max-h-60 object-cover"></template>
-                <template x-if="mediaType === 'video'"><video :src="selectedMedia" class="w-full max-h-60" autoplay muted loop></video></template>
             </div>
         </template>
 
@@ -3554,7 +3610,7 @@
                 </div>
             </div>
 
-            <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia">
+            <input type="file" x-ref="postMedia" class="hidden" accept="image/*,video/*" @change="handlePostMedia" multiple>
             <button @click="openCamera('post')" :disabled="isUploadingPost || isUploadingReel" class="text-rose-500 flex items-center space-x-2"><i class="fa-solid fa-camera text-xl"></i><span class="text-xs font-black">Camera</span></button>
             <div class="relative">
                 <select x-model="newPostFeeling" class="appearance-none bg-transparent border-none text-orange-500 text-xs font-black focus:ring-0 cursor-pointer">
@@ -3673,6 +3729,12 @@
 
                 <!-- Bottom Interface -->
                 <div x-show="!isScanning" class="absolute bottom-0 left-0 right-0 pb-12 pt-20 flex flex-col items-center bg-gradient-to-t from-black/90 to-transparent z-50">
+                    <!-- Time Remaining Badge -->
+                    <div x-show="isCameraRecording" x-transition class="mb-4 bg-red-600 text-white px-4 py-1.5 rounded-full font-black text-sm shadow-lg flex items-center gap-2 animate-pulse">
+                        <div class="w-2 h-2 bg-white rounded-full"></div>
+                        <span x-text="formatRecordingTime(recordingTimeRemaining)"></span>
+                    </div>
+
                     <!-- Mode Selector Carousel -->
                     <div class="flex gap-6 mb-8 items-center justify-center w-full">
                         <template x-for="mode in ['photo', '15s', '30s', '60s']">

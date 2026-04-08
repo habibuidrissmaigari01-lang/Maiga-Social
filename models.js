@@ -140,7 +140,7 @@ userSchema.index({ blocked: 1, email: 1 });    // For admin search
 const postSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     content: String,
-    media: String,
+    media: [String],
     media_type: String,
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     saved_by: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -155,7 +155,8 @@ const postSchema = new mongoose.Schema({
         title: String,
         description: String,
         image: String
-    }
+    },
+    shared_post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' }
 }, schemaOptions);
 
 // Performance: Indexes for feed filtering and Reels
@@ -170,18 +171,23 @@ postSchema.index({ createdAt: -1, user: 1 }); // Optimized index for 'most activ
 // Intercepts deleteOne operations to remove media from Cloudflare R2
 postSchema.pre('deleteOne', { document: false, query: true }, async function() {
     const doc = await this.model.findOne(this.getQuery());
-    if (doc && doc.media && doc.media.startsWith('http')) {
-        try {
-            // Extract key from URL (e.g., "posts/12345-image.jpg")
-            const url = new URL(doc.media);
-            const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-            
-            await s3Client.send(new DeleteObjectCommand({
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: key
-            }));
-        } catch (error) {
-            // Cleanup failed
+    if (doc && doc.media) {
+        const mediaArray = Array.isArray(doc.media) ? doc.media : [doc.media];
+        for (const m of mediaArray) {
+            if (m && m.startsWith('http')) {
+                try {
+                    // Extract key from URL (e.g., "posts/12345-image.jpg")
+                    const url = new URL(m);
+                    const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                    
+                    await s3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_BUCKET_NAME,
+                        Key: key
+                    }));
+                } catch (error) {
+                    // Cleanup failed
+                }
+            }
         }
     }
 });
@@ -237,7 +243,7 @@ const messageSchema = new mongoose.Schema({
     media_type: { type: String, default: 'text' },
     is_delivered: { type: Boolean, default: false },
     delivered_at: Date,
-    expires_at: { type: Date, index: { expires: 0 } }, // TTL Index: Deletes doc when this time is reached
+    expires_at: { type: Date }, // Removed TTL index to prevent R2 orphans; cleanup is now handled by the api.js task
     is_read: { type: Boolean, default: false },
     read_by: [{ 
         user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -399,7 +405,7 @@ groupSchema.index({ 'members.user': 1 });
 
 const storySchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    media: String,
+    media: [String],
     type: String,
     views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -431,7 +437,11 @@ storySchema.pre('deleteOne', { document: false, query: true }, async function() 
 
 const baseNotificationSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    is_read: { type: Boolean, default: false }
+    is_read: { type: Boolean, default: false },
+    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
+    story: { type: mongoose.Schema.Types.ObjectId, ref: 'Story' },
+    others_count: { type: Number, default: 0 }
 }, { 
     discriminatorKey: 'type', // This field determines which sub-schema to use
     timestamps: { createdAt: 'created_at', updatedAt: false },
@@ -493,35 +503,23 @@ const Notification = mongoose.model('Notification', baseNotificationSchema);
 
 // Discriminator for 'Like' notifications
 Notification.discriminator('like', new mongoose.Schema({
-    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    others_count: { type: Number, default: 0 }
 }));
 
 // Discriminator for 'Follow' notifications
 Notification.discriminator('follow', new mongoose.Schema({
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }));
 
 // Discriminator for 'Post' notifications (for new posts/stories)
 Notification.discriminator('post', new mongoose.Schema({
-    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
-    story: { type: mongoose.Schema.Types.ObjectId, ref: 'Story' },
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }));
 
 // Discriminator for 'Mention' notifications
 Notification.discriminator('mention', new mongoose.Schema({
-    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment' } // Optional: mention in a comment
 }));
 
 // Discriminator for 'Comment' notifications
 Notification.discriminator('comment', new mongoose.Schema({
-    post: { type: mongoose.Schema.Types.ObjectId, ref: 'Post', required: true },
-    trigger_user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    others_count: { type: Number, default: 0 }
 }));
 
 // Discriminator for 'System' notifications (just text)

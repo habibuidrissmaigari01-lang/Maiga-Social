@@ -3,7 +3,10 @@ const mongoose = require('mongoose');
 const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
+const path = require('path');
 const webpush = require('web-push');
+const { exec } = require('child_process');
+const { Upload } = require('@aws-sdk/lib-storage');
 const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
@@ -15,20 +18,78 @@ if (publicVapidKey && privateVapidKey) {
     webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
 }
 
-const upload = multer({ storage: multer.memoryStorage() });
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(__dirname, '../../uploads');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '_'));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 100 * 1024 * 1024 } // Limit individual files to 100MB
+});
 
 // Robust URL handling: ensure the base URL has no trailing slash
 const BASE_PUBLIC_URL = process.env.R2_PUBLIC_URL?.replace(/\/+$/, '');
 
+// Helper: Get Video Duration using ffprobe
+const getVideoDuration = (filePath) => {
+    return new Promise((resolve, reject) => {
+        // Check if ffprobe exists by running 'ffprobe -version'
+        exec('ffprobe -version', (versionErr) => {
+            if (versionErr) {
+                console.warn('FFmpeg/ffprobe not found on system. Skipping duration check.');
+                return resolve(null);
+            }
+
+            exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, (err, stdout) => {
+                if (err) return resolve(null);
+            resolve(parseFloat(stdout));
+        });
+        });
+    });
+};
+
 const uploadToR2 = async (file, folder) => {
     const key = `${folder}/${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
-    await s3Client.send(new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME,
-        Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-    }));
-    return `${BASE_PUBLIC_URL}/${key}`;
+
+    try {
+        // SECURITY: Check video duration if the file is a video
+        if (file.mimetype.startsWith('video')) {
+            try {
+                const duration = await getVideoDuration(file.path);
+                if (duration !== null && duration > 180) { // Only throw if duration was actually retrieved
+                    throw new Error('Video duration exceeds the 3-minute limit.');
+                }
+            } catch (err) {
+                throw new Error(err.message || 'Failed to verify video duration.');
+            }
+        }
+
+        const fileStream = fs.createReadStream(file.path);
+        const parallelUpload = new Upload({
+            client: s3Client,
+            params: {
+                Bucket: process.env.R2_BUCKET_NAME,
+                Key: key,
+                Body: fileStream,
+                ContentType: file.mimetype,
+            },
+            queueSize: 4,
+            partSize: 1024 * 1024 * 5,
+        });
+
+        await parallelUpload.done();
+        return `${BASE_PUBLIC_URL}/${key}`;
+    } finally {
+        // Always delete the temporary file from the server's disk after R2 upload completes or fails
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    }
 };
 
 // Backend Helper: Check if a file actually exists in the R2 bucket
@@ -107,6 +168,39 @@ const isAdmin = async (req, res, next) => {
 
 // --- Routes ---
 
+router.get('/get_init_data', isAuthenticated, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        
+        // Fetch all critical data in parallel on the server
+        const [user, posts, chats, groups, connections, trending, notifications] = await Promise.all([
+            User.findById(userId),
+            Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
+            Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online'),
+            Group.find({ 'members.user': userId }),
+            User.findById(userId).populate('following', 'name avatar username online dept'),
+            Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
+            Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10)
+        ]);
+
+        res.json({
+            user: {
+                id: user._id, name: user.name, username: user.username, 
+                avatar: user.avatar, dept: user.dept, bio: user.bio,
+                is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
+            },
+            posts: posts.map(p => ({ id: p._id, author: p.user?.full_name, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
+            chats: [], // Map your chat logic here
+            groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
+            following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
+            trending: [], // Map trending logic here
+            notifications: notifications
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to aggregate data' });
+    }
+});
+
 router.get('/get_user', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId);
     const postsCount = await Post.countDocuments({ user: user._id });
@@ -178,6 +272,7 @@ router.post('/update_recent_stickers', isAuthenticated, async (req, res) => {
 
 router.post('/submit_support_ticket', isAuthenticated, async (req, res) => {
     try {
+        const user = await User.findById(req.session.userId);
         const report = new Report({
             reporter: req.session.userId,
             reason: 'Support Ticket: ' + req.body.title,
@@ -213,7 +308,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         
         // Populate 'user' and include fields needed for the 'full_name' virtual
         let posts = await Post.find(query)
-            .populate('user', 'name first_name surname avatar is_verified')
+            .populate('user', 'name first_name surname avatar is_verified').populate({ path: 'shared_post', populate: { path: 'user', select: 'name avatar' } })
             .sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
 
         // Randomize the current batch and interleave to prevent consecutive posts from the same author
@@ -277,19 +372,25 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/create_post', isAuthenticated, upload.single('media'), async (req, res) => {
-    let mediaUrl = null;
-    if (req.file) {
-        const folder = req.file.mimetype.startsWith('video') ? 'reels' : 
-                      (req.file.mimetype.startsWith('audio') ? 'voice_notes' : 'posts');
-        mediaUrl = await uploadToR2(req.file, folder);
+router.post('/create_post', isAuthenticated, upload.array('media', 10), async (req, res) => {
+    let mediaUrls = [];
+    let firstMime = null;
+    if (req.files && req.files.length > 0) {
+        for (const file of req.files) {
+            const folder = file.mimetype.startsWith('video') ? 'reels' : 
+                          (file.mimetype.startsWith('audio') ? 'voice_notes' : 'posts');
+            const url = await uploadToR2(file, folder);
+            mediaUrls.push(url);
+            if (!firstMime) firstMime = file.mimetype;
+        }
     }
+
     const post = new Post({
         user: req.session.userId,
         content: req.body.content,
-        media: mediaUrl,
-        media_type: req.file ? (req.file.mimetype.startsWith('video') ? 'video' : 
-                               (req.file.mimetype.startsWith('audio') ? 'audio' : 'image')) : null,
+        media: mediaUrls,
+        media_type: firstMime ? (firstMime.startsWith('video') ? 'video' : 
+                                (firstMime.startsWith('audio') ? 'audio' : 'image')) : null,
         feeling: req.body.feeling,
     });
 
@@ -319,7 +420,6 @@ router.post('/create_post', isAuthenticated, upload.single('media'), async (req,
         media_type: populatedPost.media_type || (req.file?.mimetype.startsWith('video') ? 'video' : 'image'),
         time: formatTime(populatedPost.createdAt), likes: 0, comments: 0, views: 0, saved: false, myReaction: null, 
         link_preview: populatedPost.link_preview, // Include link preview
-        user_id: populatedPost.user?._id, // Ensure user_id is returned for reels to correctly filter in profile
         verified: populatedPost.user?.is_verified ?? false
     }});
 });
@@ -832,7 +932,7 @@ router.post('/share_post', isAuthenticated, async (req, res) => {
         content: originalPost.content, // Or add custom share text
         media: originalPost.media,
         media_type: originalPost.media_type,
-        original_post: originalPost._id // Reference to the original post
+        shared_post: originalPost._id // Reference to the original post
     });
     await newPost.save();
 
@@ -1203,7 +1303,6 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
             saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
             myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
-            user_id: r.user?._id, // Ensure user_id is returned for reels to correctly filter in profile
             seen: r.viewed_by.some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
