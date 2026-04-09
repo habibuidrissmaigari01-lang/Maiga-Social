@@ -41,15 +41,11 @@
       }
     }
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
-    </script>
+    <!-- Preload self-hosted font to prevent layout shift -->
+    <link rel="preload" href="fonts/inter-roman.var.woff2" as="font" type="font/woff2" crossorigin>
+    <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
         // Initial theme sync to prevent flicker
         if (localStorage.getItem('darkMode') === 'true' || 

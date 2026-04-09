@@ -172,6 +172,7 @@ const initMaiga = () => {
         hasFlashlight: false,
         isConfirmingCapture: false,
         showCameraFlash: false,
+        focusRing: { show: false, x: 0, y: 0 },
         isReporting: false,
         isCreatingPost: false,
         isCreatingStory: false,
@@ -712,6 +713,7 @@ const initMaiga = () => {
             this.isCameraOpen = true;
             this.isCreatingPost = false;
             this.isCreatingStory = false;
+            this.focusRing.show = false;
             this.isScanning = (source === 'scan');
 
             // Auto-switch to back camera for scanning
@@ -767,6 +769,10 @@ const initMaiga = () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     canvas.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+                    if (this.isScanning) {
+                        const boxSize = Math.min(canvas.width, canvas.height) * 0.7;
+                        this.scanLinePosition = (canvas.height - boxSize) / 2;
+                    }
                     this.startCanvasLoop();
 
                     // Detect flashlight capability
@@ -825,7 +831,7 @@ const initMaiga = () => {
                 // Draw video frame first
                 ctx.save();
                 if (this.facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
-                ctx.filter = this.beautyFilter;
+                ctx.filter = this.isScanning ? 'none' : this.beautyFilter; // Accuracy: Use clean feed for QR detector
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 ctx.restore();
                 ctx.filter = 'none';
@@ -950,12 +956,22 @@ const initMaiga = () => {
                     this.drawARFilter(ctx);
                 }
 
-                // 3. QR Code Detection (Throttled to 1 second)
-                if (this.qrDetector && !this.isCameraRecording && Date.now() - lastQrScan > 1000) {
-                    lastQrScan = Date.now();
-                    const codes = await this.qrDetector.detect(canvas);
-                    if (codes.length > 0) {
-                        const raw = codes[0].rawValue;
+                // 3. QR Code Detection (Throttled to 200ms for faster response)
+                if (this.isScanning && !this.isCameraRecording && Date.now() - lastQrScan > 200) {
+                    lastQrScan = Date.now(); 
+                    let raw = null;
+
+                    if (this.qrDetector) {
+                        const codes = await this.qrDetector.detect(canvas);
+                        if (codes.length > 0) raw = codes[0].rawValue;
+                    } else if (window.jsQR) {
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+                        if (code) raw = code.data;
+                    }
+
+                    if (raw) {
+                        document.getElementById('scan-sound')?.play().catch(() => {}); // Play success sound
                         if (raw.includes('/user/')) {
                             // Sanitize username (handle trailing slashes or query params)
                             const username = raw.split('/user/')[1].split('/')[0].split('?')[0];
@@ -983,18 +999,100 @@ const initMaiga = () => {
                     } else { faceStayCount = 0; }
                 }
 
-                // 5. Scanning Line Animation
+                // 5. Scanning Interface Overlay
                 if (this.isScanning) {
-                    ctx.fillStyle = 'rgba(0, 255, 0, 0.5)'; // Green scanning line
-                    ctx.fillRect(0, this.scanLinePosition, canvas.width, 5); // 5px thick line
+                    const boxSize = Math.min(canvas.width, canvas.height) * 0.7;
+                    const boxX = (canvas.width - boxSize) / 2;
+                    const boxY = (canvas.height - boxSize) / 2;
+
+                    // Dim the outside area
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    ctx.fillRect(0, 0, canvas.width, boxY); // Top
+                    ctx.fillRect(0, boxY + boxSize, canvas.width, canvas.height - (boxY + boxSize)); // Bottom
+                    ctx.fillRect(0, boxY, boxX, boxSize); // Left
+                    ctx.fillRect(boxX + boxSize, boxY, canvas.width - (boxX + boxSize), boxSize); // Right
+
+                    // Draw Blue Bounding Box Corners
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 4;
+                    const len = 30;
+                    ctx.beginPath();
+                    ctx.moveTo(boxX, boxY + len); ctx.lineTo(boxX, boxY); ctx.lineTo(boxX + len, boxY); // TL
+                    ctx.moveTo(boxX + boxSize - len, boxY); ctx.lineTo(boxX + boxSize, boxY); ctx.lineTo(boxX + boxSize, boxY + len); // TR
+                    ctx.moveTo(boxX, boxY + boxSize - len); ctx.lineTo(boxX, boxY + boxSize); ctx.lineTo(boxX + len, boxY + boxSize); // BL
+                    ctx.moveTo(boxX + boxSize - len, boxY + boxSize); ctx.lineTo(boxX + boxSize, boxY + boxSize); ctx.lineTo(boxX + boxSize, boxY + boxSize - len); // BR
+                    ctx.stroke();
+
+                    // Restrict Scanning Line to within the box
+                    ctx.fillStyle = 'rgba(59, 130, 246, 0.5)';
+                    ctx.fillRect(boxX, this.scanLinePosition, boxSize, 2);
                     this.scanLinePosition += this.scanLineSpeed * this.scanLineDirection;
-                    if (this.scanLinePosition >= canvas.height || this.scanLinePosition <= 0) {
+                    if (this.scanLinePosition >= boxY + boxSize || this.scanLinePosition <= boxY) {
                         this.scanLineDirection *= -1; // Reverse direction
                     }
                 }
                 requestAnimationFrame(render);
             };
             requestAnimationFrame(render);
+        },
+
+        triggerFocus(e) {
+            if (!this.isCameraOpen || this.isConfirmingCapture) return;
+            
+            // 1. Calculate relative position
+            const rect = this.$refs.cameraCanvas.getBoundingClientRect();
+            this.focusRing.x = e.clientX - rect.left;
+            this.focusRing.y = e.clientY - rect.top;
+            this.focusRing.show = true;
+
+            // 2. Hardware focus attempt (Limited browser support for advanced constraints)
+            if (this.cameraStream) {
+                const track = this.cameraStream.getVideoTracks()[0];
+                if (track && track.applyConstraints) {
+                    track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+                }
+            }
+
+            // 3. Auto-hide focus ring
+            clearTimeout(this.focusTimer);
+            this.focusTimer = setTimeout(() => { this.focusRing.show = false; }, 800);
+        },
+
+        async handleGalleryQr(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            this.showToast('Scanning', 'Reading image from gallery...', 'info');
+
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+            await new Promise(resolve => img.onload = resolve);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            let raw = null;
+            if (this.qrDetector) {
+                const codes = await this.qrDetector.detect(canvas);
+                if (codes.length > 0) raw = codes[0].rawValue;
+            } else if (window.jsQR) {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                if (code) raw = code.data;
+            }
+
+            if (raw && raw.includes('/user/')) {
+                const username = raw.split('/user/')[1].split('/')[0].split('?')[0];
+                this.closeCamera();
+                this.openUserProfileByName(username);
+                document.getElementById('scan-sound')?.play().catch(() => {});
+            } else {
+                this.showToast('No Code Found', 'Could not detect a valid profile QR in this image.', 'error');
+            }
+            URL.revokeObjectURL(img.src);
+            e.target.value = '';
         },
 
         drawARFilter(ctx) {
@@ -2586,18 +2684,6 @@ const initMaiga = () => {
             this.viewingUser = null; // Show loading state
             this.showUserProfile = true;
             this.profileTab = 'posts'; // Reset tab to posts when opening a new profile
-            },
-        openReelFromProfile(reel) {
-            this.showUserProfile = false;
-            // Prepend the reel to the main reels feed if it's not already there
-            if (!this.reels.find(r => String(r.id) === String(reel.id))) {
-                this.reels.unshift({...reel, showHeart: false, liked: !!reel.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false});
-            }
-            this.activeTab = 'reels';
-            this.$nextTick(() => {
-                const el = this.$refs.reelsContainer.querySelector(`[data-reel-id="${reel.id}"]`);
-                if (el) el.scrollIntoView({ behavior: 'auto' });
-            });
 
             // Fetch full user profile from API
             this.apiFetch(`/api/get_profile?user_id=${userId}`)
@@ -2632,6 +2718,18 @@ const initMaiga = () => {
                     this.showUserProfile = false;
                     this.showToast('Error', 'Network error loading profile.', 'error');
                 });
+            },
+        openReelFromProfile(reel) {
+            this.showUserProfile = false;
+            // Prepend the reel to the main reels feed if it's not already there
+            if (!this.reels.find(r => String(r.id) === String(reel.id))) {
+                this.reels.unshift({...reel, showHeart: false, liked: !!reel.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false});
+            }
+            this.activeTab = 'reels';
+            this.$nextTick(() => {
+                const el = this.$refs.reelsContainer.querySelector(`[data-reel-id="${reel.id}"]`);
+                if (el) el.scrollIntoView({ behavior: 'auto' });
+            });
         },
         async loadMoreProfilePosts() {
             if (!this.viewingUser || this.viewingUser.isLoadingMoreProfilePosts || !this.viewingUser.hasMorePosts) {

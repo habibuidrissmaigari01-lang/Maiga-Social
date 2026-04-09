@@ -42,16 +42,11 @@
       }
     }
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
-    </script>
+     <!-- Preload self-hosted font to prevent layout shift -->
+    <link rel="preload" href="fonts/inter-roman.var.woff2" as="font" type="font/woff2" crossorigin>
+    <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-maiga.json">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script>
+      <script>
         // Initial theme sync to prevent flicker
         if (localStorage.getItem('darkMode') === 'true' || 
            (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -61,139 +56,11 @@
         }
     </script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow-x: hidden;
-            margin: 0;
-            padding: 20px;
-            transition: background-color 0.3s, color 0.3s;
-        }
-        .background-container {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            z-index: -1;
-            background-image: url('img/logo.png'), url('img/logo.png'), url('img/logo.png'), url('img/logo.png'), url('img/logo.png'), url('img/logo.png');
-            background-position: left top, right top, left center, right center, left bottom, right bottom;
-            background-size: 50% 33.34%;
-            background-repeat: no-repeat;
-        }
-        @media (min-width: 768px) {
-            .background-container {
-                background-image: url('img/logo.png'), url('img/logo.png');
-                background-position: left, right;
-                background-size: 50% 100%;
-            }
-        }
-
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 24px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
-            width: 100%;
-            max-width: 450px;
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-        }
-
         .dark body { background-color: #000000 !important; color: #ffffff !important; }
-        .dark .glass-card { background: rgba(0, 0, 0, 0.95) !important; border: 1px solid #262626 !important; }
-        .dark input, .dark select { background-color: #000000 !important; color: #ffffff !important; border-color: #262626 !important; }
-        .dark .glass-card h1, .dark .glass-card h2 { color: #fff !important; }
-        .dark .glass-card p { color: #cbd5e1 !important; }
-        .dark .bg-white { background-color: #000000 !important; }
-        .dark .text-gray-500, .dark .text-gray-600 { color: #a1a1aa !important; }
-        .dark .border-gray-100, .dark .border-gray-200 { border-color: #262626 !important; }
-
-        .step-content {
-            display: none;
-            animation: slideIn 0.4s ease-out;
-        }
-
-        .step-content.active {
-            display: block;
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        .input-group input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 12px;
-            outline: none;
-            transition: all 0.3s;
-        }
-
-        .input-group input:focus {
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 14px;
-            border-radius: 12px;
-            font-weight: 600;
-            width: 100%;
-            transition: transform 0.2s, opacity 0.2s;
-            cursor: pointer;
-        }
-
-        .btn-primary:active {
-            transform: scale(0.98);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .progress-bar {
-            height: 6px;
-            background: #edf2f7;
-            border-radius: 3px;
-            margin-bottom: 30px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: #667eea;
-            width: 0%;
-            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .strength-meter {
-            height: 4px;
-            border-radius: 2px;
-            background: #edf2f7;
-            margin-top: 8px;
-            overflow: hidden;
-        }
-
-        .strength-fill {
-            height: 100%;
-            width: 0;
-            transition: all 0.3s;
-        }
-
-        .find-account-link {
-            display: block;
-            text-align: center;
-            margin-top: 20px;
-            color: #718096;
-            font-size: 14px;
-            text-decoration: underline;
-        }
+    </style>
+    <!-- Load heavy icons asynchronously -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <style>
         body::before {
             content: "";
             position: absolute;
@@ -255,7 +122,7 @@
     <div class="background-container"></div>
     <div class="glass-card p-6 md:p-10" id="authCard">
         <div class="flex flex-col items-center justify-center mb-6">
-            <img src="img/logo.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
+           <img src="img/logo.png" width="64" height="64" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
             <h1 class="text-2xl font-black text-gray-800 italic">Maiga Social</h1>
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>

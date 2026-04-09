@@ -4,7 +4,7 @@
   "description": "The official social platform for YSU students.",
   "start_url": "/ysu.html",
   "scope": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#008000",
   "icons": [

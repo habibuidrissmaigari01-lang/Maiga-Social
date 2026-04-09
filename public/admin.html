@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maiga Social - Admin Panel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link href="css/main.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
     <script src="alpine.js" defer></script>
@@ -15,9 +15,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         [x-cloak] { display: none !important; }
-        .dark { background-color: #18191a; color: #e4e6eb; }
-        body { background-color: #f0f2f5; transition: background-color 0.3s; -webkit-tap-highlight-color: transparent; }
-        .dark body { background-color: #18191a; }
         /* Grayscale filter for logos */
         .logo-grayscale { filter: grayscale(100%); }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
@@ -29,7 +26,7 @@
     </style>
 </head>
 <body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
-      :class="{ 'dark': darkMode }"
+      :class="{ 'dark': darkMode, ['font-size-' + appFontSize]: true }"
       x-data="adminData">
 
     <!-- Mobile Sidebar -->

@@ -300,7 +300,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const query = req.query.user_id ? { user: req.query.user_id, ...baseQuery } : baseQuery;
         
         // Populate 'user' and include fields needed for the 'full_name' virtual
-        let posts = await Post.find(query)
+        let posts = await Post.find(query) // Fetch one extra to check for more
             .populate('user', 'name first_name surname avatar is_verified').populate({ path: 'shared_post', populate: { path: 'user', select: 'name avatar' } })
             .sort({ createdAt: -1 }).skip(skip).limit(limit + 1); // Fetch one extra to check for more
 
@@ -330,7 +330,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const postsToReturn = posts.slice(0, limit);
         
         res.json(postsToReturn.map(p => ({
-            id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'User', avatar: p.user?.avatar,
+            id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
             content: p.content, media: p.media, media_type: p.media_type,
             time: formatTime(p.createdAt), likes: p.likes.length,
             comments: p.comments_count || 0,
@@ -351,7 +351,7 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
         if (!post) return res.status(404).json({ error: 'Post not found' });
         
         res.json({
-            id: post._id, user_id: post.user?._id, author: post.user?.full_name || 'User', avatar: post.user?.avatar,
+            id: post._id, user_id: post.user?._id, author: post.user?.full_name || 'Deleted User', avatar: post.user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
             content: post.content, media: post.media, media_type: post.media_type,
             time: formatTime(post.createdAt), likes: post.likes.length,
             comments: post.comments_count || 0,
@@ -396,7 +396,7 @@ router.post('/create_post', isAuthenticated, upload.array('media', 10), async (r
     await post.save();
     const populatedPost = await post.populate('user', 'name first_name surname avatar is_verified');
 
-    // Notify followers
+    // Notify followers (if public)
     const author = await User.findById(req.session.userId);
     const notifications = author.followers.map(followerId => ({
         user: followerId,
@@ -407,7 +407,7 @@ router.post('/create_post', isAuthenticated, upload.array('media', 10), async (r
     if (notifications.length > 0) await Notification.insertMany(notifications);
     
     // Return a fully formatted post object for optimistic UI update
-    res.json({ success: true, post: {
+    res.json({ success: true, post: { // Include link preview
         id: populatedPost._id, user_id: populatedPost.user?._id, author: populatedPost.user?.full_name || 'Deleted User', avatar: populatedPost.user?.avatar,
         content: populatedPost.content, media: populatedPost.media, 
         media_type: populatedPost.media_type,
@@ -499,11 +499,18 @@ router.post('/delete_chat_history', isAuthenticated, async (req, res) => {
     const { chat_id } = req.body;
     const userId = req.session.userId;
     
+    let targetChatId = chat_id;
+    if (chat_id === 'support-admin') {
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetChatId = supportUser._id;
+    }
+
     await Message.deleteMany({
         group: null,
         $or: [
-            { sender: userId, receiver: chat_id },
-            { sender: chat_id, receiver: userId }
+            { sender: userId, receiver: targetChatId },
+            { sender: targetChatId, receiver: userId }
         ]
     });
     res.json({ success: true });
@@ -622,7 +629,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
             total_posts_count: totalPostsCount,
             posts: posts.slice(0, limit).map(p => ({
                 id: p._id,
-                content: p.content,
+                content: p.content, // Include link preview
                 media: p.media,
                 media_type: p.media_type,
                 time: formatTime(p.createdAt),
@@ -630,7 +637,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
                 comments: p.comments_count || 0,
                 saved: p.saved_by.some(id => id.toString() === req.session.userId.toString()),
                 myReaction: p.likes.some(id => id.toString() === req.session.userId.toString()) ? 'like' : null,
-                author: user.full_name,
+                author: user.full_name, // Include link preview
                 avatar: user.avatar
             })),
             hasMorePosts: posts.length > limit
@@ -735,7 +742,7 @@ router.post('/mark_messages_read', isAuthenticated, async (req, res) => {
 
     const filter = type === 'group' 
         ? { group: chat_id, 'read_by.user': { $ne: userId } }
-        : { sender: chat_id, receiver: userId, is_read: false };
+        : { sender: targetChatId, receiver: userId, is_read: false };
 
     await Message.updateMany(filter, { 
         $set: { is_read: true },
@@ -760,23 +767,18 @@ router.post('/react_message', isAuthenticated, async (req, res) => {
     try {
         const { message_id, emoji } = req.body;
         const userId = req.session.userId;
-        const message = await Message.findById(message_id);
-        if (!message) return res.status(404).json({ error: 'Message not found' });
-
-        // Remove existing reaction by this user
-        const existingIndex = message.reactions.findIndex(r => r.user.toString() === userId.toString());
         
-        if (existingIndex > -1) {
-            if (message.reactions[existingIndex].emoji === emoji) {
-                message.reactions.splice(existingIndex, 1); // Toggle off
-            } else {
-                message.reactions[existingIndex].emoji = emoji; // Change emoji
-            }
-        } else {
-            message.reactions.push({ user: userId, emoji });
+        // Atomic update to handle reactions without VersionError
+        // 1. Remove user's existing reaction if any
+        await Message.updateOne({ _id: message_id }, { $pull: { reactions: { user: userId } } });
+        
+        // 2. Add new reaction if emoji is provided
+        if (emoji) {
+            await Message.updateOne({ _id: message_id }, { $push: { reactions: { user: userId, emoji } } });
         }
 
-        await message.save();
+        const message = await Message.findById(message_id);
+        if (!message) return res.status(404).json({ error: 'Message not found' });
         
         const target = message.group ? `group_${message.group}` : (message.receiver ? message.receiver.toString() : message.sender.toString());
         req.io.to(target).emit('message_reacted', { message_id, reactions: message.reactions });
@@ -878,9 +880,16 @@ router.post('/mark_chat_unread', isAuthenticated, async (req, res) => {
     const { chat_id } = req.body;
     const userId = req.session.userId;
 
+    let targetChatId = chat_id;
+    if (chat_id === 'support-admin') {
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetChatId = supportUser._id;
+    }
+
     // Remove the user from the read_by array for all messages in the chat
     await Message.updateMany(
-        { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] },
+        { $or: [{ sender: userId, receiver: targetChatId }, { sender: targetChatId, receiver: userId }] },
         { $pull: { read_by: { user: userId } }, $set: { is_read: false } }
     );
     res.json({ success: true });
@@ -1050,19 +1059,19 @@ router.get('/get_message_read_details', isAuthenticated, async (req, res) => {
 router.post('/toggle_reaction', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const { post_id, reaction } = req.body;
-    const post = await Post.findById(post_id);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
-
-    // Remove any existing reaction by this user
-    post.likes = post.likes.filter(id => id.toString() !== userId.toString());
-
-    // Add new reaction if it's not an un-react action
-    if (reaction) {
-        post.likes.push(userId);
+    
+    try {
+        if (!reaction) {
+            // Un-react: pull user from likes (atomic)
+            await Post.updateOne({ _id: post_id }, { $pull: { likes: userId } });
+        } else {
+            // React: add to likes (atomic)
+            await Post.updateOne({ _id: post_id }, { $addToSet: { likes: userId } });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Action failed' });
     }
-
-    await post.save();
-    res.json({ success: true });
 });
 
 router.post('/remove_group_member', isAuthenticated, async (req, res) => {
@@ -1140,13 +1149,20 @@ router.post('/clear_chat', isAuthenticated, async (req, res) => {
     const { chat_id, type } = req.body;
     const userId = req.session.userId;
 
+    let targetChatId = chat_id;
+    if (chat_id === 'support-admin' && type === 'support') {
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetChatId = supportUser._id;
+    }
+
     if (type === 'group') {
         // For groups, mark messages as deleted for the current user
         await Message.updateMany({ group: chat_id }, { $addToSet: { deleted_for: userId } });
     } else {
         // For 1-on-1 chats, mark messages as deleted for the current user
         await Message.updateMany(
-            { $or: [{ sender: userId, receiver: chat_id }, { sender: chat_id, receiver: userId }] },
+            { $or: [{ sender: userId, receiver: targetChatId }, { sender: targetChatId, receiver: userId }] },
             { $addToSet: { deleted_for: userId } }
         );
     }
@@ -1158,7 +1174,7 @@ router.get('/saved_posts', isAuthenticated, async (req, res) => {
     const posts = await Post.find({ saved_by: userId })
         .populate('user', 'name first_name surname avatar is_verified')
         .sort({ createdAt: -1 });
-
+ // Always true for saved posts list
     res.json(posts.map(p => ({
         id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
         content: p.content, media: p.media, media_type: p.media_type,
@@ -1291,7 +1307,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const userId = req.session.userId;
         res.json(reels.map(r => ({
             id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
-            media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0,
+            media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0, // Ensure comments count is included
             comments: r.comments_count || 0, // Ensure comments count is included
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
             saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
@@ -1319,7 +1335,7 @@ router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
 
         res.json(reels.map(r => ({
             id: r._id,
-            user_id: r.user?._id,
+            user_id: r.user?._id, // Ensure comments count is included
             author: r.user?.name || 'User',
             avatar: r.user?.avatar,
             media: r.media,
@@ -1406,18 +1422,21 @@ router.get('/get_connections', isAuthenticated, async (req, res) => {
 router.post('/toggle_story_reaction', isAuthenticated, async (req, res) => {
     try {
         const { story_id } = req.body;
-        const story = await Story.findById(story_id);
-        if (!story) return res.status(404).json({ error: 'Story not found' });
-
         const userId = req.session.userId;
-        const index = story.likes.indexOf(userId);
-        if (index === -1) {
-            story.likes.push(userId);
-        } else {
-            story.likes.splice(index, 1);
+        
+        // Atomic toggle for story likes without VersionError
+        const updated = await Story.findOneAndUpdate(
+            { _id: story_id, likes: { $ne: userId } },
+            { $addToSet: { likes: userId } },
+            { new: true }
+        );
+
+        if (!updated) {
+            await Story.updateOne({ _id: story_id }, { $pull: { likes: userId } });
+            return res.json({ success: true, liked: false });
         }
-        await story.save();
-        res.json({ success: true, liked: index === -1 });
+
+        res.json({ success: true, liked: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to toggle story reaction' });
     }
@@ -1429,7 +1448,7 @@ router.get('/search_posts', isAuthenticated, async (req, res) => {
         if (!q) return res.json([]);
         const posts = await Post.find({ 
             content: { $regex: q, $options: 'i' },
-            media_type: { $ne: 'video' } 
+            media_type: { $ne: 'video' } // Include link preview
         })
         .populate('user', 'name first_name surname avatar is_verified')
         .limit(10);
@@ -1460,8 +1479,14 @@ router.get('/search_reels', isAuthenticated, async (req, res) => {
 });
 
 router.get('/search_users', isAuthenticated, async (req, res) => {
-    const users = await User.find({ name: { $regex: req.query.q, $options: 'i' } }).limit(10);
-    res.json(users.map(u => ({ id: u._id, name: u.name, avatar: u.avatar, dept: u.dept })));
+    const q = req.query.q;
+    const users = await User.find({ 
+        $or: [
+            { name: { $regex: q, $options: 'i' } },
+            { username: { $regex: q, $options: 'i' } }
+        ]
+    }).limit(10);
+    res.json(users.map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept })));
 });
 
 router.post('/subscribe', isAuthenticated, async (req, res) => {
@@ -1604,7 +1629,7 @@ router.post('/delete_story', isAuthenticated, async (req, res) => {
         const story = await Story.findOne({ _id: story_id, user: req.session.userId });
         if (!story) return res.status(404).json({ error: 'Story not found' });
 
-        await Story.deleteOne({ _id: story_id });
+        await Story.deleteOne({ _id: story_id }); // Include link preview
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete story' });
@@ -2441,7 +2466,15 @@ router.post('/admin/update_admin_profile', isAuthenticated, isAdmin, upload.sing
 
 router.post('/admin/clear_chat', isAuthenticated, isAdmin, async (req, res) => {
     const { chat_id } = req.body;
-    await Message.deleteMany({ $or: [{ sender: chat_id }, { receiver: chat_id }] });
+
+    let targetChatId = chat_id;
+    if (chat_id === 'support-admin') {
+        const supportUser = await User.findOne({ username: 'support-admin' });
+        if (!supportUser) return res.status(404).json({ error: 'Support admin user not found' });
+        targetChatId = supportUser._id;
+    }
+
+    await Message.deleteMany({ $or: [{ sender: targetChatId }, { receiver: targetChatId }] });
     res.json({ success: true });
 });
 

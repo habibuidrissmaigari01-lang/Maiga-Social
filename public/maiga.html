@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Maiga Social</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="css/main.css" rel="stylesheet">
      <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
      <link rel="apple-touch-icon" sizes="180x180" href="img/logo.png">
      <meta name="apple-mobile-web-app-capable" content="yes">
@@ -16,11 +16,6 @@
     <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
     <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
 
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-        }
-    </script>
     <link rel="manifest" href="manifest.json">
     <link rel="service-worker" href="sw.js">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -61,6 +56,7 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
         html {
             font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
@@ -804,14 +800,8 @@
                 <template x-if="activeChat?.type === 'group'">
                     <button @click="isCreatingPoll = true; showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-square-poll-vertical text-yellow-500 text-xl"></i></div><span class="text-[10px] font-bold">Poll</span></button>
                 </template>
-                <button @click="sendLocation()" class="flex-col items-center space-y-2 flex group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
-                <button @click="activeTab = 'blockedUsers'; fetchBlockedUserDetails()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600"><i class="fa-solid fa-user-slash"></i></div>
-                        <span class="font-bold text-sm">Blocked Users</span>
-                    </div>
-                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
-                </button>
+               <button @click="sendLocation()" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
+                <button @click="showWallpaperPicker = true; showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-image text-teal-500 text-xl"></i></div><span class="text-[10px] font-bold">Wallpaper</span></button>
     <main x-show="activeTab === 'blockedUsers'" class="animate-fadeIn">
         <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
             <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
@@ -2099,6 +2089,8 @@
     <audio id="ringing-sound" src="https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg" loop></audio>
     <audio id="message-sound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
     <audio id="notification-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
+    <audio id="scan-sound" src="https://actions.google.com/sounds/v1/foley/beeps_and_clicks.ogg" preload="auto"></audio>
+    <audio id="sent-sound" src="https://actions.google.com/sounds/v1/foley/button_click.ogg" preload="auto"></audio>
     <audio id="post-success-sound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
     <audio id="system-warning-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
     <audio x-ref="remoteAudio" autoplay></audio>
@@ -3655,9 +3647,19 @@
                 <canvas x-ref="cameraCanvas" 
                         class="w-full h-full object-cover transition-transform duration-300"
                         :style="`transform: scale(${zoomScale})`"
+                        @click="triggerFocus($event)"
                         @touchstart="handlePinchStart($event)"
                         @touchmove="handlePinchMove($event)"
                         @touchend="handlePinchEnd()"></canvas>
+
+                <!-- Focus Ring Indicator -->
+                <div x-show="focusRing.show" 
+                     class="absolute pointer-events-none border-2 border-yellow-400 w-16 h-16 rounded-lg z-[100]"
+                     :style="`left: ${focusRing.x}px; top: ${focusRing.y}px; transform: translate(-50%, -50%); transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);`"
+                     x-transition:enter="scale-150 opacity-0" x-transition:enter-end="scale-100 opacity-100"
+                     x-transition:leave="opacity-100" x-transition:leave-end="opacity-0" x-cloak>
+                     <div class="absolute inset-0 border border-yellow-400 animate-ping opacity-30 rounded-lg"></div>
+                </div>
 
                 <!-- Countdown Overlay -->
                 <div x-show="isCountdownActive" x-cloak
@@ -3694,6 +3696,13 @@
                     </button>
                     
                     <div class="flex gap-4">
+                        <template x-if="cameraMode === 'scan'">
+                            <button @click="$refs.qrGalleryInput.click()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all" title="Pick from Gallery">
+                                <i class="fa-solid fa-images text-xl"></i>
+                            </button>
+                        </template>
+                        <input type="file" x-ref="qrGalleryInput" class="hidden" accept="image/*" @change="handleGalleryQr($event)">
+
                         <template x-if="isScanning && hasFlashlight">
                             <button @click="toggleFlashlight()" class="p-3 text-white hover:bg-white/20 rounded-full transition-all" :class="isFlashOn ? 'bg-yellow-500 !text-black' : ''">
                                 <i class="fa-solid" :class="isFlashOn ? 'fa-bolt-lightning' : 'fa-bolt'"></i>
