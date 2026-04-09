@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node api.js",
     "dev": "nodemon api.js",
-    "css:watch": "tailwindcss -i ./public/input.css -o ./public/css/main.css --watch",
-    "css:build": "tailwindcss -i ./public/input.css -o ./public/css/main.css --minify"
+    "css:watch": "tailwindcss -i ./public/css/input.css -o ./public/css/main.css --watch",
+    "css:build": "tailwindcss -i ./public/css/input.css -o ./public/css/main.css --minify"
   },
   "engines": {
     "node": ">=22.0.0"
