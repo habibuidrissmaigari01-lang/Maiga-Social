@@ -27,6 +27,10 @@
 .font-size-large { --app-font-scale: 1.125; }
 
 [x-cloak] { display: none !important; }
+/* Grayscale filter for logos */
+.logo-grayscale { filter: grayscale(100%); }
+.dark .logo-grayscale { filter: grayscale(100%) invert(1); }
+
 
 /* Moved from HTML files to improve caching and reduce HTML size */
 .glass-card {
@@ -57,6 +61,140 @@
 }
 @keyframes shimmer-effect { 0% { left: -100%; } 20% { left: 200%; } 100% { left: 200%; } }
 
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+.shake-btn {
+    animation: shake 0.5s ease-in-out;
+}
+@keyframes float-envelope {
+    0%, 100% { transform: translateY(0) rotate(0); }
+    50% { transform: translateY(-10px) rotate(5deg); }
+}
+.animate-float-envelope {
+    animation: float-envelope 2s infinite ease-in-out;
+}
+
+.dark body { background-color: #000000 !important; color: #ffffff !important; }
+.dark .glass-card { background: rgba(0, 0, 0, 0.95) !important; border: 1px solid #262626 !important; }
+.dark input, .dark select { background-color: #000000 !important; color: #ffffff !important; border-color: #262626 !important; }
+.dark .glass-card h1, .dark .glass-card h2 { color: #fff !important; }
+.dark .glass-card p { color: #cbd5e1 !important; }
+.dark .bg-white { background-color: #000000 !important; }
+.dark .text-gray-500, .dark .text-gray-600 { color: #a1a1aa !important; }
+.dark .border-gray-100, .dark .border-gray-200 { border-color: #262626 !important; }
+
+.step-content {
+    display: none;
+    animation: slideIn 0.4s ease-out;
+}
+
+.step-content.active {
+    display: block;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.input-group input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    outline: none;
+    transition: all 0.3s;
+}
+
+.input-group input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    width: 100%;
+    transition: transform 0.2s, opacity 0.2s;
+    cursor: pointer;
+}
+
+.btn-primary:active {
+    transform: scale(0.98);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.progress-bar {
+    height: 6px;
+    background: #edf2f7;
+    border-radius: 3px;
+    margin-bottom: 30px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #667eea;
+    width: 0%;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.strength-meter {
+    height: 4px;
+    border-radius: 2px;
+    background: #edf2f7;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.strength-fill {
+    height: 100%;
+    width: 0;
+    transition: all 0.3s;
+}
+
+.find-account-link {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    color: #718096;
+    font-size: 14px;
+    text-decoration: underline;
+}
+
+.background-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 50%;
+    opacity: 0.1;
+    pointer-events: none;
+}
+/* Specific backgrounds for index and ysu */
+body.index-bg .background-container { background-image: url('/img/logo.png'); }
+body.ysu-bg .background-container { background-image: url('/img/ysu.png'); }
+
+@media (min-width: 768px) {
+    body.index-bg .background-container,
+    body.ysu-bg .background-container {
+        background-image: url('/img/logo.png'), url('/img/logo.png'); /* Two logos for desktop */
+        background-position: left, right;
+        background-size: 50% 100%;
+    }
+}
+
 body { 
     background-color: #f0f2f5; 
     font-family: var(--font-sans);
@@ -64,7 +202,10 @@ body {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     transition: background-color 0.3s, font-size 0.2s; 
-    -webkit-tap-highlight-color: transparent; 
+    -webkit-tap-highlight-color: transparent;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
 }
 .dark body { background-color: #18191a; }
 .post-card { transition: all 0.2s; border-radius: 12px; }

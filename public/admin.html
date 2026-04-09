@@ -13,17 +13,6 @@
     <script src="alpine.js" defer></script>
     <audio id="admin-notif-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
     <script src="/socket.io/socket.io.js"></script>
-    <style>
-        [x-cloak] { display: none !important; }
-        /* Grayscale filter for logos */
-        .logo-grayscale { filter: grayscale(100%); }
-        .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
-
-        .dark .bg-white { background-color: #242526 !important; color: #e4e6eb; }
-        .dark .text-gray-500 { color: #b0b3b8 !important; }
-        .dark .border-gray-200, .dark .border-gray-800 { border-color: #3e4042 !important; }
-        .dark .divide-gray-200 { border-color: #3e4042 !important; }
-    </style>
 </head>
 <body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
       :class="{ 'dark': darkMode, ['font-size-' + appFontSize]: true }"
