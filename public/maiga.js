@@ -107,6 +107,7 @@ const initMaiga = () => {
         supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
         pushPermission: Notification.permission || 'default',
         friendsPage: 1,
+        messageContextMenu: { show: false, x: 0, y: 0, message: null },
         chatContextMenu: { show: false, x: 0, y: 0, chat: null },
         friendsLimit: 10,
         isLoadingMoreFriends: false,
@@ -3502,7 +3503,7 @@ const initMaiga = () => {
                         pinned: !!m.is_pinned,
                         read: !!m.is_read,
                         read_by: m.read_by || [],
-                       author: m.first_name + ' ' + m.surname, // For groups (ensure m.sender is populated)
+                        author: (m.first_name || m.author || 'User') + (m.surname ? ' ' + m.surname : ''),
                         avatar: m.avatar,
                         replyTo: m.replyTo,
                         // Poll specific data
@@ -3514,7 +3515,7 @@ const initMaiga = () => {
                         })) : null,
                         poll_id: m.poll_id
                     }}));
-                    this.chatMessages[chat.id] = formattedMessages;
+                    this.chatMessages = { ...this.chatMessages, [chat.id]: formattedMessages };
                     
                     data.forEach((m, idx) => {
                         this.chatMessages[chat.id][idx].reactions = m.reactions || [];
@@ -3661,6 +3662,13 @@ const initMaiga = () => {
         openMessageOptions(msg) {
             this.selectedMessageForOptions = msg;
             this.showMessageOptions = true;
+        },
+        openMessageContextMenu(event, msg) {
+            this.selectedMessageForOptions = msg;
+            this.messageContextMenu.message = msg;
+            this.messageContextMenu.x = event.clientX;
+            this.messageContextMenu.y = event.clientY;
+            this.messageContextMenu.show = true;
         },
         replyToMessage(msg = null) {
             this.replyingTo = msg || this.selectedMessageForOptions;

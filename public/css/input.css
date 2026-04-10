@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-/* Self-hosted Font Definitions */
+/* 1. CONFIGURATION & FONTS */
+@source "../**/*.html";
+@variant dark (&:where(.dark, .dark *));
+
 @font-face {
   font-family: 'Inter';
   src: url('/fonts/inter-roman.var.woff2') format('woff2-variations');
@@ -9,22 +12,27 @@
   font-display: swap;
 }
 
-/* Tell Tailwind where to look for classes */
-@source "../**/*.html";
-
-/* Enable class-based dark mode for your Alpine.js toggle */
-@variant dark (&:where(.dark, .dark *));
-
 @theme {
   --font-inter: "Inter", "ui-sans-serif", "system-ui", "sans-serif";
   --font-sans: var(--font-inter);
 }
 
-/* Font Size Scaling System */
-:root { --app-font-scale: 1; }
+/* 2. SCALING SYSTEM */:root { --app-font-scale: 1; }
 .font-size-small { --app-font-scale: 0.875; }
 .font-size-medium { --app-font-scale: 1; }
 .font-size-large { --app-font-scale: 1.125; }
+
+/* 3. BASE ELEMENTS */
+body { 
+    background-color: #f0f2f5; 
+    font-family: var(--font-sans);
+    font-size: calc(1rem * var(--app-font-scale));
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    transition: background-color 0.3s, font-size 0.2s; 
+    -webkit-tap-highlight-color: transparent;
+    min-height: 100vh;
+}
 
 [x-cloak] { display: none !important; }
 /* Grayscale filter for logos */
@@ -32,7 +40,21 @@
 .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
 
 
-/* Moved from HTML files to improve caching and reduce HTML size */
+/* Specific backgrounds for index and ysu */
+.background-container {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 50%;
+    opacity: 0.1;
+    pointer-events: none;
+}
+body.index-bg .background-container { background-image: url('/img/logo.png'); }
+body.ysu-bg .background-container { background-image: url('/img/ysu.png'); }
+
+/* 4. COMPONENTS */
 .glass-card {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);

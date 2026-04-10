@@ -748,7 +748,7 @@
                         <!-- Message Bubble and Meta -->
                          <div :id="'msg-' + msg.id" class="flex flex-col group relative transition-colors duration-500" :class="msg.sender === 'me' ? 'items-end' : 'items-start'">                            
 
-
+                            <div @contextmenu.prevent="openMessageContextMenu($event, msg)" class="absolute top-1/2 -translate-y-1/2 text-gray-400 transition-opacity duration-200 z-0" :class="msg.sender === 'me' ? 'right-full mr-4' : 'left-full ml-4'" :style="swipingMsgId === msg.id && Math.abs(swipeOffset) > 40 ? 'opacity: 1' : 'opacity: 0'"></div>
                             <!-- Message Bubble -->
                             <div class="absolute top-1/2 -translate-y-1/2 text-gray-400 transition-opacity duration-200 z-0" :class="msg.sender === 'me' ? 'right-full mr-4' : 'left-full ml-4'" :style="swipingMsgId === msg.id && Math.abs(swipeOffset) > 40 ? 'opacity: 1' : 'opacity: 0'">
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
@@ -796,6 +796,7 @@
                                 <template x-if="msg.sender === 'me'">
                                     <i class="fa-solid fa-check-double text-[10px]" :class="msg.read ? 'text-blue-500' : 'text-gray-400'"></i>
                                 </template>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -1138,6 +1139,30 @@
                         </div>
                     </div>
                 </div>
+
+    <!-- Custom Context Menu for Messages (Desktop) -->
+    <div x-show="messageContextMenu.show" 
+         @click.away="messageContextMenu.show = false" 
+         class="fixed z-[2000] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border dark:border-gray-700 w-48 py-2 overflow-hidden animate-fadeIn"
+         :style="`left: ${messageContextMenu.x}px; top: ${messageContextMenu.y}px`" x-cloak>
+        <button @click="replyToMessage(messageContextMenu.message); messageContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-reply text-blue-500"></i>
+            <span>Reply</span>
+        </button>
+        <button @click="copyMessageText(); messageContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-regular fa-copy text-gray-500"></i>
+            <span>Copy</span>
+        </button>
+        <button @click="toggleStarMessage(); messageContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-star text-yellow-500"></i>
+            <span x-text="messageContextMenu.message?.starred ? 'Unstar' : 'Star'"></span>
+        </button>
+        <div class="border-t dark:border-gray-700 my-1"></div>
+        <button @click="reportMessage(); messageContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-flag"></i>
+            <span>Report</span>
+        </button>
+    </div>
             </div>
         </div>
 
@@ -2135,7 +2160,7 @@
         </div>
         
         <!-- Header info -->
-        <div class="relative z-10 flex flex-col items-center mt-10 transition-all duration-500" :class="(callType === 'video' && callStatus === 'Connected') ? 'opacity-0 hover:opacity-100' : ''">
+        <div class="relative z-10 flex flex-col items-center mt-4 lg:mt-10 transition-all duration-500" :class="(callType === 'video' && callStatus === 'Connected') ? 'opacity-0 hover:opacity-100' : ''">
             <img :src="activeChat?.avatar" class="w-32 h-32 rounded-full border-4 border-white/10 shadow-2xl mb-6 animate-pulse object-cover">
             <h2 class="text-white text-3xl font-black tracking-tight drop-shadow-lg" x-text="activeChat?.name"></h2>
             <p class="text-gray-300 font-medium mt-2 text-lg drop-shadow-md" x-text="callStatus === 'Connected' ? 'Connected • ' + formatRecordingTime(callDuration) : callStatus"></p>
