@@ -55,69 +55,10 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
-    <style>
-        .dark body { background-color: #000000 !important; color: #ffffff !important; }
-    </style>
     <!-- Load heavy icons asynchronously -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
-    <style>
-        body::before {
-            content: "";
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-image: url('img/logo.png');
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 50%;
-            opacity: 0.1;
-            pointer-events: none;
-            z-index: 0;
-        }
-        @keyframes gentle-pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
-        .logo-pulse {
-            animation: gentle-pulse 3s infinite ease-in-out;
-        }
-        .shimmer-btn {
-            position: relative;
-            overflow: hidden;
-        }
-        .shimmer-btn::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(to right, transparent, rgba(255,255,255,0.4), transparent);
-            transform: skewX(-20deg);
-            animation: shimmer-effect 3s infinite;
-        }
-        @keyframes shimmer-effect {
-            0% { left: -100%; }
-            20% { left: 200%; }
-            100% { left: 200%; }
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-            20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        .shake-btn {
-            animation: shake 0.5s ease-in-out;
-        }
-        @keyframes float-envelope {
-            0%, 100% { transform: translateY(0) rotate(0); }
-            50% { transform: translateY(-10px) rotate(5deg); }
-        }
-        .animate-float-envelope {
-            animation: float-envelope 2s infinite ease-in-out;
-        }
-    </style>
 </head>
-<body class="index-bg">
+<body class="index-bg flex items-center justify-center min-h-screen p-4 overflow-x-hidden">
 
     <div class="background-container"></div>
     <div class="glass-card p-6 md:p-10" id="authCard">
@@ -283,7 +224,7 @@
                 <div id="checkEmailAnim" class="hidden flex flex-col items-center justify-center space-y-2 mb-6">
                     <div class="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 animate-float-envelope shadow-lg border border-indigo-100 dark:border-indigo-800">
                         <i class="fa-solid fa-envelope-open-text text-2xl"></i>
-                    </div>
+                    </div
                     <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Checking your mailbox...</p>
                 </div>
                 <div class="space-y-6">
@@ -1319,6 +1260,7 @@
             popup.classList.add('hidden');
         }
     </script>
+        </script>
 </body>
 </html>
  

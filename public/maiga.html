@@ -58,11 +58,18 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
     <style>
+        @font-face {
+            font-family: 'Intel One Mono';
+            src: url('/font/intel-4.1/web/IntelOneMono-Regular.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+
         html {
             font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
         }
         .fixed-font { font-size: 16px !important; }
-        .logo-grayscale { filter: grayscale(100%); }
+        body { font-family: 'Intel One Mono', 'Inter', sans-serif !important; }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
     </style>
     <script src="maiga.js" defer></script>
@@ -412,9 +419,11 @@
                 <!-- All Chats -->
                 <div x-show="activeMessageTab === 'all'">
                     <template x-for="chat in sortedChats" :key="chat.id">
-                        <div @click="activeChat = chat; chat.unread = false" class="flex items-center p-4 space-x-4 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer">
+                        <div @click="activeChat = chat; chat.unread = false" 
+                             @contextmenu.prevent="chatContextMenu = { show: true, x: $event.clientX, y: $event.clientY, chat: chat }"
+                             class="flex items-center p-4 space-x-4 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer relative group">
                             <div class="relative">
-                                <img :src="chat.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                                <img :src="chat.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-14 h-14 rounded-full border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
                                     <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                                 </template>
@@ -636,7 +645,7 @@
         <div x-show="activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn" x-transition>
             <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md">
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
-                <img @click="openChatProfile()" :src="activeChat?.avatar" class="w-10 h-10 rounded-full cursor-pointer">
+                <img @click="openChatProfile()" :src="activeChat?.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <p class="font-bold text-sm" x-text="activeChat?.name"></p>
                     <p class="text-xs text-gray-500"> 
@@ -780,6 +789,9 @@
                                 <i x-show="msg.starred" class="fa-solid fa-star text-yellow-500 text-[8px] ml-1"></i>
                                 <template x-if="msg.sender === 'me'">
                                     <span x-show="msg.is_edited" class="text-[9px] italic ml-1">edited</span>
+                                </template>
+                                <template x-if="msg.sender === 'me'">
+                                    <span x-show="msg.showReadStatus" x-transition class="text-[9px] font-black text-blue-500 uppercase ml-1">Read</span>
                                 </template>
                                 <template x-if="msg.sender === 'me'">
                                     <i class="fa-solid fa-check-double text-[10px]" :class="msg.read ? 'text-blue-500' : 'text-gray-400'"></i>
@@ -2523,7 +2535,7 @@
                  class="bg-white dark:bg-gray-900 mt-2 p-4 post-card border-b dark:border-gray-800 shadow-sm cursor-pointer">
                 <div class="flex items-center justify-between mb-3"> 
                     <div @click.stop="openUserProfile(post.user_id)" class="flex items-center space-x-3 cursor-pointer">
-                        <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700"> 
+                        <img :src="post.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-11 h-11 parallelogram-sm border dark:border-gray-700"> 
                         <div class="hover:underline">
                             <div class="flex items-center space-x-1"><span class="font-bold text-sm" x-text="post.author"></span><template x-if="post.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template></div> 
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
@@ -2591,7 +2603,7 @@
     </main>
 
     <!-- MAIN VIEW: REELS -->
-    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 z-[50] bg-black lg:static lg:z-0 lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
+    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="h-full bg-black lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl scroll-smooth" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full snap-start snap-always relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
@@ -4035,6 +4047,30 @@
             </template>
         </div>
     </aside>
+    </div>
+
+    <!-- Custom Context Menu for Chats (Desktop) -->
+    <div x-show="chatContextMenu.show" 
+         @click.away="chatContextMenu.show = false" 
+         class="fixed z-[2000] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border dark:border-gray-700 w-48 py-2 overflow-hidden animate-fadeIn"
+         :style="`left: ${chatContextMenu.x}px; top: ${chatContextMenu.y}px`" x-cloak>
+        <button @click="togglePin(chatContextMenu.chat); chatContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-thumbtack text-gray-400"></i>
+            <span x-text="isPinned(chatContextMenu.chat?.id, chatContextMenu.chat?.type) ? 'Unpin Chat' : 'Pin Chat'"></span>
+        </button>
+        <button @click="toggleMute(chatContextMenu.chat); chatContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-bell-slash text-gray-400"></i>
+            <span>Mute Notifications</span>
+        </button>
+        <button @click="toggleArchiveChat(chatContextMenu.chat); chatContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-archive text-gray-400"></i>
+            <span>Archive Chat</span>
+        </button>
+        <div class="border-t dark:border-gray-700 my-1"></div>
+        <button @click="deleteChat(chatContextMenu.chat); chatContextMenu.show = false" class="w-full text-left px-4 py-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 text-sm font-bold flex items-center gap-3">
+            <i class="fa-solid fa-trash"></i>
+            <span>Delete Chat</span>
+        </button>
     </div>
     </div>
     </div>

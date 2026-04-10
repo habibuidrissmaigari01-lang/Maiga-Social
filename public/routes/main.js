@@ -176,14 +176,30 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10)
         ]);
 
+        const processedChats = new Map();
+        chats.forEach(m => {
+            if (!m.sender || !m.receiver || !m.sender._id || !m.receiver._id) return;
+            const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
+            const otherId = other._id.toString();
+            if (!processedChats.has(otherId)) {
+                processedChats.set(otherId, {
+                    id: other._id, name: other.name, avatar: other.avatar,
+                    status: other.online ? 'online' : 'offline',
+                    lastMsg: (m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`),
+                    time: formatTime(m.createdAt),
+                    lastMsgTimestamp: m.createdAt
+                });
+            }
+        });
+
         res.json({
             user: {
                 id: user._id, name: user.name, username: user.username, 
                 avatar: user.avatar, dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
-            posts: posts.map(p => ({ id: p._id, author: p.user?.full_name, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
-            chats: [], // Map your chat logic here
+            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
+            chats: Array.from(processedChats.values()),
             groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
             trending: [], // Map trending logic here

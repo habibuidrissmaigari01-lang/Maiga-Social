@@ -107,6 +107,7 @@ const initMaiga = () => {
         supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
         pushPermission: Notification.permission || 'default',
         friendsPage: 1,
+        chatContextMenu: { show: false, x: 0, y: 0, chat: null },
         friendsLimit: 10,
         isLoadingMoreFriends: false,
         isSocketConnected: false,
@@ -399,7 +400,7 @@ const initMaiga = () => {
         isUploadingReel: false,
         isProcessingMetadata: false,
         editorTextFont: 'sans-serif',
-        editorFonts: ['sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'Arial', 'Verdana', 'Times New Roman'],
+        editorFonts: ['Intel One Mono', 'sans-serif', 'serif', 'monospace', 'cursive', 'fantasy', 'Arial', 'Verdana', 'Times New Roman'],
         videoDuration: 0,
         videoTrim: { start: 0, end: 100 },
         cropper: null,
@@ -2086,9 +2087,16 @@ const initMaiga = () => {
                     chatInList.lastMsgId = data.id;
                     chatInList.lastMsgByMe = false;
                     chatInList.lastMsgIsRead = false;
-                    chatInList.lastMsgTimestamp = Date.now();
                     chatInList.time = 'Just now';
                     chatInList.lastMsgTimestamp = Date.now();
+                    
+                    // Re-order list: Move the updated chat/group to the top of its respective array
+                    if (data.group_id) {
+                        this.groups = [chatInList, ...this.groups.filter(g => g.id.toString() !== chatId)];
+                    } else {
+                        this.chats = [chatInList, ...this.chats.filter(c => c.id.toString() !== chatId)];
+                    }
+
                     if (this.activeChat?.id.toString() !== chatId) {
                         chatInList.unread = true;
                         chatInList.unreadCount = (chatInList.unreadCount || 0) + 1;
@@ -2328,6 +2336,12 @@ const initMaiga = () => {
                     if (msg) {
                         msg.read = data.is_read;
                         msg.read_by = data.read_by;
+                        
+                        // Trigger temporary 'Read' text visibility
+                        if (msg.sender === 'me' && data.is_read) {
+                            msg.showReadStatus = true;
+                            setTimeout(() => { msg.showReadStatus = false; }, 3000);
+                        }
                     }
                 }
                 // Also update the read status in the chat list preview
@@ -2557,6 +2571,7 @@ const initMaiga = () => {
                     this.user = { ...this.user, ...initData.user };
                     this.editUser = { ...this.user };
                     this.posts = initData.posts;
+                    this.chats = initData.chats;
                     this.groups = initData.groups;
                     this.notifications = initData.notifications;
                     this.followingList = initData.following;
