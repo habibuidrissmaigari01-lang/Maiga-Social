@@ -1282,15 +1282,21 @@ router.get('/get_comments', isAuthenticated, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
-router.post('/add_comment', isAuthenticated, upload.single('media'), async (req, res) => {
+router.post('/add_comment', isAuthenticated, async (req, res) => {
     try {
-        const { post_id, content, parent_comment_id, media_type } = req.body;
+        const { fields, files } = await parseForm(req);
+        const post_id = fields.post_id?.[0] || fields.post_id;
+        const content = fields.content?.[0] || fields.content;
+        const parent_comment_id = fields.parent_comment_id?.[0] || fields.parent_comment_id;
+        const media_type = fields.media_type?.[0] || fields.media_type;
+
         let mediaUrl = null;
-        if (req.file) mediaUrl = await uploadToR2(req.file, 'comments');
+        const mediaFile = files.media?.[0] || files.media;
+        if (mediaFile) mediaUrl = await uploadToR2(mediaFile, 'comments');
 
         const comment = new Comment({
             post: post_id, user: req.session.userId, content, media: mediaUrl,
-            media_type: media_type || (req.file ? (req.file.mimetype.startsWith('audio') ? 'audio' : 'image') : 'text'),
+            media_type: media_type || (mediaFile ? (mediaFile.mimetype.startsWith('audio') ? 'audio' : 'image') : 'text'),
             parent_comment: parent_comment_id || null
         });
         await comment.save();
@@ -1780,11 +1786,17 @@ router.post('/report_message', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/report_user', isAuthenticated, upload.single('screenshot'), async (req, res) => {
+router.post('/report_user', isAuthenticated, async (req, res) => {
     try {
-        const { user_id, reason, details, priority } = req.body;
+        const { fields, files } = await parseForm(req);
+        const user_id = fields.user_id?.[0] || fields.user_id;
+        const reason = fields.reason?.[0] || fields.reason;
+        const details = fields.details?.[0] || fields.details;
+        const priority = fields.priority?.[0] || fields.priority;
+
         let screenshotUrl = null;
-        if (req.file) screenshotUrl = await uploadToR2(req.file, 'reports');
+       const screenshotFile = files.screenshot?.[0] || files.screenshot;
+        if (screenshotFile) screenshotUrl = await uploadToR2(screenshotFile, 'reports');
 
         const report = new Report({
             reporter: req.session.userId,

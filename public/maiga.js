@@ -97,6 +97,9 @@ const initMaiga = () => {
         activeMessageTab: 'all',
         isLoading: true,
         dataLoaded: false,
+        isMaintenanceMode: false,
+        maintenanceEndTime: null,
+        maintenanceCountdown: '',
         loadProgress: 0,
         showLoadingRetry: false,
         showSkeletons: true,
@@ -315,6 +318,17 @@ const initMaiga = () => {
                         window.location.href = '/';
                         return null;
                     }
+                    if (response.status === 503) {
+                        this.isMaintenanceMode = true;
+                        try {
+                            const errData = await response.json();
+                            if (errData.until) {
+                                this.maintenanceEndTime = new Date(errData.until).getTime();
+                                this.startMaintenanceTimer();
+                            }
+                        } catch (e) { }
+                        return null;
+                    }
                     if (response.ok) {
                         const contentType = response.headers.get('content-type');
                         return (contentType && contentType.includes('application/json')) ? await response.json() : null;
@@ -322,6 +336,10 @@ const initMaiga = () => {
                     if (response.status < 500) break;
                     if (i < maxRetries) await new Promise(r => setTimeout(r, 1000 * (i + 1)));
                 } catch (error) {
+                    if (i === maxRetries && !navigator.onLine) {
+                        this.showToast('API Offline', 'The server is currently unreachable.', 'error');
+                        // You could set a flag here to show a full-screen "API Down" error
+                    }
                     if (i === maxRetries) {
                         this.showToast(error.name === 'AbortError' ? 'Timeout' : 'Network Error', 'Check connection.', 'error');
                         return null;
@@ -330,6 +348,42 @@ const initMaiga = () => {
                 }
             }
             return null;
+        },
+
+        startMaintenanceTimer() {
+            if (this.maintInterval) return;
+            const update = () => {
+                if (!this.maintenanceEndTime) {
+                    this.maintenanceCountdown = 'Calculating...';
+                    return;
+                }
+                const now = Date.now();
+                const diff = this.maintenanceEndTime - now;
+                if (diff <= 0) {
+                    this.maintenanceCountdown = 'Completing soon...';
+                    clearInterval(this.maintInterval);
+                    this.maintInterval = null;
+                    return;
+                }
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                this.maintenanceCountdown = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            };
+            update();
+            this.maintInterval = setInterval(update, 1000);
+        },
+
+        async checkApiStatus() {
+            this.showToast('Checking', 'Verifying server status...', 'info');
+            const data = await this.apiFetch('/api/health', { timeout: 5000 });
+            if (data && data.message === 'OK' && data.mongodb === 'connected') {
+                this.isMaintenanceMode = false;
+                this.showToast('Back Online', 'The system is ready. Refreshing...', 'success');
+                setTimeout(() => window.location.reload(), 1500);
+            } else {
+                this.showToast('Still Offline', 'Maintenance is still in progress.', 'error');
+            }
         },
 
         

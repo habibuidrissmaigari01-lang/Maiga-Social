@@ -6,7 +6,7 @@
 
 @font-face {
   font-family: 'Inter';
-  src: url('/fonts/inter-roman.var.woff2') format('woff2-variations');
+  src: url('/font/inter-roman.var.woff2') format('woff2-variations');
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
@@ -47,12 +47,16 @@ body {
     z-index: -1;
     background-repeat: no-repeat;
     background-position: center;
-    background-size: 50%;
-    opacity: 0.1;
+    background-size: 40%;
+    opacity: 0.15;
     pointer-events: none;
 }
 body.index-bg .background-container { background-image: url('/img/logo.png'); }
 body.ysu-bg .background-container { background-image: url('/img/ysu.png'); }
+
+/* Toggle Logic for Auth Pages */
+.step-content { display: none; width: 100%; }
+.step-content.active { display: block; animation: fadeIn 0.3s ease-out; }
 
 /* 4. COMPONENTS */
 .glass-card {

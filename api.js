@@ -14,7 +14,7 @@ const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Group, Story, Call, s3Client, setIo } = require('./models'); 
+const { User, Message, Post, Group, Story, Call, Setting, s3Client, setIo } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -60,6 +60,25 @@ app.set('trust proxy', 1); // Required for secure cookies on Railway
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- Maintenance Middleware ---
+const checkMaintenance = async (req, res, next) => {
+    try {
+        const maintenanceSetting = await Setting.findOne({ key: 'maintenance_mode' });
+        const isMaintenance = maintenanceSetting ? maintenanceSetting.value : false;
+
+        if (isMaintenance) {
+            const user = await User.findById(req.session.userId);
+            if (user && user.is_admin) return next();
+            
+            const untilSetting = await Setting.findOne({ key: 'maintenance_until' });
+            return res.status(503).json({ error: 'Maintenance Mode', until: untilSetting ? untilSetting.value : null });
+        }
+        next();
+    } catch (err) {
+        next();
+    }
+};
 
 app.use((req, res, next) => {
     req.io = io;
@@ -190,8 +209,8 @@ mongoConnection.then(() => {
 }).catch(err => { });
 
 // --- Routes ---
-app.use('/api', authRoutes);
-app.use('/api', mainRoutes);
+app.use('/api', authRoutes); // Auth (login/reg) should always be accessible to check user type
+app.use('/api', checkMaintenance, mainRoutes);
 
 server.listen(PORT, '0.0.0.0');
 
