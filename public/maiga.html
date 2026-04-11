@@ -79,8 +79,6 @@
         [x-cloak] { display: none !important; }
         body { background-color: #ffffff; color: #000000; transition: background-color 0.3s, color 0.3s; -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; min-height: 100dvh; }
         body.dark { background-color: #000000 !important; color: #ffffff !important; }
-        .post-card { transition: all 0.2s; border-radius: 12px; }
-        .post-card:active { transform: scale(0.99); }
         .dark .bg-white, .dark .bg-gray-50, .dark .bg-gray-100, .dark .bg-gray-900 { background-color: #000000 !important; color: #ffffff !important; }
         .dark aside, .dark header, .dark nav, .dark main, .dark .glass-card { background-color: #000000 !important; color: #ffffff !important; border-color: #262626 !important; }
         .dark .text-gray-900, .dark .text-gray-800, .dark .text-gray-700, .dark .text-gray-600 { color: #ffffff !important; }
@@ -363,7 +361,7 @@
 
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
-    <div class="pb-24 lg:pb-0">
+    <div class="pb-32 lg:pb-8">
     <!-- Messaging Overlay (now also for desktop chat windows) -->
     <div x-show="isMessaging" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
         <!-- List View -->
@@ -419,9 +417,20 @@
                 <!-- All Chats -->
                 <div x-show="activeMessageTab === 'all'">
                     <template x-for="chat in sortedChats" :key="chat.id">
-                        <div @click="activeChat = chat; chat.unread = false" 
-                             @contextmenu.prevent="chatContextMenu = { show: true, x: $event.clientX, y: $event.clientY, chat: chat }"
-                             class="flex items-center p-4 space-x-4 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer relative group">
+                        <div class="relative overflow-hidden bg-white dark:bg-gray-900 border-b dark:border-gray-800">
+                            <div class="absolute inset-0 bg-blue-500 flex justify-start items-center pl-8 text-white">
+                                <i class="fa-solid fa-envelope text-lg"></i>
+                            </div>
+                            <div class="absolute inset-0 bg-red-500 flex justify-end items-center pr-8 text-white">
+                                <i class="fa-solid fa-trash-can text-lg"></i>
+                            </div>
+                            <div @click="activeChat = chat; chat.unread = false" 
+                                 @touchstart="handleChatSwipeStart($event, chat.id)"
+                                 @touchmove="handleChatSwipeMove($event)"
+                                 @touchend="handleChatSwipeEnd()"
+                                 @contextmenu.prevent="chatContextMenu = { show: true, x: $event.clientX, y: $event.clientY, chat: chat }"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
+                                 :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <div class="relative">
                                 <img :src="chat.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-14 h-14 rounded-full border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
@@ -481,7 +490,19 @@
                 <!-- Group Chats -->
                 <div x-show="activeMessageTab === 'group'">
                     <template x-for="group in groups" :key="group.id">
-                        <div @click="activeChat = group; group.unread = false" class="flex items-center p-4 space-x-4 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer">
+                        <div class="relative overflow-hidden bg-white dark:bg-gray-900 border-b dark:border-gray-800">
+                            <div class="absolute inset-0 bg-blue-500 flex justify-start items-center pl-8 text-white">
+                                <i class="fa-solid fa-envelope text-lg"></i>
+                            </div>
+                            <div class="absolute inset-0 bg-red-500 flex justify-end items-center pr-8 text-white">
+                                <i class="fa-solid fa-trash-can text-lg"></i>
+                            </div>
+                            <div @click="activeChat = group; group.unread = false" 
+                                 @touchstart="handleChatSwipeStart($event, group.id)"
+                                 @touchmove="handleChatSwipeMove($event)"
+                                 @touchend="handleChatSwipeEnd()"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
+                                 :style="swipingChatId === group.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <img :src="group.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
@@ -559,7 +580,16 @@
                 <!-- Archived Chats -->
                 <div x-show="activeMessageTab === 'archived'">
                     <template x-for="chat in archivedChats" :key="chat.id">
-                        <div @click="activeChat = chat; chat.unread = false; isMessaging = true" class="flex items-center p-4 space-x-4 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer">
+                        <div class="relative overflow-hidden bg-white dark:bg-gray-900 border-b dark:border-gray-800">
+                            <div class="absolute inset-0 bg-blue-500 flex justify-start items-center pl-8 text-white">
+                                <i class="fa-solid fa-box-open text-lg"></i>
+                            </div>
+                            <div @click="activeChat = chat; chat.unread = false; isMessaging = true" 
+                                 @touchstart="handleChatSwipeStart($event, chat.id)"
+                                 @touchmove="handleChatSwipeMove($event)"
+                                 @touchend="handleChatSwipeEnd()"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
+                                 :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <img :src="chat.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
@@ -567,7 +597,6 @@
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
                                 </div>
                                 <p class="text-sm text-gray-500 truncate w-48" x-text="chat.lastMsg"></p>
-                                <button @click.stop="toggleArchiveChat(chat)" class="text-[10px] font-bold text-blue-600 mt-1">Unarchive</button>
                             </div>
                         </div>
                     </template>
@@ -2158,7 +2187,7 @@
         <div x-show="callType === 'voice'" class="absolute inset-0 overflow-hidden opacity-30 pointer-events-none">
             <img :src="activeChat?.avatar" class="w-full h-full object-cover blur-3xl scale-125">
         </div>
-        
+    
         <!-- Header info -->
         <div class="relative z-10 flex flex-col items-center mt-4 lg:mt-10 transition-all duration-500" :class="(callType === 'video' && callStatus === 'Connected') ? 'opacity-0 hover:opacity-100' : ''">
             <img :src="activeChat?.avatar" class="w-32 h-32 rounded-full border-4 border-white/10 shadow-2xl mb-6 animate-pulse object-cover">
@@ -2571,7 +2600,7 @@
                  <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content, post.link_preview)"></p>
                 <template x-if="post.media">
                     <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
-                        <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-auto object-cover"></template>
+                        <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-auto object-cover" loading="lazy"></template>
                         <template x-if="post.mediaType === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
                     </div>
                 </template>
@@ -2855,6 +2884,22 @@
                     </template>
                 </div>
             </div>
+
+                <!-- Activity Report Section -->
+                <div x-show="groupActivityData.length > 0" class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border dark:border-blue-900/30">
+                    <h4 class="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase mb-4 tracking-widest flex items-center gap-2"><i class="fa-solid fa-chart-simple"></i> 7-Day Activity Report</h4>
+                    <div class="flex items-end justify-between h-24 px-2">
+                        <template x-for="day in groupActivityData" :key="day._id">
+                            <div class="flex flex-col items-center flex-1 group">
+                                <div class="w-2.5 bg-blue-500 dark:bg-blue-400 rounded-t-lg transition-all duration-700 group-hover:bg-blue-600" 
+                                     :style="`height: ${Math.max(10, (day.count / Math.max(...groupActivityData.map(d=>d.count), 1)) * 100)}%`"
+                                     :title="day.count + ' messages'"></div>
+                                <span class="text-[7px] font-black text-gray-400 mt-2 uppercase" x-text="day._id.split('-').slice(2).join('/')"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
             <button @click="openCamera('scan')" class="p-3.5 bg-blue-600 text-white rounded-2xl shadow-lg active:scale-90 transition-transform">
                 <i class="fa-solid fa-qrcode"></i>
             </button>
@@ -3041,7 +3086,7 @@
                         <button @click="editUser = { ...user }; isEditingProfile = true" class="border-2 border-blue-600 text-blue-600 px-5 py-2 rounded-2xl font-black text-xs active:bg-blue-600 active:text-white transition-all shadow-sm">Edit Profile</button>
                     </div>
                 </div>
-                <p class="mt-4 text-sm leading-relaxed text-gray-700 dark:text-gray-300" x-text="user.bio"></p>
+                <p class="mt-4 text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-words whitespace-pre-wrap" x-text="user.bio"></p>
                 
                 <div class="flex justify-between mt-8 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border dark:border-gray-700">
                     <div class="text-center flex-1 p-4 border-r dark:border-gray-700"><p class="font-black text-lg" x-text="formatNumber(user.total_posts_count)"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Posts</p></div>
@@ -3419,17 +3464,12 @@
             <div class="space-y-4">
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Full Name</label><input type="text" x-model="editUser.name" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Username</label><input type="text" x-model="editUser.username" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
-                <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Bio</label><textarea x-model="editUser.bio" rows="3" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500 resize-none"></textarea></div>
                 <div>
-                    <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Department</label>
-                    <select x-model="editUser.dept" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500 appearance-none">
-                        <option>Computer Science</option>
-                        <option>Biological Sciences</option>
-                        <option>Physics</option>
-                        <option>Chemistry</option>
-                        <option>Law</option>
-                        <option>Sociology</option>
-                    </select>
+                    <div class="flex justify-between items-center mb-1 px-1">
+                        <label class="text-[10px] font-black text-gray-400 uppercase">Bio</label>
+                        <span class="text-[10px] font-bold" :class="(editUser.bio || '').length >= 150 ? 'text-red-500' : 'text-gray-400'" x-text="(editUser.bio || '').length + ' / 160'"></span>
+                    </div>
+                    <textarea x-model="editUser.bio" maxlength="160" rows="3" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm focus:ring-1 focus:ring-blue-500 resize-none"></textarea>
                 </div>
             </div>
         </div>
@@ -3847,7 +3887,7 @@
                             </div>
                             <h2 class="text-2xl font-black mt-4" x-text="viewingUser?.name"></h2>
                             <p class="text-gray-500 font-bold text-sm" x-text="viewingUser?.dept"></p>
-                            <p class="text-gray-500 text-sm mt-2 text-center" x-text="viewingUser?.bio"></p>
+                            <p class="text-gray-500 text-sm mt-2 text-center break-words whitespace-pre-wrap" x-text="viewingUser?.bio"></p>
 
                             <!-- Mutual Followers Section -->
                             <template x-if="viewingUser?.mutual_followers && viewingUser.mutual_followers.length > 0">
@@ -4107,7 +4147,7 @@
              :style="getIndicatorStyle()"
              style="transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);"></div>
 
-        <button @click="activeTab = 'home'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'home'; $refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
             <i class="fa-solid fa-house-chimney text-xl"></i>
             <span class="text-[10px] font-bold mt-1">Home</span>
         </button>

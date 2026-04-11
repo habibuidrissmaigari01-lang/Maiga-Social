@@ -136,6 +136,7 @@ const initMaiga = () => {
         savedPostList: [],
         connectionList: [],
         followingList: [],
+        followerList: [],
         blockedUsers: [],
         blockedUserDetails: [],
         callHistory: [],
@@ -508,9 +509,10 @@ const initMaiga = () => {
             return `Seen by: ${names}`;
         },
         get filteredFollowingList() {
-            if (!this.friendsSearchQuery?.trim()) return this.followingList || [];
+            const list = this.followingList || [];
+            if (!this.friendsSearchQuery?.trim()) return list;
             const q = this.friendsSearchQuery.toLowerCase();
-            return (this.followingList || []).filter(f =>
+            return list.filter(f =>
                 (f.name?.toLowerCase().includes(q)) ||
                 (f.username?.toLowerCase().includes(q)) ||
                 (f.dept?.toLowerCase().includes(q))
@@ -542,9 +544,15 @@ const initMaiga = () => {
             );
         },
         get filteredFollowingForGroup() {
-            if (!this.groupSearchQuery?.trim()) return this.followingList || [];
+            // Combine following and followers for a complete member list
+            const combined = [...(this.followingList || []), ...(this.followerList || [])];
+            const uniqueMap = new Map();
+            combined.forEach(u => uniqueMap.set(u.id.toString(), u));
+            const list = Array.from(uniqueMap.values());
+
+            if (!this.groupSearchQuery?.trim()) return list;
             const q = this.groupSearchQuery.toLowerCase();
-            return (this.followingList || []).filter(f =>
+            return list.filter(f =>
                 (f.name?.toLowerCase().includes(q)) ||
                 (f.username?.toLowerCase().includes(q)) ||
                 (f.dept?.toLowerCase().includes(q))
@@ -1627,6 +1635,8 @@ const initMaiga = () => {
         minimizedCallTransform: { x: 0, y: 0 },
         swipeStart: { x: 0, y: 0 },
         swipingMsgId: null,
+        swipingChatId: null,
+        chatSwipeOffset: 0,
         // Removed duplicate swipeOffset, isDragging, isPaused declarations
         editingMessageId: null,
         isSearchingChat: false,
@@ -2576,6 +2586,7 @@ const initMaiga = () => {
                     this.groups = initData.groups;
                     this.notifications = initData.notifications;
                     this.followingList = initData.following;
+                    this.followerList = initData.followers || [];
                     this.loadProgress = 60; // Huge jump in progress
                 }
 
@@ -3476,7 +3487,8 @@ const initMaiga = () => {
         },
         fetchMessages(chat, forceScroll = true) {
             const type = chat.type === 'group' ? 'group' : 'user';
-            let url = `/api/get_messages?chat_id=${chat.id.toString()}&type=${type}`;
+            const chatId = chat.id.toString();
+            let url = `/api/get_messages?chat_id=${chatId}&type=${type}`;
             if (this.chatSearchQuery) {
                 url += `&search=${encodeURIComponent(this.chatSearchQuery)}`;
             }
@@ -3492,9 +3504,9 @@ const initMaiga = () => {
                         let msgType = m.media_type || 'text';
                         // Ensure IDs are strings for consistency
                         return {
-                        id: m.id,
-                        sender_id: m.sender_id,
-                        sender: m.sender_id == this.user.id ? 'me' : 'them',
+                        id: m.id.toString(),
+                        sender_id: m.sender_id.toString(),
+                        sender: m.sender_id.toString() === this.user.id.toString() ? 'me' : 'them',
                         type: msgType,
                         content: content,
                         created_at: m.created_at,
@@ -3515,10 +3527,10 @@ const initMaiga = () => {
                         })) : null,
                         poll_id: m.poll_id
                     }}));
-                    this.chatMessages = { ...this.chatMessages, [chat.id]: formattedMessages };
+                    this.chatMessages = { ...this.chatMessages, [chatId]: formattedMessages };
                     
                     data.forEach((m, idx) => {
-                        this.chatMessages[chat.id][idx].reactions = m.reactions || [];
+                        this.chatMessages[chatId][idx].reactions = m.reactions || [];
                     });
 
                     if (forceScroll) {
@@ -3650,6 +3662,33 @@ const initMaiga = () => {
             this.swipingMsgId = null;
             this.swipeOffset = 0;
             this.touchEnd();
+        },
+        handleChatSwipeStart(e, chatId) {
+            this.swipeStart.x = e.touches[0].clientX;
+            this.swipeStart.y = e.touches[0].clientY;
+            this.swipingChatId = chatId;
+            this.chatSwipeOffset = 0;
+        },
+        handleChatSwipeMove(e) {
+            if (!this.swipingChatId) return;
+            const dx = e.touches[0].clientX - this.swipeStart.x;
+            const dy = e.touches[0].clientY - this.swipeStart.y;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (e.cancelable) e.preventDefault();
+                if (dx < 0) this.chatSwipeOffset = Math.max(dx, -100); // Swipe Left (Delete)
+                else this.chatSwipeOffset = Math.min(dx, 100); // Swipe Right (Archive)
+            }
+        },
+        handleChatSwipeEnd() {
+            if (this.chatSwipeOffset < -70) {
+                const chat = [...this.chats, ...this.groups, ...this.archivedChats].find(c => c.id.toString() === this.swipingChatId.toString());
+                if (chat) this.deleteChat(chat);
+            } else if (this.chatSwipeOffset > 70) {
+                const chat = [...this.chats, ...this.groups, ...this.archivedChats].find(c => c.id.toString() === this.swipingChatId.toString());
+                if (chat) this.markAsUnread(chat);
+            }
+            this.swipingChatId = null;
+            this.chatSwipeOffset = 0;
         },
         touchStart(e, msg) {
             this.touchTimer = setTimeout(() => {
@@ -4477,7 +4516,6 @@ const initMaiga = () => {
             formData.append('name', this.editUser.name);
             formData.append('username', this.editUser.username);
             formData.append('bio', this.editUser.bio || '');
-            formData.append('dept', this.editUser.dept || '');
             
             this.isSavingProfile = true; // Disable button
             if (this.$refs.profileAvatarInput.files.length > 0) {
@@ -4888,6 +4926,7 @@ const initMaiga = () => {
                             this.activeChat = { ...this.activeChat, ...data };
                             this.activeChat.role = myMembership ? myMembership.role : null;
                             this.activeChat.pending_requests_count = data.join_requests ? data.join_requests.length : 0;
+                            this.fetchGroupActivity(this.activeChat.id);
                         } else {
                             this.activeChat.members = oldMembers; // Restore on error
                         }

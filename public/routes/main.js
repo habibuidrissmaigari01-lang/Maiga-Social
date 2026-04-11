@@ -166,12 +166,13 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         const userId = req.session.userId;
         
         // Fetch all critical data in parallel on the server
-        const [user, posts, chats, groups, connections, trending, notifications] = await Promise.all([
+        const [user, posts, chats, groups, connections, followersData, trending, notifications] = await Promise.all([
             User.findById(userId),
             Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
             Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online'),
             Group.find({ 'members.user': userId }),
             User.findById(userId).populate('following', 'name avatar username online dept'),
+            User.find({ following: userId }).select('name first_name surname avatar username online dept'),
             Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
             Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10)
         ]);
@@ -202,6 +203,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             chats: Array.from(processedChats.values()),
             groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
+            followers: followersData.map(f => ({ id: f._id, name: f.full_name || f.name, avatar: f.avatar, username: f.username, dept: f.dept, online: f.online })),
             trending: [], // Map trending logic here
             notifications: notifications
         });
@@ -487,7 +489,7 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
 router.post('/create_group', isAuthenticated, upload.single('avatar'), async (req, res) => {
     try {
         const { name, description, members, permissions, approve_members } = req.body;
-        let avatarUrl = 'img/logo.png';
+        let avatarUrl = 'img/default-group.png';
         if (req.file) avatarUrl = await uploadToR2(req.file, 'groups');
 
         // Creator must be added as an admin automatically
