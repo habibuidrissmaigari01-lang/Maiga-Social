@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
-const multer = require('multer');
+const formidable = require('formidable');
 const fs = require('fs');
 const path = require('path');
 const webpush = require('web-push');
@@ -16,22 +16,6 @@ if (publicVapidKey && privateVapidKey) {
     const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social';
     webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
 }
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../../uploads');
-        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '_'));
-    }
-});
-
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // Limit individual files to 100MB
-});
 
 // Robust URL handling: ensure the base URL has no trailing slash
 const BASE_PUBLIC_URL = process.env.R2_PUBLIC_URL?.replace(/\/+$/, '');
@@ -55,13 +39,13 @@ const getVideoDuration = (filePath) => {
 };
 
 const uploadToR2 = async (file, folder) => {
-    const key = `${folder}/${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
+    const key = `${folder}/${Date.now()}-${file.originalFilename.replace(/\s+/g, '_')}`;
 
     try {
         // SECURITY: Check video duration if the file is a video
         if (file.mimetype.startsWith('video')) {
             try {
-                const duration = await getVideoDuration(file.path);
+                const duration = await getVideoDuration(file.filepath);
                 if (duration !== null && duration > 180) { // Only throw if duration was actually retrieved
                     throw new Error('Video duration exceeds the 3-minute limit.');
                 }
@@ -70,7 +54,7 @@ const uploadToR2 = async (file, folder) => {
             }
         }
 
-        const fileBuffer = fs.readFileSync(file.path);
+        const fileBuffer = fs.readFileSync(file.filepath);
         await s3Client.send(new PutObjectCommand({
             Bucket: process.env.R2_BUCKET_NAME,
             Key: key,
@@ -81,7 +65,7 @@ const uploadToR2 = async (file, folder) => {
         return `${BASE_PUBLIC_URL}/${key}`;
     } finally {
         // Always delete the temporary file from the server's disk after R2 upload completes or fails
-        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+        if (fs.existsSync(file.filepath)) fs.unlinkSync(file.filepath);
     }
 };
 
@@ -159,6 +143,27 @@ const isAdmin = async (req, res, next) => {
     res.status(403).json({ error: 'Admin access denied' });
 };
 
+// Helper to parse forms with Formidable (Async/Await wrapper)
+const parseForm = (req) => {
+    const uploadDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    
+    const form = new formidable.IncomingForm({
+        uploadDir,
+        keepExtensions: true,
+        maxFileSize: 100 * 1024 * 1024,
+        multiples: true
+    });
+
+    return new Promise((resolve, reject) => {
+        form.parse(req, (err, fields, files) => {
+            if (err) reject(err);
+            resolve({ fields, files });
+        });
+    });
+};
+
+
 // --- Routes ---
 
 router.get('/get_init_data', isAuthenticated, async (req, res) => {
@@ -224,14 +229,18 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
     });
 });
 
-router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (req, res) => {
-    // SECURITY: Protect against mass assignment by only destructuring allowed fields.
-    // This prevents users from self-promoting to admin via the request body.
+router.post('/update_profile', isAuthenticated, async (req, res) => {
     try {
-        const { name, username, bio, dept } = req.body;
-        const updates = { name, username, bio, dept };
+         const { fields, files } = await parseForm(req);
+        const name = fields.name?.[0] || fields.name;
+        const username = fields.username?.[0] || fields.username;
+        const bio = fields.bio?.[0] || fields.bio;
+        const dept = fields.dept?.[0] || fields.dept;
         
-        if (req.file) {
+        const updates = { name, username, bio, dept };
+         const avatarFile = files.avatar?.[0] || files.avatar;
+        
+        if (avatarFile) {
             const user = await User.findById(req.session.userId);
             
             // If current avatar is an R2 URL (starts with http), delete the old file
@@ -246,7 +255,7 @@ router.post('/update_profile', isAuthenticated, upload.single('avatar'), async (
                     }));
                 } catch (cleanupErr) { }
             }
-            updates.avatar = await uploadToR2(req.file, 'avatars');
+            updates.avatar = await uploadToR2(avatarFile, 'avatars');
         }
 
         await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
@@ -383,11 +392,16 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/create_post', isAuthenticated, upload.array('media', 10), async (req, res) => {
+router.post('/create_post', isAuthenticated, async (req, res) => {
+    const { fields, files } = await parseForm(req);
+    const content = fields.content?.[0] || fields.content;
+    const feeling = fields.feeling?.[0] || fields.feeling;
+    const mediaFiles = files.media ? (Array.isArray(files.media) ? files.media : [files.media]) : [];
+
     let mediaUrls = [];
     let firstMime = null;
-    if (req.files && req.files.length > 0) {
-        for (const file of req.files) {
+    if (mediaFiles.length > 0) {
+        for (const file of mediaFiles) {
             const folder = file.mimetype.startsWith('video') ? 'reels' : 
                           (file.mimetype.startsWith('audio') ? 'voice_notes' : 'posts');
             const url = await uploadToR2(file, folder);
@@ -398,11 +412,11 @@ router.post('/create_post', isAuthenticated, upload.array('media', 10), async (r
 
     const post = new Post({
         user: req.session.userId,
-        content: req.body.content,
+        content: content,
         media: mediaUrls,
         media_type: firstMime ? (firstMime.startsWith('video') ? 'video' : 
                                 (firstMime.startsWith('audio') ? 'audio' : 'image')) : null,
-        feeling: req.body.feeling,
+        feeling: feeling,
     });
 
     // Generate link preview if a URL is present in the content
@@ -435,8 +449,13 @@ router.post('/create_post', isAuthenticated, upload.array('media', 10), async (r
     }});
 });
 
-router.post('/send_message', isAuthenticated, upload.single('media'), async (req, res) => {
-    const { receiver_id, group_id, content, media_type, reply_to_id } = req.body;
+router.post('/send_message', isAuthenticated, async (req, res) => {
+    const { fields, files } = await parseForm(req);
+    const receiver_id = fields.receiver_id?.[0] || fields.receiver_id;
+    const group_id = fields.group_id?.[0] || fields.group_id;
+    const content = fields.content?.[0] || fields.content;
+    const media_type = fields.media_type?.[0] || fields.media_type;
+    const reply_to_id = fields.reply_to_id?.[0] || fields.reply_to_id;
     
     let targetReceiverId = receiver_id;
     // Handle special case for 'support-admin'
@@ -448,11 +467,12 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
     }
     
     let mediaUrl = null;
-    if (req.file) {
+    const mediaFile = files.media?.[0] || files.media;
+    if (mediaFile) {
         // Organize R2 storage by media type
-        const isAudio = req.file.mimetype.startsWith('audio') || media_type === 'audio';
+        const isAudio = mediaFile.mimetype.startsWith('audio') || media_type === 'audio';
         const folder = isAudio ? 'voice_notes' : (media_type === 'sticker' ? 'stickers' : 'messages');
-        mediaUrl = await uploadToR2(req.file, folder);
+        mediaUrl = await uploadToR2(mediaFile, folder);
     }
 
     // Handle Disappearing Messages (24h)
@@ -486,11 +506,18 @@ router.post('/send_message', isAuthenticated, upload.single('media'), async (req
     res.json({ success: true, message_id: msg._id });
 });
 
-router.post('/create_group', isAuthenticated, upload.single('avatar'), async (req, res) => {
+router.post('/create_group', isAuthenticated, async (req, res) => {
     try {
-        const { name, description, members, permissions, approve_members } = req.body;
+        const { fields, files } = await parseForm(req);
+        const name = fields.name?.[0] || fields.name;
+        const description = fields.description?.[0] || fields.description;
+        const members = fields.members?.[0] || fields.members;
+        const permissions = fields.permissions?.[0] || fields.permissions;
+        const approve_members = fields.approve_members?.[0] || fields.approve_members;
+
         let avatarUrl = 'img/default-group.png';
-        if (req.file) avatarUrl = await uploadToR2(req.file, 'groups');
+        const avatarFile = files.avatar?.[0] || files.avatar;
+        if (avatarFile) avatarUrl = await uploadToR2(avatarFile, 'groups');
 
         // Creator must be added as an admin automatically
         const parsedMembers = JSON.parse(members).map(id => ({ user: id, role: 'member' }));
@@ -2154,9 +2181,15 @@ router.get('/get_stickers', isAuthenticated, (req, res) => {
     });
 });
 
-router.post('/update_group_info', isAuthenticated, upload.single('avatar'), async (req, res) => {
+router.post('/update_group_info', isAuthenticated, async (req, res) => {
     try {
-        const { group_id, name, description, permissions, approve_members } = req.body;
+        const { fields, files } = await parseForm(req);
+        const group_id = fields.group_id?.[0] || fields.group_id;
+        const name = fields.name?.[0] || fields.name;
+        const description = fields.description?.[0] || fields.description;
+        const permissions = fields.permissions?.[0] || fields.permissions;
+        const approve_members = fields.approve_members?.[0] || fields.approve_members;
+
         const group = await Group.findById(group_id);
         if (!group) return res.status(404).json({ error: 'Group not found' });
 
@@ -2167,7 +2200,8 @@ router.post('/update_group_info', isAuthenticated, upload.single('avatar'), asyn
 
         const updates = { name, description, approve_members: approve_members === '1' };
         if (permissions) updates.permissions = JSON.parse(permissions);
-        if (req.file) updates.avatar = await uploadToR2(req.file, 'groups');
+        const avatarFile = files.avatar?.[0] || files.avatar;
+        if (avatarFile) updates.avatar = await uploadToR2(avatarFile, 'groups');
 
         await Group.findByIdAndUpdate(group_id, { $set: updates });
         res.json({ success: true });
@@ -2471,11 +2505,14 @@ router.post('/admin/send_broadcast', isAuthenticated, isAdmin, async (req, res) 
     }
 });
 
-router.post('/admin/update_admin_profile', isAuthenticated, isAdmin, upload.single('avatar'), async (req, res) => {
+router.post('/admin/update_admin_profile', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const { name } = req.body;
+        const { fields, files } = await parseForm(req);
+        const name = fields.name?.[0] || fields.name;
+
         const updates = { name };
-        if (req.file) updates.avatar = await uploadToR2(req.file, 'admin');
+        const avatarFile = files.avatar?.[0] || files.avatar;
+        if (avatarFile) updates.avatar = await uploadToR2(avatarFile, 'admin');
         
         await User.findByIdAndUpdate(req.session.userId, { $set: updates });
         res.json({ success: true });
