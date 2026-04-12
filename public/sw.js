@@ -11,14 +11,18 @@ const ASSETS_TO_CACHE = [
   '/img/logo.png',
   '/img/ysu.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
+  '/font/inter-regular.woff2',
+  '/font/IntelOneMono-Regular.woff2',
+  '/font/IntelOneMono-Bold.woff2',
+  '/font/IntelOneMono-Italic.woff2',
+  '/font/IntelOneMono-BoldItalic.woff2',
 ];
 
 // Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
 
-const CACHE_NAME = `${APP_TYPE}-offline-v4`;
+const CACHE_NAME = `${APP_TYPE}-offline-v5`;
 const OFFLINE_URL = '/offline.html';
 const DB_NAME = 'maiga_crypto';
 const STORE_NAME = 'pending_messages';

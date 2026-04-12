@@ -166,6 +166,17 @@ const initMaiga = () => {
         ],
         loginSessions: [],
 
+        get filteredForwardList() {
+            const combined = [...new Map([...this.followingList, ...this.followerList].map(item => [item.id, item])).values()];
+            if (!this.reelForwardSearchQuery.trim()) return combined;
+            const q = this.reelForwardSearchQuery.toLowerCase();
+            return combined.filter(p => 
+                p.name.toLowerCase().includes(q) || 
+                p.username.toLowerCase().includes(q) ||
+                (p.dept && p.dept.toLowerCase().includes(q))
+            );
+        },
+
         // UI Controls
         isMessaging: false,
         isSavingProfile: false,
@@ -179,6 +190,9 @@ const initMaiga = () => {
         hasFlashlight: false,
         isConfirmingCapture: false,
         showCameraFlash: false,
+        reelForwardSearchQuery: '',
+        hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
+        showReelMenu: false,
         focusRing: { show: false, x: 0, y: 0 },
         isReporting: false,
         isCreatingPost: false,
@@ -1826,6 +1840,7 @@ const initMaiga = () => {
         refreshAllData() {
             if (this.isRefreshing) return;
             this.isRefreshing = true;
+            this.friendsPage = 1;
 
             const promises = [
                 this.apiFetch('/api/get_posts?page=1').then(data => { if (Array.isArray(data)) { this.posts = data; this.page = 1; } }), // Fixed: this.homePosts to this.posts
@@ -1835,7 +1850,6 @@ const initMaiga = () => {
                 this.apiFetch(`/api/friends/suggestions?page=1&limit=${this.friendsLimit}`).then(data => { 
                     if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem('maiga_friends_cache', JSON.stringify(data.users)); } 
                 }),
-                this.friendsPage = 1, // Reset page for suggestions
                 this.apiFetch('/api/get_trending').then(data => { if (Array.isArray(data)) this.trendingTopics = data; })
         
             ];
@@ -2480,7 +2494,14 @@ const initMaiga = () => {
             
             // Auto-scroll to top when switching to home
             this.$watch('activeTab', (val) => {
-                if (val === 'home') this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
+                if (val === 'home') {
+                    this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+                
+                // Isolate Reels scroll: prevent outer container from scrolling when in reels tab
+                if (this.$refs.mainContent) {
+                    this.$refs.mainContent.style.overflowY = val === 'reels' ? 'hidden' : 'auto';
+                }
             });
             
             // Listen for typing events
@@ -2694,7 +2715,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_reels?page=1&limit=10').then(async d => { 
                     // Fixed: reels were not being mapped with initial properties
-                    this.reels = (Array.isArray(d) ? d : []).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                    this.reels = (Array.isArray(d) ? d : []).filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver());
                     incrementProgress();
                     await this.restoreScrollState();
@@ -4234,13 +4255,15 @@ const initMaiga = () => {
         },
         handleReelClick(reel, event) {
             if (this.isSpeedingUp) {
-                // Ignore the click event that fires after a long-press release
                 return;
             }
             const now = Date.now();
             if (now - this.lastReelClick < 300) {
-                // Double (or multi) tap detected
                 clearTimeout(this.reelClickTimer);
+
+                // Stop the hint timer if the user is interacting
+                clearTimeout(this.reelHintTimer);
+                this.showSwipeHint = false;
 
                 // 1. Capture exact tap coordinates relative to the video container
                 const rect = event.currentTarget.getBoundingClientRect();
@@ -4251,7 +4274,7 @@ const initMaiga = () => {
                 reel.showHeart = false;
                 this.$nextTick(() => {
                     reel.showHeart = true;
-                    // Auto-hide the heart after the animation completes
+                    if (navigator.vibrate) navigator.vibrate(30);
                     clearTimeout(reel.heartTimer);
                     reel.heartTimer = setTimeout(() => reel.showHeart = false, 800);
                 });
@@ -4277,24 +4300,43 @@ const initMaiga = () => {
         },
 
         startReelHold(reel) {
+            this.reelForwardSearchQuery = '';
+            this.selectedReel = reel;
+            // 1. Long Press Menu timer (TikTok style)
+            this.reelMenuTimer = setTimeout(() => {
+                if (!this.isSpeedingUp) {
+                    this.showReelMenu = true;
+                    if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+                }
+            }, 700); // 700ms for menu
+
+            // 2. 2x Speed timer
             this.speedTimer = setTimeout(() => { // Ensure reel.id is string
                 const video = document.getElementById('reel-video-' + reel.id);
-                if (video) {
+                if (video && !this.showReelMenu) {
                     video.playbackRate = 2;
                     this.isSpeedingUp = true;
                     if (navigator.vibrate) navigator.vibrate(50);
                 }
-            }, 500);
+            }, 500); // Start speeding up slightly before menu potentially pops
         },
 
         stopReelHold(reel) {
             clearTimeout(this.speedTimer);
+            clearTimeout(this.reelMenuTimer);
             if (this.isSpeedingUp) {
                 const video = document.getElementById('reel-video-' + reel.id);
                 if (video) video.playbackRate = 1;
                 // Small delay before resetting flag to allow handleReelClick to catch it
                 setTimeout(() => { this.isSpeedingUp = false; }, 100);
             }
+        },
+
+        sendReelForward(person, reel) {
+            if (!person || !reel) return;
+            const msg = `Check out this reel from @${reel.author}: ${reel.media}`;
+            this.sendMessage(reel.media, 'video', `Check out this reel:`, null); // Sending video type message
+            this.showToast('Forwarded', `Sent to ${person.name.split(' ')[0]}`, 'success');
         },
 
         startVolumeLongPress() {
@@ -7194,7 +7236,7 @@ const initMaiga = () => {
             return this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
-                        const mapped = data.map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                        const mapped = data.filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                         this.reels = [...this.reels, ...mapped];
                     }
                 }).catch(() => {
@@ -7312,9 +7354,17 @@ const initMaiga = () => {
             }
         },
         markNotInterested(reel) {
-             this.reels = this.reels.filter(r => r.id.toString() !== reel.id.toString());
-            this.showToast('Feedback', 'We will show less like this.', 'info'); // Ensure reel.id is string
+            if (reel.dept) {
+                this.hiddenReelDepts.push(reel.dept);
+                localStorage.setItem('maiga_hidden_depts', JSON.stringify(this.hiddenReelDepts));
+                this.reels = this.reels.filter(r => r.dept !== reel.dept);
+                this.showToast('Preference Saved', `Hiding similar reels from ${reel.dept}.`, 'success');
+            } else {
+                this.reels = this.reels.filter(r => r.id.toString() !== reel.id.toString());
+                this.showToast('Feedback', 'We will show less like this.', 'info');
+            }
             this.showReelOptions = false;
+            this.showReelMenu = false;
         },
         reportReel(reel) {
             if (!reel || (!reel.user_id && (!reel.user || !reel.user.id))) {

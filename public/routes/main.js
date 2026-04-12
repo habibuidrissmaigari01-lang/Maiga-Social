@@ -1333,7 +1333,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         if (req.query.user_id) query.user = req.query.user_id;
 
         // Fetching reels
-        let reels = await Post.find(query).populate('user', 'name avatar').sort({ createdAt: -1 }).skip(skip).limit(limit);
+        let reels = await Post.find(query).populate('user', 'name avatar dept').sort({ createdAt: -1 }).skip(skip).limit(limit);
         
         // Randomize and interleave reels to avoid author clustering
         if (!req.query.user_id && reels.length > 2) {
@@ -1358,6 +1358,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const userId = req.session.userId;
         res.json(reels.map(r => ({
             id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
+            dept: r.user?.dept,
             media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0, // Ensure comments count is included
             comments: r.comments_count || 0, // Ensure comments count is included
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
@@ -1380,7 +1381,7 @@ router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
             media_type: 'video',
             createdAt: { $gte: lastWeek }
         })
-        .populate('user', 'name avatar')
+        .populate('user', 'name avatar dept')
         .sort({ views: -1, 'likes.length': -1 })
         .limit(10);
 
@@ -1389,6 +1390,7 @@ router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
             user_id: r.user?._id, // Ensure comments count is included
             author: r.user?.name || 'User',
             avatar: r.user?.avatar,
+            dept: r.user?.dept,
             media: r.media,
             caption: r.content,
             likes: r.likes.length,
@@ -2635,7 +2637,7 @@ router.get('/get_trending', isAuthenticated, async (req, res) => {
         });
 
         const trending = Object.entries(counts)
-            .map(([tag, count]) => ({ tag: tag.replace('#', ''), count, category: 'Trending' }))
+            .map(([tag, count], index) => ({ id: index + 1, tag: tag.replace('#', ''), count, category: 'Trending' }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 10);
 
