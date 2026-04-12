@@ -2576,6 +2576,7 @@ const initMaiga = () => {
             
             // Auto-scroll to top when switching to home
             this.$watch('activeTab', (val) => {
+                if (this.isMessaging) this.isMessaging = false;
                 if (val === 'home') {
                     this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -7391,7 +7392,7 @@ const initMaiga = () => {
         handleScroll(el) {
             // Contextual Header Logic
             let st = el.scrollTop;
-            this.isHeaderHidden = false; // Keep header pinned at all times
+            this.hasScrolled = st > 10;
             this.lastScrollTop = st <= 0 ? 0 : st;
 
             this.hasScrolled = el.scrollTop > 10;
