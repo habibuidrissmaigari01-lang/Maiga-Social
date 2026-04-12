@@ -53,6 +53,11 @@ const initMaiga = () => {
     };
 
     isMaigaInitialized = true;
+    // Global Error Boundary to prevent app crashes
+    Alpine.setErrorHandler((e, el, expression) => {
+        console.error('Alpine Logic Error:', e, 'at element:', el, 'expression:', expression);
+    });
+
     Alpine.data('appData', () => ({
         init() {
             this.mainInit(); 
@@ -116,6 +121,8 @@ const initMaiga = () => {
         isRefreshing: false,
         isOffline: !navigator.onLine,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
+        isMessaging: false,
+        fetchError: false,
         compressionProgress: 0,
         supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
         pushPermission: Notification.permission || 'default',
@@ -190,6 +197,7 @@ const initMaiga = () => {
         chatListSearchQuery: '',
         showOnlyUnread: false,
         isAutoExpanding: false,
+        isChangingPassword: false,
         isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
         isSavingProfile: false,
         isSubmittingGroup: false,
@@ -212,6 +220,7 @@ const initMaiga = () => {
         isCreatingGroup: false,
         isEditingProfile: false,
         isEditingGroupInfo: false,
+        isUpdatingGroupInfo: false,
         isAddingGroupMembers: false,
         isMediaEditorOpen: false,
         isCalling: false,
@@ -275,6 +284,14 @@ const initMaiga = () => {
         lastBusyCall: null,
         vibrationInterval: null,
         callTimeoutTimer: null,
+        restoreStateRan: false,
+        maintInterval: null,
+        typingIndicatorTimeout: null,
+        lastHapticStep: 0,
+        focusTimer: null,
+        musicSourceNode: null,
+        reelMenuTimer: null,
+        touchTimer: null,
 
         // Admin State
         totalUsers: 0,
@@ -662,6 +679,7 @@ const initMaiga = () => {
         activeChat: null,
         showMemberOptionsFor: null,
         isAddingGroupMembers: false,
+        isAddingMembers: false,
         membersToAdd: [],
         addMemberSearchQuery: '',
         isEditingGroupInfo: false,
@@ -4344,9 +4362,9 @@ const initMaiga = () => {
                 this.showSwipeHint = false;
 
                 // 1. Capture exact tap coordinates relative to the video container
-                const rect = event.currentTarget.getBoundingClientRect();
-                reel.heartX = event.clientX - rect.left;
-                reel.heartY = event.clientY - rect.top;
+                 const rect = event.target.getBoundingClientRect();
+                reel.heartX = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
+                reel.heartY = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
                 
                 // 2. Re-trigger animation for every single tap in a sequence
                 reel.showHeart = false;
