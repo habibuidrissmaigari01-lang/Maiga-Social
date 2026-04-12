@@ -421,17 +421,22 @@ storySchema.index({ user: 1, createdAt: -1 });
 // --- Mongoose 8 Hook: Automated Story R2 Cleanup ---
 storySchema.pre('deleteOne', { document: false, query: true }, async function() {
     const doc = await this.model.findOne(this.getQuery());
-    if (doc && doc.media && doc.media.startsWith('http')) {
-        try {
-            // Extract key from URL
-            const url = new URL(doc.media);
-            const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
-            
-            await s3Client.send(new DeleteObjectCommand({
-                Bucket: process.env.R2_BUCKET_NAME,
-                Key: key
-            }));
-        } catch (error) { }
+    if (doc && doc.media) {
+        const mediaArray = Array.isArray(doc.media) ? doc.media : [doc.media];
+        for (const m of mediaArray) {
+            if (m && m.startsWith('http')) {
+                try {
+                    // Extract key from URL
+                    const url = new URL(m);
+                    const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                    
+                    await s3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_BUCKET_NAME,
+                        Key: key
+                    }));
+                } catch (error) { }
+            }
+        }
     }
 });
 
@@ -511,6 +516,10 @@ Notification.discriminator('follow', new mongoose.Schema({
 
 // Discriminator for 'Post' notifications (for new posts/stories)
 Notification.discriminator('post', new mongoose.Schema({
+}));
+
+// Discriminator for 'Story' notifications
+Notification.discriminator('story', new mongoose.Schema({
 }));
 
 // Discriminator for 'Mention' notifications

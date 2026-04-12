@@ -3431,14 +3431,14 @@ const initMaiga = () => {
             }
             this.isSendingMessage = false;
         },
-        sendTypingSignal: Alpine.throttle(function() { 
+        sendTypingSignal: Alpine.debounce(function() { 
             if (!this.activeChat) return;
             this.socket.emit('typing', { 
                  group_id: this.activeChat.type === 'group' ? this.activeChat.id : null,
                 receiver_id: this.activeChat.type !== 'group' ? this.activeChat.id : null,
                 sender_id: this.user.id.toString()
             });
-        }, 2000),
+        }, 1000),
 
         sendLocation() {
             if (!navigator.geolocation) return this.showToast('Error', 'Geolocation not supported', 'error');

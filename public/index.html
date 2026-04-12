@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="img/logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="img/logo.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Maiga Social">
 
@@ -43,7 +44,7 @@
     }
     </script>
      <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/font/inter-roman.var.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-maiga.json">
       <script>
@@ -57,35 +58,51 @@
     </script>
     <!-- Load heavy icons asynchronously -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <style>
+        [x-cloak] { display: none !important; }
+        .step-content { display: none; }
+        .step-content.active { display: block; }
+        .progress-fill { transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+        .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
+        .background-container {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: url('img/bg-index.jpg'); /* Ensure this path is correct */
+            background-size: cover;
+            background-position: center;
+        }
+    </style>
 </head>
 <body class="index-bg flex items-center justify-center min-h-screen w-full p-4 overflow-x-hidden">
 
     <div class="background-container"></div>
-    <div class="glass-card p-6 md:p-10" id="authCard">
+    <div class="glass-card p-6 md:p-10 w-full max-w-md" id="authCard" x-data="authComponent()" x-cloak>
         <div class="flex flex-col items-center justify-center mb-6">
            <img src="img/logo.png" width="64" height="64" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
             <h1 class="text-2xl font-black text-gray-800 italic">Maiga Social</h1>
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->
-        <form id="mainAuthForm">
+        <form id="mainAuthForm" @submit.prevent="submitForm">
             <!-- Hidden input to tell backend which action was taken -->
-            <input type="hidden" id="authType" name="auth_type" value="login">
+            <input type="hidden" id="authType" name="auth_type" :value="view === 'login' ? 'login' : 'register'">
             <input type="hidden" name="account_type" value="maiga">
 
             <!-- Progress Bar (Hidden for Login) -->
-            <div id="regProgress" class="hidden">
+            <div id="regProgress" x-show="view === 'register'">
                 <div class="flex justify-between text-xs font-bold text-indigo-600 mb-2 uppercase tracking-wider">
-                    <span id="stepCounter">Step 1 of 7</span>
-                    <span id="percentLabel">15%</span>
+                    <span x-text="`Step ${step} of 7`"></span>
+                    <span x-text="Math.round((step / 7) * 100) + '%'"></span>
                 </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+                <div class="w-full bg-gray-100 dark:bg-gray-800 h-2 rounded-full overflow-hidden mb-6">
+                    <div class="progress-fill bg-indigo-600 h-full rounded-full" :style="`width: ${Math.round((step / 7) * 100)}%` shadow-sm"></div>
                 </div>
             </div>
 
             <!-- LOGIN PAGE -->
-            <div id="page-login" class="step-content active">
+            <div id="page-login" class="step-content" :class="{ 'active': view === 'login' }" x-show="view === 'login'">
                 <h1 class="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h1>
                 <p class="text-gray-500 mb-8">Login to stay connected with Maiga Social.</p>
 
@@ -124,61 +141,68 @@
                     <button type="submit" class="btn-primary mt-4">Login</button>
                     <p class="text-center text-sm text-gray-600">
                         Don't have an account? 
-                        <button type="button" onclick="showRegister(event)" class="text-indigo-600 font-bold ml-1">Register</button>
+                        <button type="button" @click="view = 'register'; step = 1" class="text-indigo-600 font-bold ml-1">Register</button>
                     </p>
                 </div>
             </div>
 
             <!-- REGISTER STEP 1: Name -->
-            <div id="reg-1" class="step-content">
-                <button type="button" onclick="showLogin(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-1" class="step-content" :class="{ 'active': view === 'register' && step === 1 }" x-show="view === 'register' && step === 1">
+                <button type="button" @click="view = 'login'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">What's your name?</h2>
                 <p class="text-gray-500 text-sm mb-6">Enter the name you use in real life.</p>
                 <div class="space-y-4">
                     <input type="text" name="first_name" placeholder="First Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <input type="text" name="surname" placeholder="Last Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" onclick="nextStep(2)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(2, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Already have an account?</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Already have an account?</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 2: Birthday -->
-            <div id="reg-2" class="step-content">
-                <button type="button" onclick="nextStep(1)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-2" class="step-content" :class="{ 'active': view === 'register' && step === 2 }" x-show="view === 'register' && step === 2">
+                <button type="button" @click="step = 1" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">What's your birthday?</h2>
                 <p class="text-gray-500 text-sm mb-6">Please enter your real date of birth.</p>
                 <div class="space-y-4">
                     <input type="date" name="birthday" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" onclick="nextStep(3)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(3, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 3: Username -->
-            <div id="reg-3" class="step-content">
-                <button type="button" onclick="nextStep(2)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-3" class="step-content" :class="{ 'active': view === 'register' && step === 3 }" x-show="view === 'register' && step === 3">
+                <button type="button" @click="step = 2" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Choose a username</h2>
                 <p class="text-gray-500 text-sm mb-6">Your unique username will be public.</p>
                 <div class="space-y-4">
                     <div class="relative">
-                        <input type="text" name="username" id="username" placeholder="Username" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400" oninput="this.value = this.value.replace(/\s/g, '_'); checkUsername(this.value)">
-                        <div id="username-feedback" class="absolute right-3 top-1/2 -translate-y-1/2"></div>
+                        <input type="text" name="username" id="username" placeholder="Username"
+                               @input.debounce.500ms="checkAvailability('username', $event.target.value)"
+                               class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 transition-colors"
+                               :class="usernameStatus === 'taken' ? 'border-red-500 shadow-[0_0_10px_rgba(239,44,44,0.2)]' : (usernameStatus === 'available' ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]' : '')">
+                        <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                            <i x-show="usernameStatus === 'checking'" class="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                            <i x-show="usernameStatus === 'available'" class="fa-solid fa-check-circle text-green-500"></i>
+                            <i x-show="usernameStatus === 'taken'" class="fa-solid fa-times-circle text-red-500"></i>
+                        </div>
                     </div>
                     <div id="username-suggestions" class="text-xs text-gray-500 -mt-2 px-1"></div>
-                    <button type="button" onclick="nextStep(4)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(4, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 4: Gender -->
-            <div id="reg-4" class="step-content">
-                <button type="button" onclick="nextStep(3)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-4" class="step-content" :class="{ 'active': view === 'register' && step === 4 }" x-show="view === 'register' && step === 4">
+                <button type="button" @click="step = 3" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">What's your gender?</h2>
                 <p class="text-gray-500 text-sm mb-6">Specify your gender as per official documents.</p>
                 <div class="space-y-4">
@@ -188,37 +212,50 @@
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                     </select>
-                    <button type="button" onclick="nextStep(5)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(5, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 5: Mobile / Email -->
-            <div id="reg-5" class="step-content">
-                <button type="button" onclick="nextStep(4)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-5" class="step-content" :class="{ 'active': view === 'register' && step === 5 }" x-show="view === 'register' && step === 5">
+                <button type="button" @click="step = 4" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 id="contactTitle" class="text-2xl font-bold text-gray-800 mb-1">Contact Details</h2>
                 <p id="contactSub" class="text-gray-500 text-sm mb-6">Enter your mobile number and email address.</p>
                 <div class="space-y-4">
-                    <div id="phoneInputWrap">
-                        <input type="tel" name="phone" placeholder="+123 456 7890" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                        <p class="text-xs text-gray-400 mt-2">You may receive a WhatsApp or SMS OTP from us.</p>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Phone Number</label>
+                        <div class="relative mt-1">
+                            <input type="tel" name="phone" placeholder="Phone Number" 
+                                   @input.debounce.500ms="checkAvailability('phone', $event.target.value)"
+                                   class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400"
+                                   :class="phoneStatus === 'taken' ? 'border-red-500' : (phoneStatus === 'available' ? 'border-green-500' : '')">
+                            <p x-show="phoneStatus === 'taken'" class="text-[10px] text-red-500 font-bold mt-1 ml-1">Phone number already in use.</p>
+                        </div>
                     </div>
-                    <div id="emailInputWrap">
-                        <input type="email" name="reg_email" placeholder="example@email.com" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Email Address</label>
+                        <div class="relative mt-1">
+                            <input type="email" name="reg_email" placeholder="example@email.com" 
+                                   @input.debounce.500ms="checkAvailability('email', $event.target.value)"
+                                   class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400"
+                                   :class="emailStatus === 'taken' ? 'border-red-500' : (emailStatus === 'available' ? 'border-green-500' : '')">
+                            <p x-show="emailStatus === 'taken'" class="text-[10px] text-red-500 font-bold mt-1 ml-1">Email address already in use.</p>
+                        </div>
                     </div>
                     
-                    <button type="button" onclick="nextStep(6)" class="btn-primary mt-4">Get OTP</button>
+                    <button type="button" @click="sendRegistrationOTP($event)" class="btn-primary mt-4">Get OTP</button>
                     <div class="text-center mt-2">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 6: OTP -->
-            <div id="reg-6" class="step-content">
-                <button type="button" onclick="nextStep(5)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-6" class="step-content" :class="{ 'active': view === 'register' && step === 6 }" x-show="view === 'register' && step === 6">
+                <button type="button" @click="step = 5" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Verify your account</h2>
                 <p class="text-gray-500 text-sm mb-6">Enter the 6-digit verification code.</p>
                 <div id="checkEmailAnim" class="hidden flex flex-col items-center justify-center space-y-2 mb-6">
@@ -238,18 +275,18 @@
                     </div>
                     <button type="button" onclick="verifyOTP()" class="btn-primary">Verify</button>
                     <div class="text-center">
-                       <p id="timerContainer" class="text-xs text-gray-400">Resend code in <span id="timer" class="font-bold text-indigo-500">03:00</span></p>
-                       <a href="#" id="resendBtn" onclick="resendOTP(event)" class="hidden text-xs font-bold text-indigo-600 underline">Resend code</a>
+                       <p x-show="otpTimer > 0" class="text-xs text-gray-400">Resend code in <span class="font-bold text-indigo-500" x-text="formattedTimer"></span></p>
+                       <a href="#" x-show="otpTimer <= 0" @click.prevent="sendRegistrationOTP($event)" class="text-xs font-bold text-indigo-600 underline">Resend code</a>
                     </div>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- REGISTER STEP 7: Password -->
-            <div id="reg-7" class="step-content">
-                <button type="button" onclick="nextStep(6)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="reg-7" class="step-content" :class="{ 'active': view === 'register' && step === 7 }" x-show="view === 'register' && step === 7">
+                <button type="button" @click="step = 6" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Enter a strong password</h2>
                 <p class="text-gray-500 text-sm mb-6">Choose a secure password to protect your account.</p>
                 <div class="space-y-4">
@@ -285,7 +322,7 @@
                         Register
                     </button>
                     <div class="text-center mt-4">
-                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -832,10 +869,9 @@
                             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
                             const nextEl = document.getElementById(`reg-${step}`);
                             nextEl.classList.add('active');
-                            currentStep = step;
+                            this.step = step;
                             saveAuthProgress(true); // Reset OTP timestamp
-                            updateProgress();
-                            startTimer(data.remaining || 180);
+                            this.startOtpTimer(data.remaining || 180);
                         }
                     })
                     .catch(err => {
@@ -1260,7 +1296,6 @@
             popup.classList.add('hidden');
         }
     </script>
-        </script>
 </body>
 </html>
  

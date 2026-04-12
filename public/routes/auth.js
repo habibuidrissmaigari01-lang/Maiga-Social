@@ -237,6 +237,26 @@ router.get('/check_username', async (req, res) => {
     }
 });
 
+router.get('/check_email', async (req, res) => {
+    try {
+        const { email } = req.query;
+        const user = await User.findOne({ email: email.toLowerCase() });
+        res.json({ available: !user });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
+
+router.get('/check_phone', async (req, res) => {
+    try {
+        const { phone } = req.query;
+        const user = await User.findOne({ phone });
+        res.json({ available: !user });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
+});
+
 router.get('/logout', (req, res) => {
     if (req.session.userId) {
         User.findByIdAndUpdate(req.session.userId, { online: false }).exec();

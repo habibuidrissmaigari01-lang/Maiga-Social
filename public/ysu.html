@@ -7,6 +7,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="img/ysu.png">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="YSU Social">
 
@@ -55,6 +56,16 @@
             document.documentElement.classList.remove('dark');
         }
     </script>
+    <style>
+        .background-container {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: url('img/bg-ysu.jpg'); /* Ensure this path is correct */
+            background-size: cover;
+            background-position: center;
+        }
+    </style>
 </head>
 <body class="ysu-bg flex items-center justify-center min-h-screen w-full p-4 overflow-x-hidden">
 

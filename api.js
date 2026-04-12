@@ -116,15 +116,26 @@ app.use(session({
 const cleanupExpiredStories = async () => {
     try {
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        // Find stories created more than 24 hours ago
-        const expiredStories = await Story.find({ createdAt: { $lt: yesterday } });
+        const query = { createdAt: { $lt: yesterday } };
+
+        // 1. Find stories with media to clean up R2 first
+        const expiredWithMedia = await Story.find({ ...query, media: { $exists: true, $not: { $size: 0 } } });
         
-        if (expiredStories.length > 0) {
-            for (const story of expiredStories) {
-                // Calling deleteOne on the query triggers the hook in models.js for R2 cleanup
-                await Story.deleteOne({ _id: story._id });
+        for (const story of expiredWithMedia) {
+            const mediaArray = Array.isArray(story.media) ? story.media : [story.media];
+            for (const m of mediaArray) {
+                if (m && m.startsWith('http')) {
+                    try {
+                        const url = new URL(m);
+                        const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                        await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }));
+                    } catch (err) { /* Silent fail for R2 deletion */ }
+                }
             }
         }
+
+        // 2. Perform batch delete from Database
+        await Story.deleteMany(query);
     } catch (err) {
     }
 };

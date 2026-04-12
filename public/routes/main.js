@@ -436,7 +436,7 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
         post: post._id,
         trigger_user: req.session.userId
     }));
-    if (notifications.length > 0) await Notification.insertMany(notifications);
+    if (notifications.length > 0) await Notification.create(notifications);
     
     // Return a fully formatted post object for optimistic UI update
     res.json({ success: true, post: { // Include link preview
@@ -1545,17 +1545,23 @@ router.post('/subscribe', isAuthenticated, async (req, res) => {
     res.status(201).json({});
 });
 
-router.post('/create_story', isAuthenticated, upload.single('media'), async (req, res) => {
+router.post('/create_story', isAuthenticated, async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: 'Media file is required' });
+        const { fields, files } = await parseForm(req);
+        const mediaFile = files.media?.[0] || files.media;
+        
+        if (!mediaFile) return res.status(400).json({ error: 'Media file is required' });
 
-        const mediaUrl = await uploadToR2(req.file, 'stories');
-        const { audience, type, has_music, music_track } = req.body;
+        const mediaUrl = await uploadToR2(mediaFile, 'stories');
+        const audience = fields.audience?.[0] || fields.audience;
+        const type = fields.type?.[0] || fields.type;
+        const has_music = fields.has_music?.[0] || fields.has_music;
+        const music_track = fields.music_track?.[0] || fields.music_track;
 
         const story = new Story({
             user: req.session.userId,
             media: mediaUrl,
-            type: type || (req.file.mimetype.startsWith('video') ? 'video' : 'image'),
+            type: type || (mediaFile.mimetype.startsWith('video') ? 'video' : 'image'),
             audience: audience || 'public',
             has_music: has_music === 'true' || has_music === '1',
             music_track: music_track || null
@@ -1568,16 +1574,16 @@ router.post('/create_story', isAuthenticated, upload.single('media'), async (req
             const author = await User.findById(req.session.userId);
             const notifications = author.followers.map(followerId => ({
                 user: followerId,
-                type: 'post',
+                type: 'story',
                 story: story._id,
                 trigger_user: req.session.userId
             }));
-            if (notifications.length > 0) await Notification.insertMany(notifications);
+            if (notifications.length > 0) await Notification.create(notifications);
         }
 
         res.json({ success: true, story: await story.populate('user', 'name avatar') });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create story' });
+        res.status(500).json({ error: 'Failed to create story: ' + error.message });
     }
 });
 
@@ -2506,7 +2512,7 @@ router.post('/admin/send_broadcast', isAuthenticated, isAdmin, async (req, res) 
             content: `${title ? title + ': ' : ''}${message}`,
             is_read: false
         }));
-        await Notification.insertMany(notifications);
+        await Notification.create(notifications);
         
         // Persist to history
         await Broadcast.create({ title, message, sent_by: req.session.userId });
