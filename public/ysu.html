@@ -42,11 +42,15 @@
     }
     </script>
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+        .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
+    </style>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">

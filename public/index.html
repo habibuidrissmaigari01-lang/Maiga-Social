@@ -12,11 +12,11 @@
     <meta name="apple-mobile-web-app-title" content="Maiga Social">
 
     <!-- iOS Splash Screens -->
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_Max_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
-
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)" href="img/splash/iPhone_15_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3)" href="img/splash/iPhone_15_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" href="img/splash/iPhone_14_Plus_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)" href="img/splash/iPhone_14_portrait.png">
+    
     <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
     <!-- Open Graph / Social Media Tags -->
     <meta property="og:title" content="Maiga Social - Connect, Share, Discover">
@@ -44,11 +44,11 @@
     }
     </script>
      <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-maiga.json">
       <script>
@@ -65,7 +65,7 @@
         .step-content { display: none; }
         .step-content.active { display: block; }
         .progress-fill { transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
         .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
         .background-container {
             position: fixed;
@@ -146,7 +146,7 @@
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="remember_me" class="mr-2 rounded"> Remember me
                         </label>
-                        <a href="#" @click.prevent="showForgotPassword($event)" class="text-indigo-600 font-medium">Forgot password?</a>
+                        <button type="button" @click="view = 'forgot'" class="text-indigo-600 font-medium">Forgot password?</button>
                     </div>
                     <button type="submit" class="btn-primary mt-4">Login</button>
                     <p class="text-center text-sm text-gray-600">
@@ -164,7 +164,9 @@
                 <div class="space-y-4">
                     <input type="text" name="first_name" placeholder="First Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <input type="text" name="surname" placeholder="Last Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" @click="nextStep(2, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(2, $event)" 
+                            :class="{ 'shake-btn': shakeStep === 1 }"
+                            class="btn-primary mt-4 transition-all">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Already have an account?</a>
                     </div>
@@ -178,7 +180,9 @@
                 <p class="text-gray-500 text-sm mb-6">Please enter your real date of birth.</p>
                 <div class="space-y-4">
                     <input type="date" name="birthday" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" @click="nextStep(3, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(3, $event)" 
+                            :class="{ 'shake-btn': shakeStep === 2 }"
+                            class="btn-primary mt-4 transition-all">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
@@ -203,7 +207,9 @@
                         </div>
                     </div>
                     <div id="username-suggestions" class="text-xs text-gray-500 -mt-2 px-1"></div>
-                    <button type="button" @click="nextStep(4, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(4, $event)" 
+                            :class="{ 'shake-btn': shakeStep === 3 }"
+                            class="btn-primary mt-4 transition-all">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
@@ -222,7 +228,9 @@
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                     </select>
-                    <button type="button" @click="nextStep(5, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(5, $event)" 
+                            :class="{ 'shake-btn': shakeStep === 4 }"
+                            class="btn-primary mt-4 transition-all">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
@@ -256,7 +264,9 @@
                         </div>
                     </div>
                     
-                    <button type="button" @click="sendRegistrationOTP($event)" class="btn-primary mt-4">Get OTP</button>
+                    <button type="button" @click="sendRegistrationOTP($event)" 
+                            :class="{ 'shake-btn': shakeStep === 5 }"
+                            class="btn-primary mt-4 transition-all">Get OTP</button>
                     <div class="text-center mt-2">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
@@ -283,7 +293,9 @@
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                     </div>
-                    <button type="button" @click="verifyOTP()" class="btn-primary">Verify</button>
+                    <button type="button" @click="verifyOTP()" 
+                            :class="{ 'shake-btn': shakeStep === 6 }"
+                            class="btn-primary transition-all">Verify</button>
                     <div class="text-center">
                        <p x-show="otpTimer > 0" class="text-xs text-gray-400">Resend code in <span class="font-bold text-indigo-500" x-text="formattedTimer"></span></p>
                        <a href="#" x-show="otpTimer <= 0" @click.prevent="sendRegistrationOTP($event)" class="text-xs font-bold text-indigo-600 underline">Resend code</a>
@@ -328,7 +340,9 @@
                             <a href="#" @click.prevent="showTerms($event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
                         </label>
                     </div>
-                    <button type="submit" id="registerBtn" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <button type="submit" id="registerBtn" 
+                            @click="if($el.disabled) triggerShake(7)"
+                            class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all" disabled>
                         Register
                     </button>
                     <div class="text-center mt-4">
@@ -337,8 +351,8 @@
                 </div>
             </div>
 
-            <!-- FORGOT PASSWORD STEP 1: Identity -->
-            <div id="page-forgot" class="step-content">
+            <!-- FORGOT PASSWORD PAGE -->
+            <div id="page-forgot" class="step-content" :class="{ 'active': view === 'forgot' }" x-show="view === 'forgot'">
                 <button type="button" @click="view = 'login'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Find Your Account</h2>
                 <p class="text-gray-500 text-sm mb-6">Please enter your email address or mobile number to search for your account.</p>
@@ -346,7 +360,7 @@
                     <input type="text" name="forgot_identity" placeholder="Email or Mobile Number" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <div class="flex space-x-3 pt-2">
                         <button type="button" @click="view = 'login'" class="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 py-3 rounded-xl font-bold">Cancel</button>
-                        <button type="submit" class="flex-1 btn-primary">Search</button>
+                        <button type="button" @click="submitAuthForm()" class="flex-1 btn-primary">Search</button>
                     </div>
                 </div>
             </div>
@@ -467,6 +481,7 @@
                 otpTimer: 0,
                 countdownTimer: null,
                 isSavingProfile: false,
+                shakeStep: 0,
                 passwordForm: { current: '', new: '', confirm: '' },
                 init() {
                     this.applyTheme();
@@ -513,19 +528,14 @@
                         .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
                 },
+                triggerShake(s) {
+                    this.shakeStep = s;
+                    setTimeout(() => this.shakeStep = 0, 500);
+                },
                 validateStep(step) {
                     const stepEl = document.getElementById(`reg-${step}`);
                     if (!stepEl) return true;
-                    if (step === 6) return true;
-                    if (step === 5) {
-                        const phone = stepEl.querySelector('input[name="phone"]');
-                        const email = stepEl.querySelector('input[name="reg_email"]');
-                if (!phone.value.trim() && !email.value.trim()) {
-                            this.showMessage('Please enter both your phone number and email address.', 'error');
-                            return false;
-                        }
-                        return true;
-                    }
+                    
                     const inputs = stepEl.querySelectorAll('input, select');
                     let isValid = true;
                     inputs.forEach(input => {
@@ -535,11 +545,14 @@
                             input.classList.add('border-red-500');
                         }
                     });
-                    if (!isValid) this.showMessage('Please fill in all required fields.', 'error');
+                    if (!isValid) {
+                        this.triggerShake(step);
+                        this.showMessage('Please fill in all required fields.', 'error');
+                    }
                     return isValid;
                 },
                 nextStep(s, e) {
-                    if (s > this.step && this.step > 0 && !this.validateStep(this.step)) return;
+                    if (s > this.step && this.step > 0 && !this.validateStep(this.step)) { return; }
                     if (s === 6 && this.step === 5) { this.sendRegistrationOTP(e); return; }
                     this.step = s;
                     this.saveAuthProgress();
@@ -560,17 +573,18 @@
                     setTimeout(() => banner.classList.add('hidden'), 5000);
                 },
                 async sendRegistrationOTP(e) {
-                    const email = document.querySelector('input[name="reg_email"]').value;
-                    const phone = document.querySelector('input[name="phone"]').value;
-                    if (!email.trim() || !phone.trim()) { this.showMessage('Please provide both email and phone number.', 'error'); return; }
+                    const email = document.querySelector('input[name="reg_email"]')?.value || '';
+                    const phone = document.querySelector('input[name="phone"]')?.value || '';
+                    if (!email.trim() || !phone.trim()) { this.triggerShake(5); this.showMessage('Please provide both email and phone number.', 'error'); return; }
+                    
                     const btn = e.target;
                     const originalHtml = btn.innerHTML;
+                    const identity = email || phone;
                     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
                     fetch('/api/send-reg-otp', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ identity, account_type: 'maiga' })
                     }).then(res => res.json()).then(data => {
-                        const identity = email || phone;
                         if (data.success || res.status === 429) { 
                             this.step = 6; this.saveAuthProgress(true); 
                             this.startTimer(data.remaining || 180); 
@@ -582,7 +596,7 @@
                     const otp = Array.from(otpInputs).map(i => i.value).join('');
                     const identity = document.querySelector('input[name="reg_email"]').value || document.querySelector('input[name="phone"]').value;
 
-                    if (otp.length !== 6) { this.showMessage('Please enter the full 6-digit OTP.', 'error'); return; }
+                    if (otp.length !== 6) { this.triggerShake(6); this.showMessage('Please enter the full 6-digit OTP.', 'error'); return; }
                     if (!identity) { this.showMessage('Contact identity missing.', 'error'); return; }
 
                     const btn = document.querySelector('#reg-6 .btn-primary');
@@ -713,221 +727,15 @@
             };
         }
 
-
-            // If moving to OTP step, request OTP from backend first
-            if (step === 6 && currentStep === 5) {
-                const btn = document.querySelector('#reg-5 .btn-primary');
-                const originalBtnHtml = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Sending...';
-
-                const email = document.querySelector('input[name="reg_email"]').value;
-                const phone = document.querySelector('input[name="phone"]').value;
-                if (!email.trim() || !phone.trim()) {
-                    alert('Please enter both your phone number and email address.');
-                    btn.disabled = false;
-                    btn.innerHTML = originalBtnHtml;
-                    return;
-                }
-                const account_type = document.querySelector('input[name="account_type"]').value;
-                if (identity) {
-                    fetch('/api/send-reg-otp', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            identity: identity,
-                            account_type: account_type
-                        })
-                    }).then(async res => {
-                        const isJson = res.headers.get('content-type')?.includes('application/json');
-                        const data = isJson ? await res.json() : null;
-
-                        if (!res.ok && res.status !== 429) {
-                            throw new Error((data && data.message) || `Server API Error: ${res.status} (Check Server Console)`);
-                        }
-                        return { ...data, status: res.status };
-                    })
-                    .then(data => {
-                        if (data.success || data.status === 429) {
-                            if (data.status === 429) {
-                                showMessage(data.message || 'A code was recently sent.', 'success');
-                            } else {
-                                showMessage('A verification code has been sent to ' + identity, 'success');
-                            }
-                            
-                            // Proceed to OTP step even on 429, 
-                            // because the user likely already has a valid code.
-                            document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
-                            const nextEl = document.getElementById(`reg-${step}`);
-                            nextEl.classList.add('active');
-                            // Update Alpine state
-                        const authCard = document.getElementById('authCard');
-                        if (authCard && window.Alpine) {
-                            const alpineData = Alpine.$data(authCard);
-                            alpineData.step = step;
-                            alpineData.startTimer(data.remaining || 180);
-                        }                            
-                        saveAuthProgress(true); // Reset OTP timestamp
-                        }
-                    })
-                    .catch(err => {
-                        showMessage(err.message || 'Network error. Could not send code.', 'error');
-                    })
-                    .finally(() => {
-                        btn.disabled = false;
-                        btn.innerHTML = originalBtnHtml;
-                    });
-                }
-                return; // Prevent default step transition
-            }
-
-            document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
-            document.getElementById(step === 0 ? 'page-login' : `reg-${step}`).classList.add('active');
-            currentStep = step;
-            saveAuthProgress();
-            updateProgress();
+        // Wrapper for onclick/legacy compatibility
+        function showForgotPassword(e) { const el = document.getElementById('authCard'); if(el) Alpine.$data(el).view = 'forgot'; }
+        function showLogin(e) { const el = document.getElementById('authCard'); if(el) Alpine.$data(el).view = 'login'; }
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+            else if (document.exitFullscreen) document.exitFullscreen();
         }
-
-        function showForgotOTP(event) {
-            event?.preventDefault();
-             document.getElementById('authType').value = "forgot_2";
-            showPage('page-forgot-otp');
-        }
-
-        function showResetPassword(event) {
-            event?.preventDefault();
-             document.getElementById('authType').value = "forgot_3";
-            showPage('page-reset-password');
-        }
-
-        function updateProgress() {
-            if (currentStep === 0) return;
-            const percent = Math.round((currentStep / 7) * 100);
-            document.getElementById('progressFill').style.width = percent + '%';
-            document.getElementById('stepCounter').innerText = `Step ${currentStep} of 7`;
-            document.getElementById('percentLabel').innerText = percent + '%';
-        }
-
-        function updateCheck(elementId, isValid) {
-            const el = document.getElementById(elementId);
-            if (!el) return;
-            if (isValid) {
-                el.innerHTML = '<i class="fa-solid fa-circle-check text-green-500 mr-1"></i> ' + el.textContent.substring(el.textContent.indexOf(' ') + 1);
-                el.classList.remove('text-red-500');
-                el.classList.add('text-green-500');
-            } else {
-                el.innerHTML = '<i class="fa-solid fa-circle-xmark text-red-500 mr-1"></i> ' + el.textContent.substring(el.textContent.indexOf(' ') + 1);
-                el.classList.remove('text-green-500');
-                el.classList.add('text-red-500');
-            }
-        }
-
-        function checkStrength(val) {
-            const meter = document.getElementById('strengthFill');
-            
-            const hasLength = val.length >= 8;
-            const hasUppercase = /[A-Z]/.test(val);
-            const hasNumber = /[0-9]/.test(val);
-
-            updateCheck('lengthCheck', hasLength);
-            updateCheck('uppercaseCheck', hasUppercase);
-            updateCheck('numberCheck', hasNumber);
-
-            let strength = 0;
-            if (hasLength) strength += 1;
-            if (hasUppercase) strength += 1;
-            if (hasNumber) strength += 1;
-
-            if (strength === 0) {
-                meter.style.width = '0%'; meter.style.backgroundColor = '#cbd5e0';
-            } else if (strength === 1) {
-                meter.style.width = '33%'; meter.style.backgroundColor = '#f56565';
-            } else if (strength === 2) {
-                meter.style.width = '66%'; meter.style.backgroundColor = '#ed8936';
-            } else {
-                meter.style.width = '100%'; meter.style.backgroundColor = '#48bb78';
-            }
-        }
-
-        function checkConfirmPassword() {
-            const mainPass = document.getElementById('mainPass');
-            const confirmPass = document.getElementById('confirmPass');
-            const alertEl = document.getElementById('matchAlert');
-            const regBtn = document.getElementById('registerBtn');
-            const termsCheck = document.getElementById('terms');
-
-            // Passwords must match and the first one must not be empty
-            const passwordsMatch = mainPass.value === confirmPass.value && mainPass.value !== '';
-            
-            // Check strength requirements (matching the UI feedback logic)
-            const isStrong = mainPass.value.length >= 8 && /[A-Z]/.test(mainPass.value) && /[0-9]/.test(mainPass.value);
-
-            if (mainPass.value === '' && confirmPass.value === '') {
-                alertEl.classList.add('hidden');
-                confirmPass.classList.remove('border-red-500', 'border-green-500');
-            } else if (passwordsMatch) {
-                alertEl.innerHTML = '<i class="fa-solid fa-circle-check mr-1"></i> Passwords match';
-                alertEl.classList.remove('hidden', 'text-red-500');
-                alertEl.classList.add('text-green-500');
-                confirmPass.classList.remove('border-red-500');
-                confirmPass.classList.add('border-green-500');
-            } else {
-                // Only show "do not match" warning if the user has started typing in the confirm field
-                if (confirmPass.value !== '') {
-                    alertEl.innerHTML = '<i class="fa-solid fa-circle-exclamation mr-1"></i> Passwords do not match';
-                    alertEl.classList.remove('hidden', 'text-green-500');
-                    alertEl.classList.add('text-red-500');
-                    confirmPass.classList.remove('border-green-500');
-                    confirmPass.classList.add('border-red-500');
-                } else {
-                    alertEl.classList.add('hidden');
-                    confirmPass.classList.remove('border-red-500', 'border-green-500');
-                }
-            }
-
-            // Freeze button if not matching, not meeting strength, or terms not checked
-            regBtn.disabled = !passwordsMatch || !isStrong || !termsCheck.checked;
-        }
-        
-        // Add shaking animation on disabled button click
-        const registerBtn = document.getElementById('registerBtn');
-        registerBtn.addEventListener('click', function(event) {
-            if (this.disabled) {
-                event.preventDefault();
-                this.classList.add('shake-btn', 'border-red-500');
-                setTimeout(() => {
-                    this.classList.remove('shake-btn', 'border-red-500');
-                }, 500); // Match animation duration
-            }
-        });
-
-        // Initial check on load for password fields if they have pre-filled values
-        document.addEventListener('DOMContentLoaded', () => {
-            checkStrength(document.getElementById('mainPass')?.value || '');
-            checkConfirmPassword();
-        });
-
-        function togglePasswordVisibility(inputId, button) {
-            const input = document.getElementById(inputId);
-            const icon = button.querySelector('i');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.remove('fa-eye');
-                icon.classList.add('fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.remove('fa-eye-slash');
-                icon.classList.add('fa-eye');
-            }
-        }
-    
-        function showMessage(text, type = 'error') {
-            const banner = document.getElementById('message-banner');
-            banner.textContent = text;
-            banner.className = `mb-4 p-3 rounded-xl text-center text-sm font-bold ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
-            banner.classList.remove('hidden');
-            setTimeout(() => banner.classList.add('hidden'), 5000);
-        }
+        function closeWelcomePopup() { document.getElementById('welcomePopup')?.classList.add('hidden'); }
+        function showTerms(e) { e.preventDefault(); document.getElementById('termsModal').classList.remove('hidden'); }
 
         // Add form validation for Login and Final Registration Step
         document.getElementById('mainAuthForm').addEventListener('submit', async function(e) {
