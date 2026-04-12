@@ -6809,7 +6809,7 @@ const initMaiga = () => {
             navigator.mediaDevices.getUserMedia({
                 video: type === 'video' ? { facingMode: this.facingMode } : false,
                 audio: true
-            }).then(stream => {
+            }).then(async stream => {
                 this.localStream = Alpine.raw(stream);
                 if (type === 'video') {
                     this.$refs.localVideo.srcObject = stream;
@@ -6824,20 +6824,19 @@ const initMaiga = () => {
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
                 // Create Offer
-                this.peerConnection.createOffer().then(offer => {
-                    this.peerConnection.setLocalDescription(offer).then(() => {
-                        this.processPendingSignaling();
-                    });
-                    // Optimize: Send via Socket directly
-                    this.socket.emit('call_user', { // Ensure activeChat.id and user.id are strings
-                        userToCall: this.activeChat.id,
-                        signalData: offer,
-                        from: this.user.id,
-                        name: this.user.name,
-                        avatar: this.user.avatar,
-                        type: type
-                    });
+                const offer = await this.peerConnection.createOffer();
+                await this.peerConnection.setLocalDescription(offer);
+                
+                this.socket.emit('call_user', {
+                    userToCall: this.activeChat.id,
+                    signalData: offer,
+                    from: this.user.id,
+                    name: this.user.name,
+                    avatar: this.user.avatar,
+                    type: type
+                });
 
+                this.$nextTick(() => {
                     this.callTimeoutTimer = setTimeout(() => {
                         if (this.isCalling && this.callStatus === 'Calling...') {
                             this.showToast('No Answer', 'The user did not answer the call.', 'info');
@@ -6865,7 +6864,12 @@ const initMaiga = () => {
                 return;
             }
 
-            const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
+            const servers = { 
+                iceServers: [
+                    { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+                    // { urls: 'turn:your-turn-server.com', username: 'user', credential: 'password' } // Recommended for real-world NAT traversal
+                ] 
+            };
             this.peerConnection = new RTCPeerConnection(servers);
             this.pendingIceCandidates = this.pendingIceCandidates || [];
 
@@ -6980,17 +6984,17 @@ const initMaiga = () => {
                 
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
-               await this.peerConnection.setRemoteDescription(new RTCSessionDescription(callData.sdp));
+               await this.peerConnection.setRemoteDescription(new RTCSessionDescription(typeof callData.sdp === 'string' ? JSON.parse(callData.sdp) : callData.sdp));
                 // Process candidates that arrived while camera was starting
                 this.processPendingSignaling();
 
-                this.peerConnection.createAnswer().then(async answer => {
-                   await this.peerConnection.setLocalDescription(answer);
-                    this.socket.emit('answer_call', { // Ensure callData.id and caller_id are strings
-                        callId: callData.id,
-                        to: callData.caller_id,
-                        signal: answer
-                    });
+                const answer = await this.peerConnection.createAnswer();
+                await this.peerConnection.setLocalDescription(answer);
+                
+                this.socket.emit('answer_call', {
+                    callId: callData.id,
+                    to: callData.caller_id,
+                    signal: answer
                 });
             }).catch(err => {
                 this.showToast('Call Error', 'Failed to access camera/mic.', 'error');

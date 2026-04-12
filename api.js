@@ -319,7 +319,8 @@ io.on('connection', (socket) => {
                     caller: data.from,
                     receiver: data.userToCall,
                     type: data.type,
-                    status: 'ringing'
+                    status: 'ringing',
+                    sdp_offer: JSON.stringify(data.signalData)
                 });
 
                 io.to(data.userToCall).emit('incoming_call', { 
@@ -396,11 +397,16 @@ io.on('connection', (socket) => {
             clearTimeout(activeCallTimeouts.get(cid));
             activeCallTimeouts.delete(cid);
         }
-        await Call.findByIdAndUpdate(data.callId, { status: 'accepted', is_missed: false }).populate('caller receiver');
+        await Call.findByIdAndUpdate(data.callId, { status: 'accepted', is_missed: false, sdp_answer: JSON.stringify(data.signal) }).populate('caller receiver');
         io.to(data.to).emit('call_accepted', data.signal);
     });
     socket.on('ice_candidate', (data) => io.to(data.to).emit('ice_candidate', data.candidate));
     socket.on('end_call', async (data) => {
+         const cid = data.callId?.toString();
+        if (cid && activeCallTimeouts.has(cid)) {
+            clearTimeout(activeCallTimeouts.get(cid));
+            activeCallTimeouts.delete(cid);
+        }
         const call = await Call.findById(data.callId).populate('caller receiver');
         if (!call) return;
 
