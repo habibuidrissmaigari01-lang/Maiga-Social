@@ -44,17 +44,15 @@
     }
     </script>
      <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/font/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-maiga.json">
       <script>
         // Initial theme sync to prevent flicker
-        if (localStorage.getItem('darkMode') === 'true' || 
-           (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        const isDark = savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
     </script>
     <!-- Load heavy icons asynchronously -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
@@ -69,16 +67,24 @@
             position: fixed;
             inset: 0;
             z-index: -1;
-            background-image: url('img/bg-index.jpg'); /* Ensure this path is correct */
-            background-size: cover;
+            background-image: linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)), url('/img/logo.png');
+            background-size: 120px;
+            background-repeat: repeat;
             background-position: center;
         }
     </style>
+    <script src="alpine.js" defer></script>
 </head>
 <body class="index-bg flex items-center justify-center min-h-screen w-full p-4 overflow-x-hidden">
 
     <div class="background-container"></div>
-    <div class="glass-card p-6 md:p-10 w-full max-w-md" id="authCard" x-data="authComponent()" x-cloak>
+    <div class="glass-card p-6 md:p-10 w-full max-w-md relative" id="authCard" x-data="authComponent()" x-cloak>
+        <button @click="toggleTheme()" class="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90" :title="'Theme: ' + theme">
+            <i x-show="theme === 'light'" class="fa-solid fa-sun text-xl"></i>
+            <i x-show="theme === 'dark'" class="fa-solid fa-moon text-xl text-blue-400"></i>
+            <i x-show="theme === 'system'" class="fa-solid fa-display text-xl"></i>
+        </button>
+
         <div class="flex flex-col items-center justify-center mb-6">
            <img src="img/logo.png" width="64" height="64" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
             <h1 class="text-2xl font-black text-gray-800 italic">Maiga Social</h1>

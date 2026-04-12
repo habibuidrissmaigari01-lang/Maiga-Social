@@ -7,7 +7,6 @@
     <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="img/ysu.png">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="YSU Social">
 
@@ -43,34 +42,40 @@
     }
     </script>
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/font/inter-roman.var.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         // Initial theme sync to prevent flicker
-        if (localStorage.getItem('darkMode') === 'true' || 
-           (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        const isDark = savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
     </script>
     <style>
         .background-container {
             position: fixed;
             inset: 0;
             z-index: -1;
-            background-image: url('img/bg-ysu.jpg'); /* Ensure this path is correct */
-            background-size: cover;
+            background-image: linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)), url('/img/ysu.png');
+            background-size: 120px;
+            background-repeat: repeat;
             background-position: center;
         }
     </style>
+    <script src="alpine.js" defer></script>
 </head>
 <body class="ysu-bg flex items-center justify-center min-h-screen w-full p-4 overflow-x-hidden">
 
     <div class="background-container"></div>
-    <div class="glass-card p-6 md:p-10" id="authCard">
+    <div class="glass-card p-6 md:p-10 relative" id="authCard" x-data="authComponent()" x-cloak>
+        <button @click="toggleTheme()" class="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90" :title="'Theme: ' + theme">
+            <i x-show="theme === 'light'" class="fa-solid fa-sun text-xl"></i>
+            <i x-show="theme === 'dark'" class="fa-solid fa-moon text-xl text-blue-400"></i>
+            <i x-show="theme === 'system'" class="fa-solid fa-display text-xl"></i>
+        </button>
+
         <div class="flex flex-col items-center justify-center mb-6">
             <img src="img/ysu.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social Logo">
             <h1 class="text-2xl font-black text-gray-800 dark:text-gray-200 italic">YSU Social</h1>

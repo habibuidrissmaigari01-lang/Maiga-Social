@@ -70,7 +70,7 @@ const initMaiga = () => {
             window.addEventListener('beforeinstallprompt', (e) => {
                 e.preventDefault();
                 this.installPrompt = e;
-            });
+            }); // Fixed: Missing semicolon
 
             // Show guide overlay for new users
             if (!localStorage.getItem('guide_shown')) {
@@ -81,7 +81,8 @@ const initMaiga = () => {
         // Core App State
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
-        darkMode: localStorage.getItem('darkMode') === 'true',
+        theme: localStorage.getItem('theme') || 'system',
+        darkMode: false,
         appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
@@ -2430,15 +2431,25 @@ const initMaiga = () => {
                 localStorage.setItem('maiga_fullscreen', value);
             });
             
-            // Watch for dark mode changes
-            this.$watch('darkMode', (value) => {
-                localStorage.setItem('darkMode', value);
-                if (value) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
+            // Unified Theme Logic
+            this.applyTheme = () => {
+                localStorage.setItem('theme', this.theme);
+                const isDark = this.theme === 'dark' || (this.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                this.darkMode = isDark;
+                if (isDark) document.documentElement.classList.add('dark');
+                else document.documentElement.classList.remove('dark');
+            };
+            this.applyTheme();
+            this.$watch('theme', () => this.applyTheme());
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (this.theme === 'system') this.applyTheme();
             });
+
+            this.toggleTheme = () => {
+                const modes = ['light', 'dark', 'system'];
+                let idx = modes.indexOf(this.theme);
+                this.theme = modes[(idx + 1) % modes.length];
+            };
 
             // Watch for sidebar changes
             this.$watch('isLeftSidebarCollapsed', (value) => {

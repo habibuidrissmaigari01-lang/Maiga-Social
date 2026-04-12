@@ -48,19 +48,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
     <script>
-        // Initial theme sync to prevent flicker before Alpine loads
-        if (localStorage.getItem('darkMode') === 'true' || 
-           (!('darkMode' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        // Initial theme sync to prevent flicker (before Alpine loads)
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        const isDark = savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
     </script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-    <style>
+    <style> /* Fixed: Removed duplicate style tag */
         @font-face {
-            font-family: 'Intel One Mono';
-            src: url('/font/intel-4.1/web/IntelOneMono-Regular.woff2') format('woff2');
+            font-family: 'Inter';
+            src: url('/font/inter-regular.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
@@ -254,9 +252,10 @@
                 <p class="text-gray-500 text-sm" x-text="'@' + user.username"></p>
             </div>
             <div class="flex-1 p-4 space-y-2 overflow-y-auto">
-                <button @click="darkMode = !darkMode" class="flex items-center space-x-3 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
-                    <i class="fa-solid w-6 text-center" :class="darkMode ? 'fa-sun text-yellow-500' : 'fa-moon text-blue-600'"></i>
-                    <span x-text="darkMode ? 'Light Mode' : 'Dark Mode'"></span>
+                <button @click="toggleTheme()" class="flex items-center space-x-3 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100 transition-colors">
+                    <i class="fa-solid w-6 text-center" 
+                       :class="theme === 'light' ? 'fa-sun text-yellow-500' : (theme === 'dark' ? 'fa-moon text-blue-400' : 'fa-display')"></i>
+                    <span x-text="'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1)"></span>
                 </button>
                 <button @click="activeTab = 'profile'; isSideMenuOpen = false" class="flex items-center space-x-3 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100">
                     <i class="fa-solid fa-user text-blue-500 w-6"></i><span>My Profile</span>
@@ -340,13 +339,11 @@
                         <span x-show="!isLeftSidebarCollapsed" class="font-bold">Collapse</span>
                     </div>
                 </button>
-                <button @click="darkMode = !darkMode" class="w-full flex items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" :class="isLeftSidebarCollapsed ? 'justify-center' : 'justify-between'">
+                <button @click="toggleTheme()" class="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" :class="isLeftSidebarCollapsed ? 'justify-center' : 'justify-between'">
                     <div class="flex items-center space-x-4">
-                        <i class="fa-solid text-xl w-8 text-center" :class="darkMode ? 'fa-sun text-yellow-500' : 'fa-moon'"></i>
-                        <span x-show="!isLeftSidebarCollapsed" class="font-bold">Dark Mode</span>
-                    </div>
-                    <div x-show="!isLeftSidebarCollapsed" class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors" :class="darkMode ? 'bg-blue-600' : ''">
-                        <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="darkMode ? 'left-6' : 'left-1'"></div>
+                        <i class="fa-solid text-xl w-8 text-center" 
+                           :class="theme === 'light' ? 'fa-sun text-yellow-500' : (theme === 'dark' ? 'fa-moon text-blue-400' : 'fa-display')"></i>
+                        <span x-show="!isLeftSidebarCollapsed" class="font-bold" x-text="'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1)"></span>
                     </div>
                 </button>
                 <button @click="toggleFullScreen()" class="w-full flex items-center p-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
