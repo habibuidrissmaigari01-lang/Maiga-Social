@@ -103,7 +103,7 @@
                     <span x-text="Math.round((step / 7) * 100) + '%'"></span>
                 </div>
                 <div class="w-full bg-gray-100 dark:bg-gray-800 h-2 rounded-full overflow-hidden mb-6">
-                    <div class="progress-fill bg-indigo-600 h-full rounded-full" :style="`width: ${Math.round((step / 7) * 100)}%` shadow-sm"></div>
+                    <div class="progress-fill bg-indigo-600 h-full rounded-full shadow-sm" :style="`width: ${Math.round((step / 7) * 100)}%` "></div>
                 </div>
             </div>
 
@@ -449,149 +449,128 @@
     </div>
 
     <script>
-        let currentStep = 0;
-        let countdownTimer;
         const API_BASE_URL = ''; // Use relative path so it works on any IP
 
-        function saveAuthProgress(otpSent = false) {
-            const form = document.getElementById('mainAuthForm');
-            const data = {};
-            Array.from(form.elements).forEach(el => {
-                if (el.name && !['login_password', 'reg_password', 'confirm_password', 'login_identity'].includes(el.name)) {
-                    if (el.name.endsWith('[]')) {
-                        if (!data[el.name]) data[el.name] = [];
-                        data[el.name].push(el.value);
-                    } else if (el.type !== 'checkbox' || el.checked) {
-                        data[el.name] = el.value;
+        function authComponent() {
+            return {
+                view: 'login',
+                step: 0,
+                theme: localStorage.getItem('theme') || 'system',
+                usernameStatus: '',
+                phoneStatus: '',
+                emailStatus: '',
+                otpTimer: 0,
+                countdownTimer: null,
+                init() {
+                    this.applyTheme();
+                    if (localStorage.getItem('maiga_session_active') === 'true') {
+                        window.location.replace('/home');
+                        return;
                     }
-                }
-            });
-            
-            const currentState = JSON.parse(localStorage.getItem('maiga_reg_state') || '{}');
-            localStorage.setItem('maiga_reg_state', JSON.stringify({
-                step: currentStep,
-                authType: document.getElementById('authType').value,
-                data: data,
-                timestamp: Date.now(),
-                otpTimestamp: otpSent ? Date.now() : (currentState.otpTimestamp || 0)
-            }));
-        }
-
-        // Initialize page based on session
-        document.addEventListener('DOMContentLoaded', () => {
-            // Auto-redirect if a persistent session is likely active
-            if (localStorage.getItem('maiga_session_active') === 'true') {
-                window.location.replace('/home');
-                return;
-            }
-
-            showPage('page-login');
-
-            // Restore registration progress if it exists and is less than 60 mins old
-            const savedState = localStorage.getItem('maiga_reg_state');
-            if (savedState) {
-                const state = JSON.parse(savedState);
-                const age = (Date.now() - state.timestamp) / 1000 / 60; // minutes
-                if (age < 60 && state.step > 0 && state.authType === 'register') {
-                    Object.keys(state.data).forEach(key => {
-                        if (key.endsWith('[]')) {
-                            const inputs = document.querySelectorAll(`[name="${key.replace('[]', '\\[\\]')}"]`);
-                            const values = state.data[key];
-                            inputs.forEach((input, i) => { if (values[i]) input.value = values[i]; });
-                        } else {
-                            const input = document.querySelector(`[name="${key}"]`);
-                            if (input) input.value = state.data[key];
-                        }
+                    this.restoreProgress();
+                },
+                get formattedTimer() {
+                    const mins = Math.floor(this.otpTimer / 60);
+                    const secs = this.otpTimer % 60;
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
+                },
+                toggleTheme() {
+                    const modes = ['light', 'dark', 'system'];
+                    this.theme = modes[(modes.indexOf(this.theme) + 1) % modes.length];
+                    localStorage.setItem('theme', this.theme);
+                    this.applyTheme();
+                },
+                applyTheme() {
+                    const isDark = this.theme === 'dark' || (this.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                    if (isDark) document.documentElement.classList.add('dark');
+                    else document.documentElement.classList.remove('dark');
+                },
+                async checkAvailability(type, value) {
+                    if (!value || value.length < 3) { this[`${type}Status`] = ''; return; }
+                    this[`${type}Status`] = 'checking';
+                    fetch(`${API_BASE_URL}/api/check_${type}?${type}=${encodeURIComponent(value)}`)
+                        .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
+                        .catch(() => { this[`${type}Status`] = ''; });
+                },
+                nextStep(s, e) {
+                    if (s > this.step && this.step > 0 && !validateStep(this.step)) return;
+                    if (s === 6 && this.step === 5) { this.sendRegistrationOTP(e); return; }
+                    this.step = s;
+                    this.saveAuthProgress();
+                },
+                startTimer(seconds = 180) {
+                    this.otpTimer = seconds;
+                    clearInterval(this.countdownTimer);
+                    this.countdownTimer = setInterval(() => {
+                        if (this.otpTimer > 0) this.otpTimer--;
+                        else clearInterval(this.countdownTimer);
+                    }, 1000);
+                },
+                async sendRegistrationOTP(e) {
+                    const btn = e.target;
+                    const identity = document.querySelector('input[name="reg_email"]').value || document.querySelector('input[name="phone"]').value;
+                    if (!identity) { showMessage('Please provide email or phone.', 'error'); return; }
+                    const originalHtml = btn.innerHTML;
+                    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
+                    fetch('/api/send-reg-otp', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identity, account_type: 'maiga' })
+                    }).then(res => res.json()).then(data => {
+                        if (data.success || res.status === 429) { 
+                            this.step = 6; this.saveAuthProgress(true); 
+                            this.startTimer(data.remaining || 180); 
+                        } else showMessage(data.message, 'error');
+                    }).finally(() => { btn.disabled = false; btn.innerHTML = originalHtml; });
+                },
+                saveAuthProgress(otpSent = false) {
+                    const form = document.getElementById('mainAuthForm');
+                    const data = {};
+                    Array.from(form.elements).forEach(el => {
+                        if (el.name && !['login_password', 'reg_password', 'confirm_password'].includes(el.name)) data[el.name] = el.value;
                     });
-                    
-                    document.getElementById('authType').value = "register";
-                    document.getElementById('page-login').classList.remove('active');
-                    document.getElementById('regProgress').classList.remove('hidden');
-                    nextStep(state.step);
-                    
-                    if (state.step === 6) {
-                        const remaining = Math.max(0, Math.floor(180 - (Date.now() - state.otpTimestamp) / 1000));
-                        if (remaining > 0) startTimer(remaining);
+                    const currentState = JSON.parse(localStorage.getItem('maiga_reg_state') || '{}');
+                    localStorage.setItem('maiga_reg_state', JSON.stringify({
+                        step: this.step, authType: this.view === 'login' ? 'login' : 'register',
+                        data, timestamp: Date.now(), otpTimestamp: otpSent ? Date.now() : (currentState.otpTimestamp || 0)
+                    }));
+                },
+                restoreProgress() {
+                    const savedState = localStorage.getItem('maiga_reg_state');
+                    if (savedState) {
+                        const state = JSON.parse(savedState);
+                        const age = (Date.now() - state.timestamp) / 1000 / 60;
+                        if (age < 60 && state.step > 0 && state.authType === 'register') {
+                            this.view = 'register';
+                            this.step = state.step;
+                            this.$nextTick(() => {
+                                Object.keys(state.data).forEach(key => {
+                                    const input = document.querySelector(`[name="${key.replace('[]', '\\[\\]')}"]`);
+                                    if (input) input.value = state.data[key];
+                                });
+                                if (this.step === 6) {
+                                    const remaining = Math.max(0, Math.floor(180 - (Date.now() - state.otpTimestamp) / 1000));
+                                    if (remaining > 0) this.startTimer(remaining);
+                                }
+                            });
+                        }
                     }
                 }
-            }
-
-            document.getElementById('mainAuthForm').addEventListener('input', () => saveAuthProgress());
-
-            // PWA Auto-Update Check
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.getRegistration().then(reg => {
-                    if (reg) reg.update();
-                });
-
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    // Only force reload if the user is on the login screen (currentStep 0)
-                    // This prevents interrupting someone in the middle of typing registration info
-                    if (currentStep === 0) {
-                        window.location.reload();
-                    }
-                });
-            }
-
-            // Check for saved username
-            const savedIdentity = localStorage.getItem('saved_identity');
-            if (savedIdentity) {
-                const identityInput = document.querySelector('input[name="login_identity"]');
-                const rememberCheckbox = document.querySelector('input[name="remember_me"]');
-                if (identityInput) identityInput.value = savedIdentity;
-                if (rememberCheckbox) rememberCheckbox.checked = true;
-            }
-        });
-
-        let usernameCheckTimeout;
-        async function checkUsername(username) {
-            const feedbackEl = document.getElementById('username-feedback');
-            const suggestionsEl = document.getElementById('username-suggestions');
-            const inputEl = document.getElementById('username');
-            feedbackEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-gray-400"></i>';
-            suggestionsEl.innerHTML = '';
-
-            clearTimeout(usernameCheckTimeout);
-            if (username.length < 3) {
-                feedbackEl.innerHTML = '<i class="fa-solid fa-times-circle text-red-500"></i>';
-                suggestionsEl.innerHTML = '<span class="text-red-500">Username must be at least 3 characters.</span>';
-                inputEl.classList.remove('border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
-                inputEl.classList.add('border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]');
-                return;
-            }
-
-            usernameCheckTimeout = setTimeout(() => {
-                fetch(`${API_BASE_URL}/api/check_username?username=${encodeURIComponent(username)}`)
-                    .then(async res => {
-                        if (res.ok) return res.json();
-                    })
-                    .then(data => {
-                        if (!data) return;
-                        
-                        if (data.available) {
-                            feedbackEl.innerHTML = '<i class="fa-solid fa-check-circle text-green-500"></i>';
-                            inputEl.classList.remove('border-gray-100', 'border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]');
-                            inputEl.classList.add('border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
-                        } else {
-                            feedbackEl.innerHTML = '<i class="fa-solid fa-times-circle text-red-500"></i>';
-                            let html = '<p class="text-red-500 mb-1">Taken. Try:</p><div class="flex flex-wrap gap-2">';
-                            data.suggestions.forEach(s => {
-                                html += `<button type="button" onclick="useSuggestion('${s}')" class="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border dark:border-gray-700 hover:text-indigo-600">${s}</button>`;
-                            });
-                            html += '</div>';
-                            suggestionsEl.innerHTML = html;
-                            inputEl.classList.remove('border-gray-100', 'border-green-500', 'shadow-[0_0_10px_rgba(34,197,94,0.3)]');
-                            inputEl.classList.add('border-red-500', 'shadow-[0_0_10px_rgba(239,44,44,0.2)]', 'shake-btn');
-                            setTimeout(() => inputEl.classList.remove('shake-btn'), 500);
-                        }
-                    }).catch(err => { });
-            }, 500);
+            };
         }
 
-        function useSuggestion(username) {
-            const input = document.getElementById('username');
-            input.value = username;
-            checkUsername(username);
+        function showPage(pageId) {
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            const target = document.getElementById(pageId);
+            if (target) target.classList.add('active');
+        }
+
+        function showForgotPassword(event) {
+            event?.preventDefault();
+            const el = document.getElementById('authCard');
+            if (el && window.Alpine) {
+                Alpine.$data(el).view = 'forgot';
+                showPage('page-forgot');
+            }
         }
 
         function showTerms(e) {
