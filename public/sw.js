@@ -11,11 +11,11 @@ const ASSETS_TO_CACHE = [
   '/img/logo.png',
   '/img/ysu.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  '/font/inter-regular.woff2',
-  '/font/IntelOneMono-Regular.woff2',
-  '/font/IntelOneMono-Bold.woff2',
-  '/font/IntelOneMono-Italic.woff2',
-  '/font/IntelOneMono-BoldItalic.woff2',
+  '/fonts/inter-regular.woff2',
+  '/fonts/IntelOneMono-Regular.woff2',
+  '/fonts/IntelOneMono-Bold.woff2',
+  '/fonts/IntelOneMono-Italic.woff2',
+  '/fonts/IntelOneMono-BoldItalic.woff2',
 ];
 
 // Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
@@ -174,13 +174,27 @@ self.addEventListener('push', (event) => {
     body: data.body,
     icon: data.icon || (APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png'),
     badge: APP_TYPE === 'ysu' ? '/img/ysu-logo.jpg' : '/img/logo.png', // Small icon for status bar
-    vibrate: [200, 100, 200], // Stronger haptic feedback
-    tag: data.tag || 'maiga-notification', // Groups similar notifications
+    vibrate: data.vibrate || [200, 100, 200],
+    tag: data.tag || 'maiga-notification',
     renotify: true, // Buzz the phone even if a notification with this tag is already visible
+    requireInteraction: data.requireInteraction || false,
+    actions: data.actions || [],
     data: {
-      url: data.url || '/'
+      url: data.data?.url || data.url || '/',
+      type: data.data?.type || 'message',
+      callId: data.data?.callId,
+      callerId: data.data?.callerId
     }
   };
+
+  // If it's a call, signal open tabs to play the ringtone
+  if (options.data.type === 'call') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window' }).then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'PLAY_CALL_RINGTONE' }));
+      })
+    );
+  }
 
   event.waitUntil(
     self.registration.showNotification(data.title, options)
@@ -190,8 +204,36 @@ self.addEventListener('push', (event) => {
 // 5. Handle Notification Click
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const notificationData = event.notification.data;
+
+  if (event.action === 'decline') {
+    event.waitUntil(
+      fetch('/api/reject_call_background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callId: notificationData.callId, callerId: notificationData.callerId })
+      })
+    );
+    return;
+  }
+
+  let targetUrl = notificationData.url;
+  if (event.action === 'answer') {
+    targetUrl += '&autoAnswer=true';
+  }
+
   event.waitUntil(
-    clients.openWindow(event.notification.data.url)
+    self.clients.matchAll({ type: 'window' }).then(windowClients => {
+      // Try to focus an existing window first
+      for (var i = 0; i < windowClients.length; i++) {
+        var client = windowClients[i];
+        if (client.url.includes('/home') && 'focus' in client) {
+          return client.focus().then(c => c.navigate(targetUrl));
+        }
+      }
+      // If no window is open, open a new one
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    })
   );
 });
 

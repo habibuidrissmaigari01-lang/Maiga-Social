@@ -42,11 +42,11 @@
     }
     </script>
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/font/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -423,6 +423,7 @@
 
     <script>
         const API_BASE_URL = ''; // Use relative path so it works on any IP
+        let currentStep = 0; // Initialize globally to fix ReferenceError
 
         function authComponent() {
             return {
@@ -765,8 +766,8 @@
             if (step === 5) {
                 const phone = stepEl.querySelector('input[name="phone"]');
                 const email = stepEl.querySelector('input[name="reg_email"]');
-                if (!phone.value.trim() && !email.value.trim()) {
-                    alert('Please enter either your phone number or email address.');
+                if (!phone.value.trim() || !email.value.trim()) {
+                    alert('Please enter both your phone number and email address.');
                     return false;
                 }
                 return true;
