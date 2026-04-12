@@ -127,6 +127,7 @@ router.post('/register', [
     body('email').isEmail().withMessage('Invalid email').normalizeEmail(),
     body('password').isLength({ min: 6 }).withMessage('Password too short'),
     body('first_name').trim().notEmpty().withMessage('First name required'),
+    body('phone').trim().notEmpty().withMessage('Phone number is required'),
     body('surname').trim().notEmpty().withMessage('Surname required'), // Added account_type validation
     body('otp').notEmpty().withMessage('OTP required'),
     body('account_type').optional().isIn(['maiga', 'ysu']).withMessage('Invalid account type')
@@ -158,8 +159,8 @@ router.post('/register', [
             return res.status(400).json({ message: 'Invalid verification code.' });
         }
 
-        const existingUser = await User.findOne({ $or: [{ username }, { email }] });
-        if (existingUser) return res.status(400).json({ message: 'Username or email already exists' });
+        const existingUser = await User.findOne({ $or: [{ username }, { email }, { phone }] });
+        if (existingUser) return res.status(400).json({ message: 'Username, email, or phone number already exists' });
 
         const user = new User({
             name: (first_name + ' ' + surname).trim(), account_type: account_type || 'maiga', // Set account_type
