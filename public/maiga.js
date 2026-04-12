@@ -2195,14 +2195,17 @@ const initMaiga = () => {
                 const chatId = data.group_id ? data.group_id.toString() : data.sender_id.toString();
                 this.chatMessages[chatId] = [...(this.chatMessages[chatId] || []), formattedMsg];
 
-                // Auto-scroll to bottom if user is already at the bottom or near the bottom
+                // Smart scroll: Only scroll if user is already near the bottom
                 this.$nextTick(() => {
                     const container = document.getElementById('messageContainer');
-                    if (container && (container.scrollHeight - container.scrollTop <= container.clientHeight + 50 || data.sender_id.toString() === this.user.id.toString())) {
-                        container.scrollTop = container.scrollHeight;
+                    if (container) {
+                        const threshold = 100; // pixels from bottom
+                        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+                        if (isNearBottom) {
+                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        }
                     }
                 });
-
                 const chatInList = data.group_id
                     ? this.groups.find(g => g.id.toString() === chatId)
                     : this.chats.find(c => c.id.toString() === chatId);
@@ -3476,7 +3479,7 @@ const initMaiga = () => {
             this.chatMessages[this.activeChat.id] = [...(this.chatMessages[this.activeChat.id] || []), messagePayload];
             this.$nextTick(() => {
                 const container = document.getElementById('messageContainer');
-                if (container) container.scrollTop = container.scrollHeight;
+                if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
             });
 
             // Update chat list preview with pending state
