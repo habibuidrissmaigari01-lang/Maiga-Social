@@ -174,10 +174,10 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         const [user, posts, chats, groups, connections, followersData, trending, notifications] = await Promise.all([
             User.findById(userId),
             Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
-            Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online'),
+            Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender'),
             Group.find({ 'members.user': userId }),
-            User.findById(userId).populate('following', 'name avatar username online dept'),
-            User.find({ following: userId }).select('name first_name surname avatar username online dept'),
+            User.findById(userId).populate('following', 'name avatar username online dept gender'),
+            User.find({ following: userId }).select('name first_name surname avatar username online dept gender'),
             Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
             Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10)
         ]);
@@ -191,6 +191,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 processedChats.set(otherId, {
                     id: other._id, name: other.name, avatar: other.avatar,
                     status: other.online ? 'online' : 'offline',
+                    gender: other.gender,
                     lastMsg: (m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`),
                     time: formatTime(m.createdAt),
                     lastMsgTimestamp: m.createdAt
@@ -223,7 +224,7 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
     res.json({
         id: user._id, name: user.name, username: user.username, account_type: user.account_type,
         avatar: user.avatar, dept: user.dept, bio: user.bio,
-        email: user.email, is_admin: user.is_admin,
+        email: user.email, is_admin: user.is_admin,gender: user.gender,
         followerIds: user.followers, followingIds: user.following,
         total_posts_count: postsCount
     });
@@ -563,7 +564,7 @@ router.post('/delete_chat_history', isAuthenticated, async (req, res) => {
 router.get('/get_chats', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const messages = await Message.find({ $or: [{ sender: userId }, { receiver: userId }] })
-        .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online');
+        .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender');
     
     // Get unread counts per sender
     const unreadAggregate = await Message.aggregate([
@@ -589,6 +590,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
             chats.set(otherId, {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
+                gender: other.gender,
                 last_seen: other.last_seen,
                 lastMsg: prefix + (m.media_type === 'text' ? m.content : `<i>Sent a ${m.media_type}</i>`), 
                 lastMsgId: m._id,
@@ -623,7 +625,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
             const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 }).populate('sender', 'name');
             
             const isMe = lastMessage ? (lastMessage.sender?._id.toString() === req.session.userId.toString()) : false;
-            const senderPrefix = lastMessage ? (isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${lastMessage.sender?.name?.split(' ')[0]}:</span> `) : '';
+            const senderPrefix = lastMessage ? (isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${(lastMessage.sender?.name || 'User').split(' ')[0]}:</span> `) : '';
             const lastMsgText = lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `<i>Sent a ${lastMessage.media_type}</i>`) : 'No messages yet';
             
             return {
@@ -746,7 +748,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
 
         const messages = await Message.find(query)
             .sort({ createdAt: 1 })
-            .populate('sender', 'name first_name surname avatar')
+            .populate('sender', 'name first_name surname avatar gender')
             .populate('reply_to');
 
         res.json(messages.map(m => ({
@@ -756,6 +758,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
             is_read: m.is_read, avatar: m.sender?.avatar, 
             pinned: m.is_pinned,
             is_edited: m.is_edited,
+            gender: m.sender?.gender,
             read_by: m.read_by,
             link_preview: m.link_preview,
             poll_id: m.poll?._id,
@@ -1425,9 +1428,9 @@ router.get('/friends/suggestions', isAuthenticated, async (req, res) => {
     const suggestions = await User.find({ 
         _id: { $nin: [req.session.userId, ...user.following] },
         blocked: false 
-    }).skip(skip).limit(limit + 1).select('name username avatar dept online'); // Fetch one extra to check for more
+    }).skip(skip).limit(limit + 1).select('name username avatar dept online gender'); // Fetch one extra to check for more
     res.json({
-        users: suggestions.slice(0, limit).map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept, online: u.online })),
+        users: suggestions.slice(0, limit).map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept, online: u.online, gender: u.gender })),
         hasMore: suggestions.length > limit
     });
 });
@@ -1444,25 +1447,27 @@ router.get('/get_connections', isAuthenticated, async (req, res) => {
         
         if (type === 'followers') {
             // Get people who are following this user
-            const followers = await User.find({ following: targetUserId }).select('name first_name surname avatar username online dept _id');
+            const followers = await User.find({ following: targetUserId }).select('name first_name surname avatar username online dept _id gender');
             connectionList = followers.filter(u => u != null).map(u => ({ 
                 id: u._id, 
                 name: u.full_name || u.name, 
                 avatar: u.avatar, 
                 username: u.username, 
                 online: u.online, 
-                dept: u.dept 
+                dept: u.dept,
+                gender: u.gender
             }));
         } else {
             // Get people this user is following (default)
-            await user.populate('following', 'name first_name surname avatar username online dept');
+            await user.populate('following', 'name first_name surname avatar username online dept gender');
             connectionList = user.following.filter(u => u != null).map(u => ({ 
                 id: u._id, 
                 name: u.full_name || u.name, 
                 avatar: u.avatar, 
                 username: u.username, 
                 online: u.online, 
-                dept: u.dept 
+                dept: u.dept,
+                gender: u.gender
             }));
         }
         
@@ -2046,6 +2051,15 @@ router.post('/unblock_user', isAuthenticated, async (req, res) => {
         res.status(500).json({ error: 'Failed to unblock user' });
     }
 });
+
+router.post('/increment_share', isAuthenticated, async (req, res) => {
+    try {
+        const { post_id } = req.body;
+        await Post.findByIdAndUpdate(post_id, { $inc: { shares: 1 } });
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: 'Failed' }); }
+});
+
 
 router.get('/get_blocked_users', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId).populate('blocked_users', 'name avatar');

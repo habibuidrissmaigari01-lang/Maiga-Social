@@ -94,7 +94,7 @@ const initMaiga = () => {
         },
         installPrompt: null,
         // Core App State
-        user: { id: 0, name: '', username: '', nickname: '', avatar: '', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
+        user: { id: 0, name: '', username: '', nickname: '', avatar: '', gender: 'male', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         theme: localStorage.getItem('theme') || 'system',
         darkMode: false,
@@ -421,11 +421,28 @@ const initMaiga = () => {
         },
         watchAgain(reel) {
             if (!reel) return;
-            // Placeholder: implement reel restart logic here.
+            const video = document.getElementById('reel-video-' + reel.id);
+            if (video) {
+                video.currentTime = 0;
+                video.play();
+                reel.seen = false;
+            }
         },
         scrubReel(reel, event) {
             if (!reel || !event) return;
-            // Placeholder: implement scrubbing logic here.
+            const video = document.getElementById('reel-video-' + reel.id);
+            if (!video) return;
+            
+            const rect = event.currentTarget.getBoundingClientRect();
+            const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+            const pos = (clientX - rect.left) / rect.width;
+            const clampedPos = Math.max(0, Math.min(1, pos));
+            
+            video.currentTime = clampedPos * video.duration;
+            reel.progress = clampedPos * 100;
+        },
+        toggleReelDescription(reel) {
+            reel.isExpanded = !reel.isExpanded;
         },
         retryReelLoad(reel) {
             if (!reel) return;
@@ -2307,7 +2324,8 @@ const initMaiga = () => {
                     ...data,
                     sender: 'them',
                     type: data.media_type || 'text',
-                    time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    time: new Date(data.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    author: data.author || 'User'
                 };
 
                 const chatId = data.group_id ? data.group_id.toString() : data.sender_id.toString();
@@ -2374,7 +2392,7 @@ const initMaiga = () => {
                         name: data.group_name || data.author,
                         avatar: data.group_avatar || data.avatar,
                         type: data.group_id ? 'group' : 'user',
-                        lastMsg: (data.group_id ? `<span class="text-indigo-500 font-bold">${data.author.split(' ')[0]}:</span> ` : '') + (data.media_type === 'text' ? data.content : `<i>Sent a ${data.media_type}</i>`),
+                        lastMsg: (data.group_id ? `<span class="text-indigo-500 font-bold">${(data.author || 'User').split(' ')[0]}:</span> ` : '') + (data.media_type === 'text' ? data.content : `<i>Sent a ${data.media_type}</i>`),
                         lastMsgId: data.id,
                         lastMsgByMe: false,
                         lastMsgIsRead: false,
@@ -2919,7 +2937,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_reels?page=1&limit=10').then(async d => { 
                     // Fixed: reels were not being mapped with initial properties
-                    this.reels = (Array.isArray(d) ? d : []).filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                    this.reels = (Array.isArray(d) ? d : []).filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                     this.$nextTick(() => this.setupReelsObserver());
                     incrementProgress();
                     await this.restoreScrollState();
@@ -3163,8 +3181,8 @@ const initMaiga = () => {
                         storiesByUser.set(uid, {
                             id: uid,
                             name: (story.first_name || 'User') + ' ' + (story.surname || ''),
-                            // Use story.avatar from DB, fallback to dicebear if missing
-                            avatar: story.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
+                            // Use story.avatar from DB, fallback to gender-based local defaults
+                            avatar: story.avatar || (story.gender === 'female' ? 'img/female.png' : 'img/male.png'),
                             stories: []
                         });
                     }
@@ -4446,15 +4464,15 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-                    this.showToast('Success', 'Post shared to your feed!');
+                    this.showToast('Success', 'Post shared to your feed!', 'success');
                     this.showShareModal = false;
                     
                     // Update original post/reel share count (ensure string comparison)
-                    const post = this.homePosts.find(p => p.id === this.sharingPost.id);
+                    const post = this.posts.find(p => p.id === this.sharingPost.id);
                     if (post) post.shares++;
                     
                     const reel = this.reels.find(r => r.id === this.sharingPost.id);
-                    if (reel) reel.shares++;
+                    if (reel) this.triggerShareAnimation(reel);
                 }
             });
         },
@@ -4473,12 +4491,26 @@ const initMaiga = () => {
             this.sharingPost.shares++;
             this.showToast('Shared', 'Post shared to your story!', 'success');
         },
-        copyPostLink() {
+        async copyPostLink() {
             if (!this.sharingPost) return; // Ensure sharingPost.id is string
-            navigator.clipboard.writeText(`https://maigasocial.com/post/${this.sharingPost.id}`);
-            this.showShareModal = false;
-            this.sharingPost.shares++;
+            const url = `${window.location.origin}/post/${this.sharingPost.id}`;
+            await navigator.clipboard.writeText(url);
             this.showToast('Copied', 'Link copied to clipboard!', 'success');
+            
+            this.apiFetch('/api/increment_share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ post_id: this.sharingPost.id.toString() })
+            });
+
+            this.triggerShareAnimation(this.sharingPost);
+            this.showShareModal = false;
+        },
+        triggerShareAnimation(item) {
+            item.shares++;
+            item.isAnimatingShare = true;
+            if (navigator.vibrate) navigator.vibrate(10);
+            setTimeout(() => { item.isAnimatingShare = false; }, 1000);
         },
         handleReelClick(reel, event) {
             if (this.isSpeedingUp) {
@@ -4501,6 +4533,10 @@ const initMaiga = () => {
                 reel.showHeart = false;
                 this.$nextTick(() => {
                     reel.showHeart = true;
+                    // Position heart exactly where clicked
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    reel.heartX = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
+                    reel.heartY = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
                     if (navigator.vibrate) navigator.vibrate(30);
                     clearTimeout(reel.heartTimer);
                     reel.heartTimer = setTimeout(() => reel.showHeart = false, 800);
@@ -7381,7 +7417,11 @@ const initMaiga = () => {
 
                     if (entry.isIntersecting) {
                         // Ensure all other videos are paused before playing this one
-                        this.stopAllReels();
+                        document.querySelectorAll('video[id^="reel-video-"]').forEach(v => {
+                            if (v !== video) { v.pause(); v.muted = true; }
+                        });
+                        
+                        video.muted = this.isReelsMuted;
                         video.play().catch(error => {
                             if (error && error.name === 'AbortError') return;
                         });
@@ -7416,6 +7456,7 @@ const initMaiga = () => {
                         if (reel) reel.seen = true;
                     } else {
                         video.pause();
+                        video.muted = true;
                         video.currentTime = 0;
                     }
                 });
@@ -7495,7 +7536,7 @@ const initMaiga = () => {
             return this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
-                        const mapped = data.filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                        const mapped = data.filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                         this.reels = [...this.reels, ...mapped];
                     }
                 }).catch(() => {
@@ -7604,7 +7645,7 @@ const initMaiga = () => {
                     text: reel.caption,
                     url: window.location.href
                 }).then(() => {
-                    reel.shares++;
+                    this.triggerShareAnimation(reel);
                     this.showToast('Shared', 'Reel shared successfully!', 'success');
                 }).catch((error) => console.log('Error sharing', error));
             } else {

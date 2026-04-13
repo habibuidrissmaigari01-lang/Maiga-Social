@@ -124,7 +124,7 @@ userSchema.pre('save', async function(next) {
 
 // Computed full_name virtual
 userSchema.virtual('full_name').get(function() {
-    if (this.first_name || this.surname) return `${this.first_name || ''} ${this.surname || ''}`.trim();
+    if (this.first_name || this.surname) return `${this.first_name || ''} ${this.surname || ''}`.trim() || 'User';
     return this.name; // Fallback to existing name field
 });
 
@@ -314,7 +314,7 @@ messageSchema.post('save', async function(doc) {
         group_avatar: populatedMsg.group?.avatar,
         content: doc.content,
         media_type: doc.media_type,
-        author: populatedMsg.sender.full_name, // Using the virtual here!
+        author: populatedMsg.sender?.full_name || 'Deleted User',
         avatar: populatedMsg.sender.avatar,
         created_at: doc.createdAt
     };
