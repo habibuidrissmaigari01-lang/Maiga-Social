@@ -85,7 +85,7 @@
     <div class="glass-card p-6 md:p-10 w-full max-w-md relative" id="authCard" x-data="authComponent()" x-cloak>
         <button @click="toggleTheme()" class="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-all active:scale-90" :title="'Theme: ' + theme">
             <i x-show="theme === 'light'" class="fa-solid fa-sun text-xl"></i>
-            <i x-show="theme === 'dark'" class="fa-solid fa-moon text-xl text-blue-400"></i>
+            <i x-show="theme === 'dark'" class="fa-solid fa-moon text-xl text-blue-400" x-cloak></i>
             <i x-show="theme === 'system'" class="fa-solid fa-display text-xl"></i>
         </button>
 
@@ -95,7 +95,7 @@
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->
-        <form id="mainAuthForm" @submit.prevent="submitForm">
+        <form id="mainAuthForm">
             <!-- Hidden input to tell backend which action was taken -->
             <input type="hidden" id="authType" name="auth_type" :value="view === 'login' ? 'login' : 'register'">
             <input type="hidden" name="account_type" value="maiga">
@@ -476,7 +476,28 @@
                 emailStatus: '',
                 otpTimer: 0,
                 countdownTimer: null,
-                registration: { email: '', phone: '' },
+                registration: { 
+                    first_name: '', surname: '', birthday: '', username: '', 
+                    gender: '', phone: '', email: '', password: '', 
+                    confirmPassword: '', terms: false 
+                },
+                get passwordValidation() {
+                    const p = this.registration.password || '';
+                    return {
+                        length: p.length >= 8,
+                        uppercase: /[A-Z]/.test(p),
+                        number: /[0-9]/.test(p),
+                        match: p === this.registration.confirmPassword && p !== ''
+                    };
+                },
+                get passwordScore() {
+                    const v = this.passwordValidation;
+                    let score = 0;
+                    if (v.length) score++;
+                    if (v.uppercase) score++;
+                    if (v.number) score++;
+                    return score;
+                },
                 init() {
                     this.applyTheme();
                     if (localStorage.getItem('maiga_session_active') === 'true') {
@@ -1206,7 +1227,6 @@
         // Popup & PWA Logic
         let deferredPrompt;
         const popup = document.getElementById('welcomePopup');
-        const pwaBtn = document.getElementById('pwaInstallBtn');
 
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
@@ -1251,22 +1271,19 @@
             }
         });
 
-        pwaBtn.addEventListener('click', async (e) => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                // Hide the button immediately after prompt is shown, regardless of outcome
-                if (e && e.target) e.target.closest('button').classList.add('hidden');
-                
-                // Wait for user choice
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                    deferredPrompt = null;
-                    // Hide button after acceptance
-                    if(e && e.target) e.target.closest('button').classList.add('hidden');
-                    closeWelcomePopup();
+        // Using standard click delegator to avoid null reference on pwaBtn
+        document.addEventListener('click', async (e) => {
+            if (e.target.closest('#pwaInstallBtn')) {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    e.target.closest('#pwaInstallBtn').classList.add('hidden');
+                    
+                    const { outcome } = await deferredPrompt.userChoice;
+                    if (outcome === 'accepted') {
+                        deferredPrompt = null;
+                        closeWelcomePopup();
+                    }
                 }
-            } else {
-                // Fallback
             }
         });
 

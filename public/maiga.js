@@ -645,7 +645,18 @@ const initMaiga = () => {
         textStoryStyles: [
             { background: 'linear-gradient(to bottom, #4f46e5, #9333ea)', color: '#ffffff' },
             { background: 'linear-gradient(to bottom, #f97316, #fde047)', color: '#ffffff' },
+            { background: 'linear-gradient(to bottom, #0ea5e9, #2dd4bf)', color: '#ffffff' }, // Sky Blue to Teal
+            { background: 'linear-gradient(to bottom, #ec4899, #f43f5e)', color: '#ffffff' }, // Pink to Red
+            { background: 'linear-gradient(to bottom, #22c55e, #84cc16)', color: '#ffffff' }, // Green to Lime
+            { background: 'linear-gradient(to bottom, #8b5cf6, #d946ef)', color: '#ffffff' }, // Purple to Fuchsia
+            { background: 'linear-gradient(to bottom, #f59e0b, #ef4444)', color: '#ffffff' }, // Amber to Red
+            { background: '#1f2937', color: '#ffffff' }, // Modern Dark Grey
+            { background: '#ffffff', color: '#1f2937' }  // Clean White
         ],
+        toggleTextFont() {
+            this.textStoryFontIndex = (this.textStoryFontIndex + 1) % this.editorFonts.length;
+            if (navigator.vibrate) navigator.vibrate(10);
+        },
         get unreadBadgeDisplay() {
             const count = this.totalUnreadChats || 0;
             return count > 99 ? '99+' : count.toString();
@@ -6545,15 +6556,17 @@ const initMaiga = () => {
                         } catch (e) { return reject(e); }
                     } else {
                         const style = this.textStoryStyles[this.textStoryStyleIndex];
-                        // Canvas fillStyle does not support CSS linear-gradient strings
                         if (style.background.includes('gradient')) {
-                            const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
-                            if (style.background.includes('#4f46e5')) {
-                                grd.addColorStop(0, '#4f46e5'); grd.addColorStop(1, '#9333ea');
+                            // Dynamically extract hex colors from the linear-gradient string
+                            const hexColors = style.background.match(/#[a-fA-F0-9]{6}/g);
+                            if (hexColors && hexColors.length >= 2) {
+                                const grd = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                                grd.addColorStop(0, hexColors[0]);
+                                grd.addColorStop(1, hexColors[1]);
+                                ctx.fillStyle = grd;
                             } else {
-                                grd.addColorStop(0, '#f97316'); grd.addColorStop(1, '#fde047');
+                                ctx.fillStyle = '#4f46e5'; // Default fallback
                             }
-                            ctx.fillStyle = grd;
                         } else {
                             ctx.fillStyle = style.background;
                         }
