@@ -2,7 +2,7 @@
   "name": "YSU Social",
   "short_name": "YSU",
   "description": "The official social platform for YSU students.",
-  "start_url": "https://maigasocial.com/ysu",
+  "start_url": "/ysu.html",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

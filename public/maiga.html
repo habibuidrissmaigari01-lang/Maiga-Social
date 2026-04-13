@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/font/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
     <title>Maiga Social</title>
     <link href="css/main.css" rel="stylesheet">
      <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
@@ -64,31 +64,31 @@
     <style> /* Fixed: Removed duplicate style tag */
         @font-face {
             font-family: 'Inter';
-            src: url('/fonts/inter-regular.woff2') format('woff2');
+            src: url('/font/inter-regular.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/fonts/IntelOneMono-Regular.woff2') format('woff2');
+            src: url('/font/IntelOneMono-Regular.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/fonts/IntelOneMono-Bold.woff2') format('woff2');
+            src: url('/font/IntelOneMono-Bold.woff2') format('woff2');
             font-weight: bold;
             font-style: normal;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/fonts/IntelOneMono-Italic.woff2') format('woff2');
+            src: url('/font/IntelOneMono-Italic.woff2') format('woff2');
             font-weight: normal;
             font-style: italic;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/fonts/IntelOneMono-BoldItalic.woff2') format('woff2');
+            src: url('/font/IntelOneMono-BoldItalic.woff2') format('woff2');
             font-weight: bold;
             font-style: italic;
         }
@@ -194,26 +194,6 @@
             100% { transform: translateY(-40px); opacity: 0; }
         }
         .animate-swipe-up { animation: swipe-up 2s infinite; }
-        .reel-gradient-overlay { background: linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 25%, transparent 50%, rgba(0,0,0,0.4) 100%); }
-        .reel-icon-shadow { filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
-        @keyframes chatFlash {
-            0% { background-color: transparent; }
-            20% { background-color: rgba(59, 130, 246, 0.1); }
-            100% { background-color: transparent; }
-        }
-        .animate-chat-flash { animation: chatFlash 2s ease-out; }
-        @keyframes chatFlashHigh {
-            0% { background-color: transparent; }
-            20% { background-color: rgba(249, 115, 22, 0.15); } /* Orange-500 tint */
-            100% { background-color: transparent; }
-        }
-        .animate-chat-flash-high { animation: chatFlashHigh 2s ease-out; }
-        @keyframes heartPop {
-            0% { transform: scale(0) rotate(-15deg); opacity: 0; }
-            50% { transform: scale(1.4) rotate(10deg); opacity: 1; }
-            100% { transform: scale(1) rotate(0deg); opacity: 0; }
-        }
-        .animate-heart-pop { animation: heartPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
     </style>
 </head>
 <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
@@ -450,49 +430,20 @@
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
     <div class="pb-32 lg:pb-8">
-    </div>
-    </div>
-
-    <aside :class="[isMessaging ? 'fixed inset-0 z-[400] flex lg:relative lg:z-0 lg:inset-auto' : 'hidden lg:flex lg:relative', (isRightSidebarCollapsed || !activeChat) ? 'lg:w-20' : 'lg:w-full']" class="flex-col bg-white dark:bg-gray-900 h-full lg:h-screen border-l dark:border-gray-800 transition-all duration-300 overflow-hidden">
+    <!-- Messaging Overlay (now also for desktop chat windows) -->
+    <div x-show="isMessaging" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
         <!-- List View -->
-        <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn">
-            <div class="p-4 flex items-center justify-between border-b dark:border-gray-800" :class="(isRightSidebarCollapsed || !activeChat) ? 'flex-col gap-4' : ''">
-                <button @click="isMessaging = false" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-chevron-left"></i></button>
-                <div x-show="!isRightSidebarCollapsed" class="flex-1 flex flex-col items-center">
-                    <div class="flex items-center gap-2">
-                        <h3 class="text-lg font-black">Messages</h3>
-                        <button @click="isRightSidebarCollapsed = !isRightSidebarCollapsed" class="hidden lg:block text-gray-400 p-1"><i class="fa-solid" :class="isRightSidebarCollapsed ? 'fa-expand' : 'fa-compress'"></i></button>
-                    </div>
+        <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
+            <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
+                <button @click="isMessaging = false" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
+                <div class="flex-1 flex flex-col items-center">
+                    <h3 class="text-lg font-black">Messages</h3>
                     <button @click="markAllMessagesAsRead()" class="text-[9px] font-black text-blue-600 uppercase hover:underline tracking-widest">Mark all read</button>
                 </div>
-                <div class="flex items-center gap-1" :class="(isRightSidebarCollapsed || !activeChat) ? 'flex-col' : ''">
-                    <button @click="isMessageSoundEnabled = !isMessageSoundEnabled" class="text-lg p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 hidden lg:block transition-colors" :class="isMessageSoundEnabled ? 'text-blue-600' : 'text-gray-400'" :title="isMessageSoundEnabled ? 'Mute Sounds' : 'Unmute Sounds'">
-                        <i class="fa-solid" :class="isMessageSoundEnabled ? 'fa-volume-high' : 'fa-volume-xmark'"></i>
-                    </button>
-                    <button @click="isCreatingGroup = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
-                </div>
-                <button x-show="!activeChat" @click="isRightSidebarCollapsed = !isRightSidebarCollapsed" class="hidden lg:block text-gray-400 p-1 relative">
-                    <i class="fa-solid" :class="isRightSidebarCollapsed ? 'fa-expand' : 'fa-compress'"></i>
-                    <template x-if="isRightSidebarCollapsed && totalUnreadChats > 0">
-                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold border-2 border-white dark:border-gray-900 shadow-sm" x-text="totalUnreadChats > 99 ? '99+' : totalUnreadChats"></span>
-                    </template>
-                </button>
-            </div>
-            <!-- Search Bar -->
-            <div class="p-4 border-b dark:border-gray-800" x-show="!isRightSidebarCollapsed">
-                <div class="relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-                    <input type="text" x-model="chatListSearchQuery" placeholder="Search messages..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2.5 pl-9 pr-10 text-sm focus:ring-1 focus:ring-blue-500">
-                    <button @click="showOnlyUnread = !showOnlyUnread" 
-                            class="absolute right-3 top-1/2 -translate-y-1/2 p-1 transition-colors"
-                            :class="showOnlyUnread ? 'text-blue-600' : 'text-gray-400'"
-                            title="Unread Only">
-                        <i class="fa-solid" :class="showOnlyUnread ? 'fa-filter-circle-check' : 'fa-filter'"></i>
-                    </button>
-                </div>
+                <button @click="isCreatingGroup = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
             </div>
             <!-- Message Tabs UI Improvement -->
-            <div x-show="!isRightSidebarCollapsed" class="flex gap-2 overflow-x-auto p-2 bg-gray-50 dark:bg-gray-800/50 mx-4 my-2 rounded-xl">
+            <div class="flex gap-2 overflow-x-auto p-2 bg-gray-50 dark:bg-gray-800/50 mx-4 my-2 rounded-xl">
                 <button @click="activeMessageTab = 'all'" class="shrink-0 min-w-[72px] py-1.5 px-3 text-xs font-bold rounded-lg relative" :class="activeMessageTab === 'all' ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'">
                     <span>All</span>
                     <span x-show="totalUnreadChats > 0" class="absolute -top-1 -right-1 bg-blue-600 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm" x-text="totalUnreadChats"></span>
@@ -516,7 +467,7 @@
                 </button>
             </div>
             <!-- Online Contacts Horizontal List -->
-            <div x-show="onlineContacts.length > 0 && !isRightSidebarCollapsed" class="px-3 py-3 border-b dark:border-gray-800">
+            <div x-show="onlineContacts.length > 0" class="px-3 py-3 border-b dark:border-gray-800">
                 <h4 class="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2 ml-1">ONLINE NOW</h4>
                 <div class="flex gap-3 overflow-x-auto no-scrollbar">
                     <template x-for="contact in onlineContacts" :key="contact.id">
@@ -546,20 +497,15 @@
                                  @touchmove="handleChatSwipeMove($event)"
                                  @touchend="handleChatSwipeEnd()"
                                  @contextmenu.prevent="chatContextMenu = { show: true, x: $event.clientX, y: $event.clientY, chat: chat }"
-                                 class="flex items-center bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-all duration-200 cursor-pointer relative z-10"
-                                 :class="[(isRightSidebarCollapsed || !activeChat) ? 'justify-center p-2' : 'p-4 space-x-4', chat.justReceived ? (chat.priorityReceived === 'high' ? 'animate-chat-flash-high' : 'animate-chat-flash') : '']"
-                                 :title="(isRightSidebarCollapsed || !activeChat) ? chat.name : ''"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <div class="relative">
-                                <img :src="chat.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="rounded-full border dark:border-gray-700 transition-all" :class="(isRightSidebarCollapsed || !activeChat) ? 'w-10 h-10' : 'w-14 h-14'">
+                                <img :src="chat.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-14 h-14 rounded-full border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
-                                    <span class="absolute bottom-0 right-0 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full" :class="(isRightSidebarCollapsed || !activeChat) ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'"></span>
-                                </template>
-                                <template x-if="(isRightSidebarCollapsed || !activeChat) && chat.unreadCount > 0">
-                                    <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full font-bold border-2 border-white dark:border-gray-900" :class="chat.justReceived ? 'animate-pulse' : ''" x-text="chat.unreadCount > 9 ? '9+' : chat.unreadCount"></span>
+                                    <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                                 </template>
                             </div>
-                            <div x-show="!isRightSidebarCollapsed" class="flex-1 border-b dark:border-gray-800 pb-4">
+                            <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center">
                                         <span class="font-bold" x-text="chat.name"></span>
@@ -611,7 +557,7 @@
                 </div>
                 <!-- Group Chats -->
                 <div x-show="activeMessageTab === 'group'">
-                    <template x-for="group in sortedGroups" :key="group.id">
+                    <template x-for="group in groups" :key="group.id">
                         <div class="relative overflow-hidden bg-white dark:bg-gray-900 border-b dark:border-gray-800">
                             <div class="absolute inset-0 bg-blue-500 flex justify-start items-center pl-8 text-white">
                                 <i class="fa-solid fa-envelope text-lg"></i>
@@ -623,17 +569,10 @@
                                  @touchstart="handleChatSwipeStart($event, group.id)"
                                  @touchmove="handleChatSwipeMove($event)"
                                  @touchend="handleChatSwipeEnd()"
-                                 class="flex items-center bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-all duration-200 cursor-pointer relative z-10"
-                                 :class="[(isRightSidebarCollapsed || !activeChat) ? 'justify-center p-2' : 'p-4 space-x-4', group.justReceived ? (group.priorityReceived === 'high' ? 'animate-chat-flash-high' : 'animate-chat-flash') : '']"
-                                 :title="(isRightSidebarCollapsed || !activeChat) ? group.name : ''"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === group.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                            <div class="relative">
-                                <img :src="group.avatar" class="rounded-full border dark:border-gray-700 transition-all" :class="(isRightSidebarCollapsed || !activeChat) ? 'w-10 h-10' : 'w-14 h-14'">
-                                <template x-if="(isRightSidebarCollapsed || !activeChat) && group.unreadCount > 0">
-                                    <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4.5 h-4.5 flex items-center justify-center rounded-full font-black border-2 border-white dark:border-gray-900 shadow-sm" :class="group.justReceived ? 'animate-pulse' : ''" x-text="group.unreadCount > 9 ? '9+' : group.unreadCount"></span>
-                                </template>
-                            </div>
-                            <div x-show="!isRightSidebarCollapsed" class="flex-1 border-b dark:border-gray-800 pb-4">
+                            <img :src="group.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                            <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold" x-text="group.name"></span>
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="group.time"></span>
@@ -717,17 +656,10 @@
                                  @touchstart="handleChatSwipeStart($event, chat.id)"
                                  @touchmove="handleChatSwipeMove($event)"
                                  @touchend="handleChatSwipeEnd()"
-                                 class="flex items-center bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-all duration-200 cursor-pointer relative z-10"
-                                 :class="[(isRightSidebarCollapsed || !activeChat) ? 'justify-center p-2' : 'p-4 space-x-4', chat.justReceived ? (chat.priorityReceived === 'high' ? 'animate-chat-flash-high' : 'animate-chat-flash') : '']"
-                                 :title="(isRightSidebarCollapsed || !activeChat) ? chat.name : ''"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                            <div class="relative">
-                                <img :src="chat.avatar" class="rounded-full border dark:border-gray-700 transition-all" :class="(isRightSidebarCollapsed || !activeChat) ? 'w-10 h-10' : 'w-14 h-14'">
-                                <template x-if="(isRightSidebarCollapsed || !activeChat) && chat.unreadCount > 0">
-                                    <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] w-4.5 h-4.5 flex items-center justify-center rounded-full font-black border-2 border-white dark:border-gray-900 shadow-sm" x-text="chat.unreadCount > 9 ? '9+' : chat.unreadCount"></span>
-                                </template>
-                            </div>
-                            <div x-show="!isRightSidebarCollapsed" class="flex-1 border-b dark:border-gray-800 pb-4">
+                            <img :src="chat.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                            <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold" x-text="chat.name"></span>
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
@@ -2794,13 +2726,12 @@
 
     <!-- MAIN VIEW: REELS -->
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="h-full bg-black lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
-        <div x-ref="reelsContainer" class="h-full w-full lg:w-[420px] lg:h-[750px] lg:rounded-[32px] overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar lg:shadow-2xl border-x dark:border-gray-800" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
+        <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
-                <div class="h-full w-full shrink-0 snap-start snap-always relative flex items-center justify-center bg-black lg:rounded-[32px] overflow-hidden" :data-reel-id="reel.id">
+                <div class="h-full w-full shrink-0 snap-start snap-always relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
-                        class="w-full h-full object-cover pointer-events-none transition-opacity duration-300" 
-                        style="scroll-snap-stop: always;"
-                        playsinline muted loop 
+                        class="w-full h-full object-cover" 
+                        playsinline autoplay muted loop 
                         :src="reel.media" 
                         @ended="scrollToNextReel(index)" 
                         @waiting="reel.isLoading = true"
@@ -2809,9 +2740,6 @@
                         @timeupdate="reel.progress = ($el.currentTime / $el.duration) * 100"
                         @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
-
-                    <!-- Global Overlay for Text Readability -->
-                    <div class="absolute inset-0 reel-gradient-overlay pointer-events-none z-10"></div>
 
                     <!-- Swipe Up Hint (Only on first reel) -->
                     <template x-if="index === 0 && showSwipeHint">
@@ -2862,7 +2790,7 @@
                     </div>
 
                     <!-- Playback Progress Bar (Clickable) -->
-                    <div @click.stop="scrubReel(reel, $event)" class="absolute bottom-0 left-0 right-0 h-1 hover:h-2 group cursor-pointer bg-white/10 z-[60] transition-all">
+                    <div @click.stop="scrubReel(reel, $event)" class="absolute bottom-0 left-0 right-0 h-2 hover:h-3 group cursor-pointer bg-white/20 z-30 transition-all">
                         <div class="h-full bg-blue-600 transition-all duration-100 ease-linear" :style="`width: ${reel.progress || 0}%`"></div>
                     </div>
                     
@@ -2903,10 +2831,10 @@
                          @touchend.passive="stopReelHold(reel)" 
                          class="absolute inset-0 z-10"></div>
                     
-                    <div x-show="reel.showHeart" 
-                         class="absolute pointer-events-none z-20 select-none -translate-x-1/2 -translate-y-1/2 animate-heart-pop"
+                    <div x-show="reel.showHeart" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-0" x-transition:enter-end="opacity-100 scale-150" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100 scale-150" x-transition:leave-end="opacity-0 scale-0" 
+                         class="absolute pointer-events-none z-20 select-none -translate-x-1/2 -translate-y-1/2"
                          :style="{ left: reel.heartX + 'px', top: reel.heartY + 'px' }">
-                        <i class="fa-solid fa-heart text-red-500 text-8xl drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"></i>
+                        <i class="fa-solid fa-heart text-white text-8xl drop-shadow-2xl text-red-500"></i>
                     </div>
 
                     <!-- 2x Speed Indicator -->
@@ -2915,49 +2843,39 @@
                         <span class="text-white text-xs font-black uppercase tracking-widest">2x Speed</span>
                     </div>
 
-                    <div class="absolute bottom-0 left-0 right-0 p-5 pb-24 lg:pb-10 text-white z-30 flex items-end justify-between pointer-events-none">
-                        <div class="flex-1 max-w-[80%] pointer-events-auto">
-                            <div class="flex items-center space-x-3 mb-3">
-                                <div class="relative" @click.stop="openUserProfile(reel.user_id)">
-                                    <img :src="reel.avatar" class="w-11 h-11 rounded-full border-2 border-white/20 object-cover shadow-lg">
-                                    <div class="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-0.5 border border-black"><i class="fa-solid fa-plus text-[8px]"></i></div>
-                                </div>
-                                <div class="flex flex-col">
+                    <div class="absolute bottom-20 lg:bottom-4 left-0 right-0 p-4 bg-gradient-to-t from-black/60 to-transparent text-white z-20">
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <div class="flex items-center space-x-3 mb-2">
+                                    <img @click.stop="openUserProfile(reel.user_id)" :src="reel.avatar" class="w-10 h-10 rounded-full border-2 border-white object-cover cursor-pointer">
                                     <div class="flex items-center space-x-2">
-                                        <span class="font-black text-sm drop-shadow-md" x-text="reel.author"></span>
-                                        <button x-show="!isFollowing(reel.user_id) && user.id != reel.user_id" @click.stop="toggleFollow(reel.user_id)" class="bg-white/20 backdrop-blur-md px-3 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-white/10">Follow</button>
+                                        <span @click.stop="openUserProfile(reel.user_id)" class="font-bold text-sm cursor-pointer hover:underline" x-text="reel.author"></span>
+                                        <button x-show="!isFollowing(reel.user_id) && user.id != reel.user_id" @click.stop="toggleFollow(reel.user_id)" class="text-white text-sm font-bold">· Follow</button>
                                     </div>
-                                    <span class="text-[10px] text-white/60 font-bold" x-text="reel.dept || 'Campus Creator'"></span>
-                                </div>
+                                </div> 
+                                <p class="text-sm" x-text="reel.caption"></p>
                             </div>
-                            <p class="text-sm font-medium leading-relaxed drop-shadow-lg line-clamp-3" x-text="reel.caption"></p>
-                        </div>
-
-                        <!-- Compact Vertical Sidebar -->
-                        <div class="flex flex-col items-center space-y-5 pointer-events-auto reel-icon-shadow">
-                            <button @click.stop="toggleReelLike(reel)" class="flex flex-col items-center space-y-1">
-                                <div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center transition-all active:scale-125">
-                                    <i class="fa-solid fa-heart text-2xl" :class="reel.liked ? 'text-red-500 animate-spring' : 'text-white'"></i>
+                            <div class="flex flex-col items-center space-y-6 pointer-events-auto">
+                                <button @click.stop="toggleReelLike(reel)" class="flex flex-col items-center group">
+                                    <i class="fa-solid fa-heart text-3xl transition-all duration-75 group-active:scale-125" :class="reel.liked ? 'text-red-500' : 'text-white'"></i>
+                                    <span class="text-xs font-bold" x-text="reel.likes"></span>
+                                </button>
+                                <button @click.stop="openComments(reel, 'reel')" class="flex flex-col items-center group">
+                                    <i class="fa-solid fa-comment-dots text-3xl text-white transition-transform duration-200 group-active:scale-110"></i>
+                                    <span class="text-xs font-bold" x-text="reel.comments"></span>
+                                </button>
+                                <button @click.stop="shareReel(reel)" class="flex flex-col items-center group">
+                                    <i class="fa-solid fa-share text-3xl text-white transition-transform duration-200 group-active:scale-110"></i>
+                                    <span class="text-xs font-bold" x-text="reel.shares"></span>
+                                </button>
+                                <div class="flex flex-col items-center">
+                                    <i class="fa-solid fa-eye text-3xl text-white"></i>
+                                    <span class="text-xs font-bold" x-text="reel.views || 0"></span>
                                 </div>
-                                <span class="text-[10px] font-black" x-text="formatNumber(reel.likes)"></span>
-                            </button>
-                            <button @click.stop="openComments(reel, 'reel')" class="flex flex-col items-center space-y-1">
-                                <div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center transition-all active:scale-90">
-                                    <i class="fa-solid fa-comment-dots text-2xl text-white"></i>
-                                </div>
-                                <span class="text-[10px] font-black" x-text="formatNumber(reel.comments)"></span>
-                            </button>
-                            <button @click.stop="shareReel(reel)" class="flex flex-col items-center space-y-1">
-                                <div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center transition-all active:scale-90">
-                                    <i class="fa-solid fa-share text-2xl text-white"></i>
-                                </div>
-                                <span class="text-[10px] font-black" x-text="formatNumber(reel.shares)"></span>
-                            </button>
-                            <button @click.stop="selectedReel = reel; showReelOptions = true" class="flex flex-col items-center">
-                                <div class="w-12 h-12 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center">
-                                    <i class="fa-solid fa-ellipsis text-2xl text-white"></i>
-                                </div>
-                            </button>
+                                <button @click.stop="selectedReel = reel; showReelOptions = true" class="flex flex-col items-center group pt-2">
+                                    <i class="fa-solid fa-ellipsis text-3xl text-white transition-transform duration-200 group-active:scale-110"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -4300,6 +4218,76 @@
                     <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
                 </template>
             </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar (Desktop) -->
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300">
+        <div class="p-4 flex items-center border-b dark:border-gray-800" :class="isRightSidebarCollapsed ? 'justify-center' : 'justify-between'">
+            <div x-show="!isRightSidebarCollapsed" class="flex items-center gap-4" x-transition>
+                <h3 class="text-lg font-black">Messages</h3>
+                <button @click="isCreatingGroup = true; isMessaging = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
+            </div>
+            <button @click="isRightSidebarCollapsed = !isRightSidebarCollapsed" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-gray-500"><i class="fa-solid" :class="isRightSidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i></button>
+        </div>
+        <div class="p-4 border-b dark:border-gray-800" x-show="!isRightSidebarCollapsed" x-transition>
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input type="text" placeholder="Search messages..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500">
+            </div>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+            <div x-show="isRightSidebarCollapsed" class="flex flex-col items-center space-y-4 py-4" x-transition>
+                <template x-for="chat in sortedChats" :key="chat.id">
+                    <div @click.stop="openUserStory(chat.id)" class="cursor-pointer" :class="getStoryRingClass(chat.id)"><img @click.stop="activeChat = chat; isMessaging = true" :src="chat.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700 cursor-pointer hover:border-blue-500 transition-colors" :class="getStoryRingClass(chat.id) ? 'border-white dark:border-gray-900' : ''"></div>
+                </template>
+            </div>
+            <template x-for="chat in sortedChats" :key="chat.id">
+                <div class="flex items-center p-3 space-x-3 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer" x-show="!isRightSidebarCollapsed" x-transition>
+                    <div class="relative flex-shrink-0 cursor-pointer" :class="getStoryRingClass(chat.id)" @click.stop="openUserStory(chat.id)">
+                        <img :src="chat.avatar" class="w-12 h-12 parallelogram-sm border dark:border-gray-700" :class="getStoryRingClass(chat.id) ? 'border-2 border-white dark:border-gray-900' : ''">
+                        <template x-if="chat.status === 'online'">
+                            <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
+                        </template>
+                    </div>
+                    <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed" @click="activeChat = chat; isMessaging = true">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center min-w-0">
+                                <span class="font-bold text-sm truncate" x-text="chat.name"></span>
+                                <template x-if="chat.callInProgress">
+                                    <span class="ml-1.5 flex h-1.5 w-1.5 shrink-0">
+                                        <span class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-green-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+                                    </span>
+                                </template>
+                            </div>
+                            <template x-if="isPinned(chat.id, chat.type || 'user')">
+                                <i class="fa-solid fa-thumbtack text-[10px] text-yellow-500 mr-1"></i>
+                            </template>
+                            <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                            <div class="flex items-center gap-1 overflow-hidden">
+                                <template x-if="drafts[chat.id] && drafts[chat.id].trim()">
+                                    <p class="text-xs truncate">
+                                        <span class="text-rose-500 font-bold">Draft:</span>
+                                        <span class="text-gray-500" x-text="drafts[chat.id]"></span>
+                                    </p>
+                                </template>
+                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim()) && chat.lastMsgByMe">
+                                    <i class="fa-solid fa-check-double text-[10px] shrink-0" :class="chat.lastMsgIsRead ? 'text-blue-500' : 'text-gray-400'"></i>
+                                </template>
+                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim())">
+                                    <p class="text-xs text-gray-500 truncate" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-html="chat.lastMsg"></p>
+                                </template>
+                            </div>
+                            <template x-if="chat.unreadCount > 0">
+                                <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount > 99 ? '99+' : chat.unreadCount"></span>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
         </div>
     </aside>
     </div>

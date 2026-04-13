@@ -8,7 +8,6 @@ const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
-const webpush = require('web-push');
 
 // Updated paths because routes were moved into the public folder
 const authRoutes = require('./public/routes/auth');
@@ -18,8 +17,6 @@ const { isAuthenticated } = require('./middleware');
 const { User, Message, Post, Group, Story, Call, Setting, s3Client, setIo } = require('./models'); 
 
 const app = express();
-const activeCallTimeouts = new Map();
-
 const server = http.createServer(app);
 const io = new Server(server);
 setIo(io); // Connect Socket.io to Mongoose middleware
@@ -114,36 +111,6 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 24 * 7 // Persist for 1 week
     }
 }));
-
-// --- Background Call Rejection API ---
-// This endpoint is called by the Service Worker when a user clicks "Decline" on a push notification
-app.post('/api/reject_call_background', async (req, res) => {
-    const { callId, callerId } = req.body;
-    if (activeCallTimeouts.has(callId)) {
-        clearTimeout(activeCallTimeouts.get(callId));
-        activeCallTimeouts.delete(callId);
-    }
-
-    try {
-        const call = await Call.findByIdAndUpdate(callId, { status: 'rejected' }, { new: true }).populate('caller');
-        if (io) io.to(callerId).emit('call_ended');
-        
-        // Send a "Missed Call" notification to the receiver to replace the ringing one
-        const receiver = await User.findById(call.receiver);
-        if (receiver && receiver.push_subscription) {
-            const payload = JSON.stringify({
-                title: `Missed ${call.type} call`,
-                body: `Call from ${call.caller.name} declined`,
-                icon: call.caller.avatar,
-                tag: 'call-notification', // Same tag replaces the active "Incoming" notification
-                data: { url: '/home?activeTab=calls' },
-                requireInteraction: false // This one can fade away normally
-            });
-            webpush.sendNotification(receiver.push_subscription, payload).catch(() => {});
-        }
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ success: false }); }
-});
 
 // --- Background Tasks ---
 const cleanupExpiredStories = async () => {
@@ -330,122 +297,21 @@ io.on('connection', (socket) => {
                     avatar: data.avatar, 
                     type: data.type 
                 });
-
-                 // Set 45-second timeout for the call
-                const timeout = setTimeout(async () => {
-                    const currentCall = await Call.findById(call._id).populate('caller receiver');
-                    if (currentCall && currentCall.status === 'ringing') {
-                        currentCall.status = 'ended';
-                        currentCall.is_missed = true;
-                        await currentCall.save();
-
-                        io.to(data.from).emit('call_ended');
-                        io.to(data.userToCall).emit('call_ended');
-
-                        if (currentCall.receiver.push_subscription) {
-                            const missedPayload = JSON.stringify({
-                                title: `Missed ${currentCall.type} call`,
-                                body: `${currentCall.caller.name} called you`,
-                                icon: currentCall.caller.avatar,
-                                tag: 'call-notification',
-                                data: { url: '/home?activeTab=calls' },
-                                requireInteraction: false
-                            });
-                            webpush.sendNotification(currentCall.receiver.push_subscription, missedPayload).catch(() => {});
-                        }
-                    }
-                    activeCallTimeouts.delete(call._id.toString());
-                }, 45000);
-                activeCallTimeouts.set(call._id.toString(), timeout);
-
-                // Send Push Notification for Background/Out-of-app support
-                if (receiver.push_subscription) {
-                    const payload = JSON.stringify({
-                        title: `Incoming ${data.type} call`,
-                        body: `${data.name} is calling you...`,
-                        icon: data.avatar,
-                        tag: 'call-notification',
-                        data: {
-                            url: `/home?callId=${call._id}&type=${data.type}`,
-                            type: 'call',
-                            callId: call._id,
-                            callerId: data.from
-                        },
-                        actions: [
-                            { action: 'answer', title: 'Answer' },
-                            { action: 'decline', title: 'Decline' }
-                        ],
-                        // Rhythmic vibration to simulate a ringtone
-                        vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40],
-                        renotify: true,
-                        requireInteraction: true // Keep notification visible until user acts
-                    });
-
-                    webpush.sendNotification(receiver.push_subscription, payload).catch(err => {
-                        if (err.statusCode === 410 || err.statusCode === 404) {
-                            User.findByIdAndUpdate(receiver._id, { $unset: { push_subscription: 1 } }).exec();
-                        }
-                    });
-                }
             } else { io.to(data.from).emit('call_ended'); }
         } catch (e) { }
     });
     socket.on('answer_call', async (data) => {
-        const cid = data.callId?.toString();
-        if (cid && activeCallTimeouts.has(cid)) {
-            clearTimeout(activeCallTimeouts.get(cid));
-            activeCallTimeouts.delete(cid);
-        }
-        await Call.findByIdAndUpdate(data.callId, { status: 'accepted', is_missed: false }).populate('caller receiver');
+        await Call.findByIdAndUpdate(data.callId, { status: 'accepted', is_missed: false });
         io.to(data.to).emit('call_accepted', data.signal);
     });
     socket.on('ice_candidate', (data) => io.to(data.to).emit('ice_candidate', data.candidate));
     socket.on('end_call', async (data) => {
-        const call = await Call.findById(data.callId).populate('caller receiver');
-        if (!call) return;
-
-        const wasRinging = call.status === 'ringing';
-        call.status = 'ended';
-        call.duration = data.duration || 0;
-        await call.save();
-
+        await Call.findByIdAndUpdate(data.callId, { status: 'ended', duration: data.duration || 0 });
         io.to(data.to).emit('call_ended');
-
-        // If the caller ends the call while it's still ringing, notify the receiver they missed it
-        if (wasRinging && call.receiver.push_subscription) {
-            const missedPayload = JSON.stringify({
-                title: `Missed ${call.type} call`,
-                body: `${call.caller.name} called you`,
-                icon: call.caller.avatar,
-                tag: 'call-notification', // Replaces the ringing notification
-                data: { url: '/home?activeTab=calls' },
-                requireInteraction: false
-            });
-            webpush.sendNotification(call.receiver.push_subscription, missedPayload).catch(() => {});
-        }
     });
     socket.on('reject_call', async (data) => {
-        const cid = data.callId?.toString();
-        if (cid && activeCallTimeouts.has(cid)) {
-            clearTimeout(activeCallTimeouts.get(cid));
-            activeCallTimeouts.delete(cid);
-        }
-
-        const call = await Call.findByIdAndUpdate(data.callId, { status: 'rejected' }, { new: true }).populate('caller receiver');
+        await Call.findByIdAndUpdate(data.callId, { status: 'rejected' });
         io.to(data.to).emit('call_ended');
-
-        // If the receiver manually declines in-app, send a push to clear any background notification on other devices
-        if (call && call.receiver.push_subscription) {
-            const missedPayload = JSON.stringify({
-                title: `Missed ${call.type} call`,
-                body: `You declined a call from ${call.caller.name}`,
-                icon: call.caller.avatar,
-                tag: 'call-notification',
-                data: { url: '/home?activeTab=calls' },
-                requireInteraction: false
-            });
-            webpush.sendNotification(call.receiver.push_subscription, missedPayload).catch(() => {});
-        }
     });
     socket.on('mark_seen', async (data) => {
         if (!socket.userId) return;
