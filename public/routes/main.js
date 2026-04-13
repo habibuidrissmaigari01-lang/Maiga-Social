@@ -53,12 +53,14 @@ const uploadToR2 = async (file, folder) => {
                 throw new Error(err.message || 'Failed to verify video duration.');
             }
         }
-
-        const fileBuffer = fs.readFileSync(file.filepath);
+        
+        // Use Streams to process the file to prevent Memory Overflow (OOM) 502 errors
+        const fileStream = fs.createReadStream(file.filepath);
         await s3Client.send(new PutObjectCommand({
             Bucket: process.env.R2_BUCKET_NAME,
             Key: key,
-            Body: fileBuffer,
+            Body: fileStream,
+            ContentLength: file.size,
             ContentType: file.mimetype,
         }));
 
@@ -393,6 +395,7 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
 });
 
 router.post('/create_post', isAuthenticated, async (req, res) => {
+    try {
     const { fields, files } = await parseForm(req);
     const content = fields.content?.[0] || fields.content;
     const feeling = fields.feeling?.[0] || fields.feeling;
@@ -420,7 +423,7 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
     });
 
     // Generate link preview if a URL is present in the content
-    const detectedUrl = extractUrl(req.body.content);
+    const detectedUrl = extractUrl(content);
     if (detectedUrl) {
         const linkPreview = await getLinkPreview(detectedUrl);
         if (linkPreview) post.link_preview = linkPreview;
@@ -447,6 +450,10 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
         link_preview: populatedPost.link_preview, // Include link preview
         verified: populatedPost.user?.is_verified ?? false
     }});
+    } catch (error) {
+        console.error('Post Creation Failure:', error);
+        res.status(500).json({ success: false, error: error.message || 'Server failed to process post upload.' });
+    }
 });
 
 router.post('/send_message', isAuthenticated, async (req, res) => {

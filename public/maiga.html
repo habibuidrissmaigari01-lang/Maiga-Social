@@ -216,7 +216,7 @@
         .animate-heart-pop { animation: heartPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
     </style>
 </head>
-<body class="select-none flex flex-col h-dvh lg:grid lg:overflow-hidden bg-gray-50 dark:bg-gray-900 transition-all duration-300"
+<body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
       :class="[{ 'dark': darkMode }, desktopGridCols]"
       :style="`--app-base-font-size: ${appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px'};`"
       x-data="appData">
@@ -424,9 +424,9 @@
         </div>
     </aside>
 
-    <div class="flex-1 flex flex-col min-h-0 relative lg:min-w-0 lg:overflow-hidden lg:col-start-2 lg:col-end-3 lg:row-start-1 lg:z-0 border-x dark:border-gray-800">
+    <div class="flex flex-col min-w-0 relative">
     <!-- Top Navigation -->
-    <header class="sticky top-0 flex-none bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg px-4 flex justify-between items-center z-[500] transition-all duration-300"
+    <header class="sticky top-0 flex-none bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg px-4 flex justify-between items-center z-[100] transition-all duration-300"
             :class="hasScrolled ? 'py-1.5 shadow-lg border-transparent' : 'py-3 border-b dark:border-gray-800'">
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
@@ -448,13 +448,12 @@
     </header>
 
     <!-- Scrollable Content -->
-    <div class="flex-1 overflow-y-auto scroll-smooth no-scrollbar lg:hidden" @scroll.self="handleScroll($el)" x-ref="mainContent">
-        <div class="pb-32 lg:pb-8">
-            <!-- Main content sections (Home, Reels, etc.) are rendered here by Alpine -->
-        </div>
+    <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
+    <div class="pb-32 lg:pb-8">
+    </div>
     </div>
 
-    <aside :class="[isMessaging ? 'fixed top-[56px] bottom-[64px] inset-x-0 z-[400] flex lg:static lg:z-0' : 'hidden lg:flex lg:relative', (isRightSidebarCollapsed || !activeChat) ? 'lg:w-20' : 'lg:w-[400px]']" class="flex-col bg-white dark:bg-gray-900 h-full lg:h-screen border-l dark:border-gray-800 transition-all duration-300 overflow-hidden lg:col-start-3">
+    <aside :class="[isMessaging ? 'fixed inset-0 z-[400] flex lg:relative lg:z-0 lg:inset-auto' : 'hidden lg:flex lg:relative', (isRightSidebarCollapsed || !activeChat) ? 'lg:w-20' : 'lg:w-full']" class="flex-col bg-white dark:bg-gray-900 h-full lg:h-screen border-l dark:border-gray-800 transition-all duration-300 overflow-hidden">
         <!-- List View -->
         <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn">
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800" :class="(isRightSidebarCollapsed || !activeChat) ? 'flex-col gap-4' : ''">
@@ -3048,7 +3047,7 @@
     </div>
 
     <!-- MAIN VIEW: SAVED POSTS -->
-    <main x-show="activeTab === 'saved'" class="animate-fadeIn lg:col-start-2 lg:row-start-1 lg:mt-14 lg:h-[calc(100vh-56px)] lg:overflow-y-auto lg:z-10">
+    <main x-show="activeTab === 'saved'" class="animate-fadeIn">
 
         <template x-if="savedPosts.length === 0">
             <div class="text-center p-16 text-gray-500">
@@ -3120,7 +3119,7 @@
     </main>
 
     <!-- MAIN VIEW: FRIENDS -->
-    <main x-show="activeTab === 'friends'" class="p-4 space-y-4 animate-fadeIn lg:col-start-2 lg:row-start-1 lg:mt-14 lg:h-[calc(100vh-56px)] lg:overflow-y-auto lg:z-10">
+    <main x-show="activeTab === 'friends'" class="p-4 space-y-4 animate-fadeIn">
         <div class="flex items-center space-x-2">
             <div class="relative flex-1">
                 <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
@@ -3286,7 +3285,7 @@
     </main>
 
     <!-- MAIN VIEW: NOTIFICATIONS -->
-    <main x-show="activeTab === 'notifications'" class="animate-fadeIn lg:col-start-2 lg:row-start-1 lg:mt-14 lg:h-[calc(100vh-56px)] lg:overflow-y-auto lg:z-10">
+    <main x-show="activeTab === 'notifications'" class="animate-fadeIn">
         <div class="p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-14 z-50 gap-3">
             <div>
                 <h3 class="font-black text-xl">Notifications</h3>
@@ -3318,7 +3317,7 @@
     </main>
 
     <!-- MAIN VIEW: PROFILE -->
-    <main x-show="activeTab === 'profile'" class="animate-fadeIn pb-10 lg:col-start-2 lg:row-start-1 lg:mt-14 lg:h-[calc(100vh-56px)] lg:overflow-y-auto lg:z-10">
+    <main x-show="activeTab === 'profile'" class="animate-fadeIn pb-10">
         <div class="relative h-44 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 overflow-hidden">
             <div class="absolute inset-0 opacity-20"><i class="fa-solid fa-graduation-cap text-9xl absolute -right-6 -bottom-6 text-white rotate-12"></i></div>
             <button @click="activeTab = 'home'" class="absolute top-4 left-4 bg-black/20 backdrop-blur-md p-2 parallelogram-sm text-white"><i class="fa-solid fa-arrow-left"></i></button>
@@ -4332,7 +4331,7 @@
     </div>
 
     <!-- Bottom Nav -->
-    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[env(safe-area-inset-bottom,0px)] z-[500] shadow-2xl lg:hidden">
+    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border-t dark:border-gray-800 flex justify-around items-center pt-2 pb-[env(safe-area-inset-bottom,0px)] z-[350] shadow-2xl lg:hidden">
         <!-- Fluid Indicator Bar -->
         <div class="absolute top-0 h-1 bg-blue-600 rounded-full z-10"
              :style="getIndicatorStyle()"
