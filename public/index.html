@@ -95,7 +95,7 @@
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->
-        <form id="mainAuthForm">
+        <form id="mainAuthForm" @submit.prevent="submitForm">
             <!-- Hidden input to tell backend which action was taken -->
             <input type="hidden" id="authType" name="auth_type" :value="view === 'login' ? 'login' : 'register'">
             <input type="hidden" name="account_type" value="maiga">
@@ -541,6 +541,50 @@
                     fetch(`${API_BASE_URL}/api/check_${type}?${type}=${encodeURIComponent(value)}`)
                         .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
+                },
+                async submitForm(e) {
+                    const formData = new FormData(e.target);
+                    const data = Object.fromEntries(formData.entries());
+                    const submitBtn = e.target.querySelector('button[type="submit"]');
+                    const originalBtnHtml = submitBtn.innerHTML;
+
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Processing...';
+
+                    let endpoint = this.view === 'login' ? '/api/login' : '/api/register';
+                    
+                    if (this.view === 'register') {
+                        const otpInputs = document.querySelectorAll('#otp-inputs input');
+                        data.otp = Array.from(otpInputs).map(i => i.value).join('');
+                        data.password = this.registration.password;
+                        data.email = this.registration.email;
+                        data.phone = this.registration.phone;
+                    }
+
+                    try {
+                        const response = await fetch(API_BASE_URL + endpoint, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data),
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok) throw new Error(result.message || 'An error occurred.');
+
+                        if (this.view === 'login') {
+                            localStorage.setItem('maiga_session_active', 'true');
+                            showMessage('Redirecting to your Maiga...', 'success');
+                            setTimeout(() => { window.location.href = '/home'; }, 1500);
+                        } else {
+                            showMessage('Registration successful! Please login.', 'success');
+                            setTimeout(() => { this.view = 'login'; this.currentStep = 0; }, 2000);
+                        }
+                    } catch (error) {
+                        showMessage(error.message, 'error');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                    }
                 },
                 nextStep(s, e) {
                     if (s > this.currentStep && this.currentStep > 0 && !validateStep(this.currentStep)) return;
@@ -1265,7 +1309,8 @@
                     localStorage.setItem('installPopupShown', Date.now().toString());
                     // If not standalone and not Android (i.e., iOS), show the button explicitly
                     if (!isStandalone && isIOS) {
-                        pwaBtn.classList.remove('hidden');
+                        const installBtn = document.getElementById('pwaInstallBtn');
+                        if (installBtn) installBtn.classList.remove('hidden');
                     }
                 }, 1000);
             }
