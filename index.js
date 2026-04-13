@@ -12,51 +12,52 @@ export default {
         const url = new URL(request.url);
         let path = url.pathname;
 
-        // Handle WebSocket Proxying and Socket.io long-polling
-        if (path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket') {
-            if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
+        // Determine if this is an API or Socket.io request that needs proxying
+        const isProxyRequest = path.startsWith('/api') || path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket';
 
-            // Defensive: Remove trailing slashes and accidentally included internal ports
-            const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
+        if (isProxyRequest) {
+            if (!env.BACKEND_URL) return jsonError('Backend URL not configured in Worker environment.', 502);
+
+            const backendUrl = new URL(env.BACKEND_URL);
             
-            try {
-                const headers = new Headers(request.headers);
-                headers.delete('Host'); // Ensure Railway routes the request correctly
-
-                return await fetch(new Request(target, {
-                    method: request.method,
-                    headers: headers,
-                    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
-                }));
-            } catch (e) {
-                return jsonError('WebSocket Proxy Error', 502);
+            // Prevent infinite loops: Ensure we aren't proxying to the same domain
+            if (backendUrl.hostname === url.hostname) {
+                return jsonError('Proxy Loop Detected: BACKEND_URL cannot be the same as the Worker domain.', 502);
             }
-        }
 
-        if (path.startsWith('/api')) {
-            // PROXY ALL API REQUESTS TO RAILWAY BACKEND
-            if (!env.BACKEND_URL) return jsonError('Backend not configured.', 502);
-
-            // Defensive: Ensure we hit the public HTTPS edge, not the internal port
-            const target = env.BACKEND_URL.replace(/\/$/, '').replace(/:3000$/, '') + path + url.search;
+            // Construct the target URL. Use HTTPS for production Railway targets.
+            const protocol = backendUrl.protocol || 'https:';
+            const target = `${protocol}//${backendUrl.host.replace(/:3000$/, '')}${path}${url.search}`;
 
             try {
                 const headers = new Headers(request.headers);
-                headers.delete('Host'); // Ensure Railway ingress doesn't reject the request
+                
+                // Railway ingress requires the Host header to match the assigned domain (e.g., xxx.up.railway.app)
+                // We strip the port to ensure it hits the public edge correctly.
+                headers.set('Host', backendUrl.hostname); 
+                headers.set('X-Forwarded-Host', url.host);
+                headers.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '');
+
+                // For WebSockets, we must use the original request to preserve the upgrade handshake
+                if (request.headers.get('Upgrade') === 'websocket') {
+                    return await fetch(target, {
+                        method: request.method,
+                        headers: headers
+                    });
+                }
 
                 const backendRequest = new Request(target, {
                     method: request.method,
                     headers: headers,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
-                    redirect: 'manual' // Let the browser handle redirects
+                    redirect: 'follow'
                 });
 
                 const response = await fetch(backendRequest);
-                // Intercept HTML error pages from Railway and return JSON instead
                 if (response.status >= 500) return jsonError(`Backend Error (${response.status})`, response.status);
                 return response;
             } catch (err) {
-                return jsonError('Backend unreachable. Check if Railway service is running.', 502);
+                return jsonError(`Backend unreachable (${err.message}). Check if Railway service is running.`, 502);
             }
         } else {
             // Serve static assets

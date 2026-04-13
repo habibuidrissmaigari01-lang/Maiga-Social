@@ -18,6 +18,12 @@ const { User, Message, Post, Group, Story, Call, Setting, s3Client, setIo } = re
 
 const app = express();
 const server = http.createServer(app);
+
+// Increase timeout settings to accommodate large file uploads (e.g., 10 minutes)
+server.timeout = 600000;
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 125000;
+
 const io = new Server(server);
 setIo(io); // Connect Socket.io to Mongoose middleware
 
