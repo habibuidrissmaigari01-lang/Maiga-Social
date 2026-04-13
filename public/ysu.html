@@ -47,10 +47,6 @@
     <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
-    <style>
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
-        .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
-    </style>
     <link href="css/main.css" rel="stylesheet">
       <link rel="manifest" href="manifest-ysu.json">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -90,7 +86,7 @@
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->
-        <form id="mainAuthForm" @submit.prevent="submitAuthForm">
+        <form id="mainAuthForm">
             <!-- Hidden input to tell backend which action was taken -->
             <input type="hidden" id="authType" name="auth_type" value="login">
             <input type="hidden" name="account_type" value="ysu">
@@ -133,7 +129,7 @@
                     </div>
                     <div class="input-group relative">
                         <input type="password" name="login_password" id="loginPassword" placeholder="Password" class="pr-12">
-                        <button type="button" @click="togglePasswordVisibility('loginPassword', $el)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <button type="button" onclick="togglePasswordVisibility('loginPassword', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -141,12 +137,12 @@
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="remember_me" class="mr-2 rounded"> Remember me
                         </label>
-                        <a href="#" @click.prevent="showForgotPassword($event)" class="text-indigo-600 font-medium">Forgot password?</a>
+                        <a href="#" onclick="showForgotPassword(event)" class="text-indigo-600 font-medium">Forgot password?</a>
                     </div>
                     <button type="submit" class="btn-primary mt-4">Login</button>
                     <p class="text-center text-sm text-gray-600">
                         Don't have an account? 
-                        <button type="button" @click="view = 'register'; step = 1" class="text-indigo-600 font-bold ml-1">Register</button>
+                        <button type="button" onclick="showRegister(event)" class="text-indigo-600 font-bold ml-1">Register</button>
                     </p>
                 </div>
             </div>
@@ -159,9 +155,9 @@
                 <div class="space-y-4">
                     <input type="text" name="first_name" placeholder="First Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <input type="text" name="surname" placeholder="Last Name" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" @click="nextStep(2, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" onclick="nextStep(2)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Already have an account?</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Already have an account?</a>
                     </div>
                 </div>
             </div>
@@ -173,9 +169,9 @@
                 <p class="text-gray-500 text-sm mb-6">Please enter your real date of birth.</p>
                 <div class="space-y-4">
                     <input type="date" name="birthday" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
-                    <button type="button" @click="nextStep(3, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" onclick="nextStep(3)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -191,9 +187,9 @@
                         <div id="username-feedback" class="absolute right-3 top-1/2 -translate-y-1/2"></div>
                     </div>
                     <div id="username-suggestions" class="text-xs text-gray-500 -mt-2 px-1"></div>
-                    <button type="button" @click="nextStep(4, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" onclick="nextStep(4)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -210,9 +206,9 @@
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                     </select>
-                    <button type="button" @click="nextStep(5, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" onclick="nextStep(5)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -231,9 +227,9 @@
                         <input type="email" name="reg_email" placeholder="example@email.com" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     </div>
                     
-                    <button type="button" @click="nextStep(6, $event)" class="btn-primary mt-4">Get OTP</button>
+                    <button type="button" onclick="nextStep(6)" class="btn-primary mt-4">Get OTP</button>
                     <div class="text-center mt-2">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -258,13 +254,13 @@
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                         <input type="number" name="otp[]" maxlength="1" autocomplete="one-time-code" class="otp-box w-8 h-10 sm:w-12 sm:h-14 text-center text-base sm:text-xl font-bold border-2 border-gray-100 rounded-xl focus:border-indigo-400 outline-none">
                     </div>
-                    <button type="button" @click="verifyOTP()" class="btn-primary">Verify</button>
+                    <button type="button" onclick="verifyOTP()" class="btn-primary">Verify</button>
                     <div class="text-center">
                        <p id="timerContainer" class="text-xs text-gray-400">Resend code in <span id="timer" class="font-bold text-indigo-500">03:00</span></p>
-                       <a href="#" id="resendBtn" @click.prevent="resendOTP($event)" class="hidden text-xs font-bold text-indigo-600 underline">Resend code</a>
+                       <a href="#" id="resendBtn" onclick="resendOTP(event)" class="hidden text-xs font-bold text-indigo-600 underline">Resend code</a>
                     </div>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
@@ -277,7 +273,7 @@
                 <div class="space-y-4">
                     <div class="relative">
                         <input type="password" name="reg_password" id="mainPass" placeholder="Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12" oninput="checkStrength(this.value); checkConfirmPassword()">
-                        <button type="button" @click="togglePasswordVisibility('mainPass', $el)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <button type="button" onclick="togglePasswordVisibility('mainPass', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                         <div class="strength-meter">
@@ -291,7 +287,7 @@
                     </div>
                     <div class="relative">
                         <input type="password" name="confirm_password" id="confirmPass" placeholder="Confirm Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12" oninput="checkConfirmPassword()">
-                        <button type="button" @click="togglePasswordVisibility('confirmPass', $el)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <button type="button" onclick="togglePasswordVisibility('confirmPass', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -300,27 +296,27 @@
                         <input id="terms" name="terms" type="checkbox" onchange="checkConfirmPassword()" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mt-1 cursor-pointer">
                         <label for="terms" class="ml-3 block text-sm text-gray-700">
                             I have read and agree to the 
-                            <a href="#" @click.prevent="showTerms($event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
+                            <a href="#" onclick="showTerms(event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
                         </label>
                     </div>
                     <button type="submit" id="registerBtn" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                         Register
                     </button>
                     <div class="text-center mt-4">
-                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                        <a href="#" onclick="showLogin(event)" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
             <!-- FORGOT PASSWORD STEP 1: Identity -->
             <div id="page-forgot" class="step-content">
-                <button type="button" @click="view = 'login'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+                <button type="button" onclick="showLogin(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Find Your Account</h2>
                 <p class="text-gray-500 text-sm mb-6">Please enter your email address or mobile number to search for your account.</p>
                 <div class="space-y-4">
                     <input type="text" name="forgot_identity" placeholder="Email or Mobile Number" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <div class="flex space-x-3 pt-2">
-                        <button type="button" @click="view = 'login'" class="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 py-3 rounded-xl font-bold">Cancel</button>
+                        <button type="button" onclick="showLogin(event)" class="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 py-3 rounded-xl font-bold">Cancel</button>
                         <button type="submit" class="flex-1 btn-primary">Search</button>
                     </div>
                 </div>
@@ -328,7 +324,7 @@
 
             <!-- FORGOT PASSWORD STEP 2: OTP -->
             <div id="page-forgot-otp" class="step-content">
-                <button type="button" @click="showForgotPassword($event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+                <button type="button" onclick="showForgotPassword(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Enter security code</h2>
                 <p class="text-gray-500 text-sm mb-6">Please check your email/messages for a message with your code.</p>
                 <div class="space-y-6">
@@ -349,13 +345,13 @@
 
             <!-- FORGOT PASSWORD STEP 3: New Password -->
             <div id="page-reset-password" class="step-content">
-                <button type="button" @click="showForgotOTP($event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+                <button type="button" onclick="showForgotOTP(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Choose a new password</h2>
                 <p class="text-gray-500 text-sm mb-6">Create a new password that is at least 6 characters long. A strong password is a mix of letters, numbers, and punctuation marks.</p>
                 <div class="space-y-4">
                     <div class="relative">
                         <input type="password" name="new_password" id="newPassword" placeholder="New password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12">
-                        <button type="button" @click="togglePasswordVisibility('newPassword', $el)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                        <button type="button" onclick="togglePasswordVisibility('newPassword', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -427,7 +423,7 @@
 
     <script>
         const API_BASE_URL = ''; // Use relative path so it works on any IP
-        let currentStep = 0; 
+        let currentStep = 0; // Initialize globally to fix ReferenceError
 
         function authComponent() {
             return {
@@ -439,8 +435,6 @@
                 emailStatus: '',
                 otpTimer: 0,
                 countdownTimer: null,
-                isSavingProfile: false,
-                passwordForm: { current: '', new: '', confirm: '' },
                 init() {
                     this.applyTheme();
                     if (localStorage.getItem('maiga_session_active') === 'true') {
@@ -448,20 +442,6 @@
                         return;
                     }
                     this.restoreProgress();
-                    this.initOtpInputs();
-                },
-                initOtpInputs() {
-                    this.$nextTick(() => {
-                        const boxes = document.querySelectorAll('.otp-box');
-                        boxes.forEach((box, index) => {
-                            box.addEventListener('input', (e) => {
-                                if (e.target.value.length === 1 && index < boxes.length - 1) boxes[index + 1].focus();
-                            });
-                            box.addEventListener('keydown', (e) => {
-                                if (e.key === 'Backspace' && !e.target.value && index > 0) boxes[index - 1].focus();
-                            });
-                        });
-                    });
                 },
                 get formattedTimer() {
                     const mins = Math.floor(this.otpTimer / 60);
@@ -486,33 +466,8 @@
                         .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
                 },
-                validateStep(step) {
-                    const stepEl = document.getElementById(`reg-${step}`);
-                    if (!stepEl) return true;
-                    if (step === 6) return true;
-                    if (step === 5) {
-                        const phone = stepEl.querySelector('input[name="phone"]');
-                        const email = stepEl.querySelector('input[name="reg_email"]');
-                        if (!phone.value.trim() || !email.value.trim()) {
-                            this.showMessage('Please enter both your phone number and email address.', 'error');
-                            return false;
-                        }
-                        return true;
-                    }
-                    const inputs = stepEl.querySelectorAll('input, select');
-                    let isValid = true;
-                    inputs.forEach(input => {
-                        if (input.offsetParent === null) return;
-                        if (!input.value.trim()) {
-                            isValid = false;
-                            input.classList.add('border-red-500');
-                        }
-                    });
-                    if (!isValid) this.showMessage('Please fill in all required fields.', 'error');
-                    return isValid;
-                },
                 nextStep(s, e) {
-                    if (s > this.step && this.step > 0 && !this.validateStep(this.step)) return;
+                    if (s > this.step && this.step > 0 && !validateStep(this.step)) return;
                     if (s === 6 && this.step === 5) { this.sendRegistrationOTP(e); return; }
                     this.step = s;
                     this.saveAuthProgress();
@@ -525,17 +480,10 @@
                         else clearInterval(this.countdownTimer);
                     }, 1000);
                 },
-                showMessage(text, type = 'error') {
-                    const banner = document.getElementById('message-banner');
-                    banner.textContent = text;
-                    banner.className = `mb-4 p-3 rounded-xl text-center text-sm font-bold ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
-                    banner.classList.remove('hidden');
-                    setTimeout(() => banner.classList.add('hidden'), 5000);
-                },
                 async sendRegistrationOTP(e) {
-                    const identity = document.querySelector('input[name="reg_email"]').value || document.querySelector('input[name="phone"]').value;
-                    if (!identity) { this.showMessage('Please provide email or phone.', 'error'); return; }
                     const btn = e.target;
+                    const identity = document.querySelector('input[name="reg_email"]').value || document.querySelector('input[name="phone"]').value;
+                    if (!identity) { showMessage('Please provide email or phone.', 'error'); return; }
                     const originalHtml = btn.innerHTML;
                     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
                     fetch('/api/send-reg-otp', {
@@ -545,108 +493,8 @@
                         if (data.success || res.status === 429) { 
                             this.step = 6; this.saveAuthProgress(true); 
                             this.startTimer(data.remaining || 180); 
-                        } else this.showMessage(data.message, 'error');
+                        } else showMessage(data.message, 'error');
                     }).finally(() => { btn.disabled = false; btn.innerHTML = originalHtml; });
-                },
-                async verifyOTP() {
-                    const otpInputs = document.querySelectorAll('#otp-inputs .otp-box');
-                    const otp = Array.from(otpInputs).map(i => i.value).join('');
-                    const identity = document.querySelector('input[name="reg_email"]').value || document.querySelector('input[name="phone"]').value;
-
-                    if (otp.length !== 6) { this.showMessage('Please enter the full 6-digit OTP.', 'error'); return; }
-                    if (!identity) { this.showMessage('Contact identity missing.', 'error'); return; }
-
-                    const btn = document.querySelector('#reg-6 .btn-primary');
-                    const originalHtml = btn.innerHTML;
-                    btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Verifying...';
-
-                    try {
-                        const res = await fetch(API_BASE_URL + '/api/verify-otp', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ identity, otp, type: 'registration' })
-                        });
-                        const result = await res.json();
-                        if (res.ok && result.success) {
-                            this.showMessage(result.message, 'success');
-                            this.step = 7;
-                        } else this.showMessage(result.message || 'Verification failed.', 'error');
-                    } catch (e) { this.showMessage('Network error during verification.', 'error'); }
-                    finally { btn.disabled = false; btn.innerHTML = originalHtml; }
-                },
-                checkStrength(val) {
-                    const meter = document.getElementById('strengthFill');
-                    const hasLength = val.length >= 8;
-                    const hasUppercase = /[A-Z]/.test(val);
-                    const hasNumber = /[0-9]/.test(val);
-                    this.updateCheck('lengthCheck', hasLength);
-                    this.updateCheck('uppercaseCheck', hasUppercase);
-                    this.updateCheck('numberCheck', hasNumber);
-                    let strength = [hasLength, hasUppercase, hasNumber].filter(Boolean).length;
-                    const colors = ['#cbd5e0', '#f56565', '#ed8936', '#48bb78'];
-                    const widths = ['0%', '33%', '66%', '100%'];
-                    meter.style.width = widths[strength]; meter.style.backgroundColor = colors[strength];
-                },
-                updateCheck(id, isValid) {
-                    const el = document.getElementById(id);
-                    if (!el) return;
-                    el.innerHTML = `<i class="fa-solid fa-circle-${isValid ? 'check text-green-500' : 'xmark text-red-500'} mr-1"></i> ${el.textContent.trim().split(' ').slice(1).join(' ')}`;
-                    el.className = isValid ? 'text-green-500' : 'text-red-500';
-                },
-                checkConfirmPassword() {
-                    const mainPass = document.getElementById('mainPass').value;
-                    const confirmPass = document.getElementById('confirmPass').value;
-                    const termsCheck = document.getElementById('terms').checked;
-                    const passwordsMatch = mainPass === confirmPass && mainPass !== '';
-                    const isStrong = mainPass.length >= 8 && /[A-Z]/.test(mainPass) && /[0-9]/.test(mainPass);
-                    document.getElementById('registerBtn').disabled = !passwordsMatch || !isStrong || !termsCheck;
-                },
-                togglePasswordVisibility(inputId, el) {
-                    const input = document.getElementById(inputId);
-                    const icon = el.querySelector('i');
-                    if (input.type === 'password') {
-                        input.type = 'text';
-                        icon.classList.replace('fa-eye', 'fa-eye-slash');
-                    } else {
-                        input.type = 'password';
-                        icon.classList.replace('fa-eye-slash', 'fa-eye');
-                    }
-                },
-                async submitAuthForm() {
-                    const form = document.getElementById('mainAuthForm');
-                    const data = Object.fromEntries(new FormData(form));
-                    const endpoint = this.view === 'login' ? '/api/login' : '/api/register';
-                    if (this.view === 'register') {
-                        data.password = data.reg_password;
-                        data.email = data.reg_email;
-                        const otpInputs = document.querySelectorAll('#otp-inputs input');
-                        data.otp = Array.from(otpInputs).map(i => i.value).join('');
-                    }
-                    try {
-                        const res = await fetch(API_BASE_URL + endpoint, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(data)
-                        });
-                        const result = await res.json();
-                        if (!res.ok) throw new Error(result.message || 'Action failed');
-                        this.showMessage(result.message, 'success');
-                        if (this.view === 'login') {
-                            localStorage.setItem('maiga_session_active', 'true');
-                            setTimeout(() => window.location.href = '/home', 1500);
-                        } else {
-                            setTimeout(() => { this.view = 'login'; this.step = 0; }, 2000);
-                        }
-                    } catch (e) { this.showMessage(e.message, 'error'); }
-                },
-                showForgotPassword(event) {
-                    event?.preventDefault();
-                    this.view = 'forgot';
-                },
-                showTerms(e) {
-                    e.preventDefault();
-                    document.getElementById('termsModal').classList.remove('hidden');
-                    fetch(`${API_BASE_URL}/api/get_terms`).then(res => res.json()).then(data => {
-                        document.getElementById('termsContent').innerText = data.content || 'No terms available.';
-                    });
                 },
                 saveAuthProgress(otpSent = false) {
                     const form = document.getElementById('mainAuthForm');
@@ -919,7 +767,7 @@
                 const phone = stepEl.querySelector('input[name="phone"]');
                 const email = stepEl.querySelector('input[name="reg_email"]');
                 if (!phone.value.trim() || !email.value.trim()) {
-                    alert('Please enter BOTH your phone number and email address to continue.');
+                    alert('Please enter both your phone number and email address.');
                     return false;
                 }
                 return true;
@@ -987,11 +835,10 @@
                             // Proceed to OTP step even on 429, 
                             // because the user likely already has a valid code.
                             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
-                            document.getElementById(`reg-${step}`)?.classList.add('active');
+                            const nextEl = document.getElementById(`reg-${step}`);
+                            nextEl.classList.add('active');
                             currentStep = step;
-                            const authCard = document.getElementById('authCard');
-                            if (authCard && window.Alpine) { Alpine.$data(authCard).step = step; }
-                            saveAuthProgress(true); 
+                            saveAuthProgress(true); // Reset OTP timestamp
                             updateProgress();
                             startTimer(data.remaining || 180);
                         }

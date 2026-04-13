@@ -1,51 +1,35 @@
+/**
+ * Background Image Compression Worker
+ */
 self.onmessage = async (e) => {
     const { file, maxWidth, quality } = e.data;
 
     try {
-        // Use ImageBitmap for high-performance, low-memory decoding
+        self.postMessage({ type: 'progress', value: 10 });
+        
+        // Use createImageBitmap which is faster and available in workers
         const bitmap = await createImageBitmap(file);
+        self.postMessage({ type: 'progress', value: 40 });
         
         let width = bitmap.width;
         let height = bitmap.height;
 
-        // Calculate aspect ratio
         if (width > maxWidth) {
             height = Math.round((height * maxWidth) / width);
             width = maxWidth;
         }
 
-        // Use OffscreenCanvas for background thread rendering
+        // Use OffscreenCanvas to prevent UI blocking
         const canvas = new OffscreenCanvas(width, height);
         const ctx = canvas.getContext('2d');
-
-        // Draw and scale the image
         ctx.drawImage(bitmap, 0, 0, width, height);
+        self.postMessage({ type: 'progress', value: 70 });
 
-        // Release the bitmap memory immediately after drawing
-        bitmap.close();
-
-        // Export to blob
-        const blob = await canvas.convertToBlob({
-            type: 'image/jpeg',
-            quality: quality || 0.7
-        });
-
-        self.postMessage({
-            type: 'result',
-            success: true,
-            blob: blob
-        });
-
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+        self.postMessage({ type: 'progress', value: 100 });
+        
+        self.postMessage({ type: 'result', success: true, blob });
     } catch (error) {
-        self.postMessage({
-            type: 'result',
-            success: false,
-            error: error.message
-        });
+        self.postMessage({ type: 'result', success: false, error: error.message });
     }
 };
-
-// Helper for progress tracking (optional)
-function reportProgress(value) {
-    self.postMessage({ type: 'progress', value });
-}

@@ -53,11 +53,6 @@ const initMaiga = () => {
     };
 
     isMaigaInitialized = true;
-    // Global Error Boundary to prevent app crashes
-    Alpine.setErrorHandler((e, el, expression) => {
-        console.error('Alpine Logic Error:', e, 'at element:', el, 'expression:', expression);
-    });
-
     Alpine.data('appData', () => ({
         init() {
             this.mainInit(); 
@@ -121,8 +116,6 @@ const initMaiga = () => {
         isRefreshing: false,
         isOffline: !navigator.onLine,
         isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream,
-        isMessaging: false,
-        fetchError: false,
         compressionProgress: 0,
         supportsPush: ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window),
         pushPermission: Notification.permission || 'default',
@@ -197,7 +190,6 @@ const initMaiga = () => {
         chatListSearchQuery: '',
         showOnlyUnread: false,
         isAutoExpanding: false,
-        isChangingPassword: false,
         isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
         isSavingProfile: false,
         isSubmittingGroup: false,
@@ -220,7 +212,6 @@ const initMaiga = () => {
         isCreatingGroup: false,
         isEditingProfile: false,
         isEditingGroupInfo: false,
-        isUpdatingGroupInfo: false,
         isAddingGroupMembers: false,
         isMediaEditorOpen: false,
         isCalling: false,
@@ -284,14 +275,6 @@ const initMaiga = () => {
         lastBusyCall: null,
         vibrationInterval: null,
         callTimeoutTimer: null,
-        restoreStateRan: false,
-        maintInterval: null,
-        typingIndicatorTimeout: null,
-        lastHapticStep: 0,
-        focusTimer: null,
-        musicSourceNode: null,
-        reelMenuTimer: null,
-        touchTimer: null,
 
         // Admin State
         totalUsers: 0,
@@ -679,7 +662,6 @@ const initMaiga = () => {
         activeChat: null,
         showMemberOptionsFor: null,
         isAddingGroupMembers: false,
-        isAddingMembers: false,
         membersToAdd: [],
         addMemberSearchQuery: '',
         isEditingGroupInfo: false,
@@ -2195,17 +2177,14 @@ const initMaiga = () => {
                 const chatId = data.group_id ? data.group_id.toString() : data.sender_id.toString();
                 this.chatMessages[chatId] = [...(this.chatMessages[chatId] || []), formattedMsg];
 
-                // Smart scroll: Only scroll if user is already near the bottom
+                // Auto-scroll to bottom if user is already at the bottom or near the bottom
                 this.$nextTick(() => {
                     const container = document.getElementById('messageContainer');
-                    if (container) {
-                        const threshold = 100; // pixels from bottom
-                        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
-                        if (isNearBottom) {
-                            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                        }
+                    if (container && (container.scrollHeight - container.scrollTop <= container.clientHeight + 50 || data.sender_id.toString() === this.user.id.toString())) {
+                        container.scrollTop = container.scrollHeight;
                     }
                 });
+
                 const chatInList = data.group_id
                     ? this.groups.find(g => g.id.toString() === chatId)
                     : this.chats.find(c => c.id.toString() === chatId);
@@ -2579,7 +2558,6 @@ const initMaiga = () => {
             
             // Auto-scroll to top when switching to home
             this.$watch('activeTab', (val) => {
-                if (this.isMessaging) this.isMessaging = false;
                 if (val === 'home') {
                     this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -3479,7 +3457,7 @@ const initMaiga = () => {
             this.chatMessages[this.activeChat.id] = [...(this.chatMessages[this.activeChat.id] || []), messagePayload];
             this.$nextTick(() => {
                 const container = document.getElementById('messageContainer');
-                if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+                if (container) container.scrollTop = container.scrollHeight;
             });
 
             // Update chat list preview with pending state
@@ -4366,9 +4344,9 @@ const initMaiga = () => {
                 this.showSwipeHint = false;
 
                 // 1. Capture exact tap coordinates relative to the video container
-                 const rect = event.target.getBoundingClientRect();
-                reel.heartX = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
-                reel.heartY = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
+                const rect = event.currentTarget.getBoundingClientRect();
+                reel.heartX = event.clientX - rect.left;
+                reel.heartY = event.clientY - rect.top;
                 
                 // 2. Re-trigger animation for every single tap in a sequence
                 reel.showHeart = false;
@@ -6809,7 +6787,7 @@ const initMaiga = () => {
             navigator.mediaDevices.getUserMedia({
                 video: type === 'video' ? { facingMode: this.facingMode } : false,
                 audio: true
-            }).then(async stream => {
+            }).then(stream => {
                 this.localStream = Alpine.raw(stream);
                 if (type === 'video') {
                     this.$refs.localVideo.srcObject = stream;
@@ -6824,19 +6802,20 @@ const initMaiga = () => {
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
                 // Create Offer
-                const offer = await this.peerConnection.createOffer();
-                await this.peerConnection.setLocalDescription(offer);
-                
-                this.socket.emit('call_user', {
-                    userToCall: this.activeChat.id,
-                    signalData: offer,
-                    from: this.user.id,
-                    name: this.user.name,
-                    avatar: this.user.avatar,
-                    type: type
-                });
+                this.peerConnection.createOffer().then(offer => {
+                    this.peerConnection.setLocalDescription(offer).then(() => {
+                        this.processPendingSignaling();
+                    });
+                    // Optimize: Send via Socket directly
+                    this.socket.emit('call_user', { // Ensure activeChat.id and user.id are strings
+                        userToCall: this.activeChat.id,
+                        signalData: offer,
+                        from: this.user.id,
+                        name: this.user.name,
+                        avatar: this.user.avatar,
+                        type: type
+                    });
 
-                this.$nextTick(() => {
                     this.callTimeoutTimer = setTimeout(() => {
                         if (this.isCalling && this.callStatus === 'Calling...') {
                             this.showToast('No Answer', 'The user did not answer the call.', 'info');
@@ -6864,12 +6843,7 @@ const initMaiga = () => {
                 return;
             }
 
-            const servers = { 
-                iceServers: [
-                    { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
-                    // { urls: 'turn:your-turn-server.com', username: 'user', credential: 'password' } // Recommended for real-world NAT traversal
-                ] 
-            };
+            const servers = { iceServers: [{ urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] }] };
             this.peerConnection = new RTCPeerConnection(servers);
             this.pendingIceCandidates = this.pendingIceCandidates || [];
 
@@ -6984,17 +6958,17 @@ const initMaiga = () => {
                 
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
-               await this.peerConnection.setRemoteDescription(new RTCSessionDescription(typeof callData.sdp === 'string' ? JSON.parse(callData.sdp) : callData.sdp));
+               await this.peerConnection.setRemoteDescription(new RTCSessionDescription(callData.sdp));
                 // Process candidates that arrived while camera was starting
                 this.processPendingSignaling();
 
-                const answer = await this.peerConnection.createAnswer();
-                await this.peerConnection.setLocalDescription(answer);
-                
-                this.socket.emit('answer_call', {
-                    callId: callData.id,
-                    to: callData.caller_id,
-                    signal: answer
+                this.peerConnection.createAnswer().then(async answer => {
+                   await this.peerConnection.setLocalDescription(answer);
+                    this.socket.emit('answer_call', { // Ensure callData.id and caller_id are strings
+                        callId: callData.id,
+                        to: callData.caller_id,
+                        signal: answer
+                    });
                 });
             }).catch(err => {
                 this.showToast('Call Error', 'Failed to access camera/mic.', 'error');
@@ -7399,7 +7373,7 @@ const initMaiga = () => {
         handleScroll(el) {
             // Contextual Header Logic
             let st = el.scrollTop;
-            this.hasScrolled = st > 10;
+            this.isHeaderHidden = false; // Keep header pinned at all times
             this.lastScrollTop = st <= 0 ? 0 : st;
 
             this.hasScrolled = el.scrollTop > 10;
