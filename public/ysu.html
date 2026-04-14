@@ -491,9 +491,12 @@
                     fetch('/api/send-reg-otp', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ identity, account_type: 'ysu' })
-                    }).then(res => res.json()).then(data => {
+                    }).then(async res => {
+                        const data = await res.json();
                         if (data.success || res.status === 429) { 
-                            this.step = 6; this.saveAuthProgress(true); 
+                            this.currentStep = 6;
+                            window.currentStep = 6;
+                            this.saveAuthProgress(true); 
                             this.startTimer(data.remaining || 180); 
                         } else showMessage(data.message, 'error');
                     }).finally(() => { btn.disabled = false; btn.innerHTML = originalHtml; });
@@ -506,7 +509,7 @@
                     });
                     const currentState = JSON.parse(localStorage.getItem('maiga_reg_state') || '{}');
                     localStorage.setItem('maiga_reg_state', JSON.stringify({
-                        step: this.step, authType: this.view === 'login' ? 'login' : 'register',
+                        currentStep: this.currentStep, authType: this.view === 'login' ? 'login' : 'register',
                         data, timestamp: Date.now(), otpTimestamp: otpSent ? Date.now() : (currentState.otpTimestamp || 0)
                     }));
                 },
@@ -515,15 +518,16 @@
                     if (savedState) {
                         const state = JSON.parse(savedState);
                         const age = (Date.now() - state.timestamp) / 1000 / 60;
-                        if (age < 60 && state.step > 0 && state.authType === 'register') {
+                        if (age < 60 && state.currentStep > 0 && state.authType === 'register') {
                             this.view = 'register';
-                            this.step = state.step;
+                            this.currentStep = state.currentStep;
+                            window.currentStep = state.currentStep;
                             this.$nextTick(() => {
                                 Object.keys(state.data).forEach(key => {
                                     const input = document.querySelector(`[name="${key.replace('[]', '\\[\\]')}"]`);
                                     if (input) input.value = state.data[key];
                                 });
-                                if (this.step === 6) {
+                                if (this.currentStep === 6) {
                                     const remaining = Math.max(0, Math.floor(180 - (Date.now() - state.otpTimestamp) / 1000));
                                     if (remaining > 0) this.startTimer(remaining);
                                 }
@@ -554,7 +558,7 @@
             const el = document.getElementById('authCard');
             if (el && window.Alpine) {
                 Alpine.$data(el).view = 'login';
-                Alpine.$data(el).step = 0;
+                Alpine.$data(el).currentStep = 0;
                 showPage('page-login');
             }
         }
@@ -712,6 +716,10 @@
                 timeLeft--;
                 const mins = Math.floor(timeLeft / 60);
                 const secs = timeLeft % 60;
+                
+                if (window.Alpine) {
+                    Alpine.$data(document.getElementById('authCard')).otpTimer = timeLeft;
+                }
                     if (timerDisplay)
                 timerDisplay.innerText = `${mins}:${secs < 10 ? '0' + secs : secs}`;
                 if (timeLeft <= 0) {
@@ -860,6 +868,7 @@
             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
             document.getElementById(step === 0 ? 'page-login' : `reg-${step}`).classList.add('active');
             currentStep = step;
+            if (window.Alpine) Alpine.$data(document.getElementById('authCard')).currentStep = step;
             saveAuthProgress();
             updateProgress();
         }

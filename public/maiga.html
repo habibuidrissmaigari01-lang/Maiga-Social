@@ -2738,17 +2738,26 @@
 
     <!-- MAIN VIEW: REELS -->
     <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="h-full bg-black lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
-        <div x-ref="reelsContainer" class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl" x-init="setupReelsObserver()" @scroll.passive="handleReelsScroll($event.target)">
+        <div x-ref="reelsContainer" 
+             class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-none" 
+             x-init="setupReelsObserver()" 
+             @scroll.passive="handleReelsScroll($event.target)"
+             @wheel.prevent="handleReelWheel($event)"
+             @touchstart="handleReelTouchStart($event)"
+             @touchend="handleReelTouchEnd($event)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
                         class="w-full h-full object-cover" 
-                        playsinline autoplay muted loop 
+                        playsinline muted loop 
                         :src="reel.media" 
                         @ended="scrollToNextReel(index)" 
+                        @loadstart="reel.isLoading = true"
                         @waiting="reel.isLoading = true"
+                        @seeking="reel.isLoading = true"
                         @playing="reel.isLoading = false"
                         @canplay="reel.isLoading = false"
+                        @stalled="reel.isLoading = true"
                         @timeupdate="reel.progress = ($el.currentTime / $el.duration) * 100"
                         @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>

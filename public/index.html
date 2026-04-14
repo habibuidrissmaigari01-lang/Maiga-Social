@@ -271,7 +271,7 @@
                 <div id="checkEmailAnim" class="hidden flex flex-col items-center justify-center space-y-2 mb-6">
                     <div class="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-600 animate-float-envelope shadow-lg border border-indigo-100 dark:border-indigo-800">
                         <i class="fa-solid fa-envelope-open-text text-2xl"></i>
-                    </div
+                    </div>
                     <p class="text-[10px] font-black text-indigo-400 uppercase tracking-widest animate-pulse">Checking your mailbox...</p>
                 </div>
                 <div class="space-y-6">
@@ -339,7 +339,7 @@
                             <a href="#" onclick="showTerms(event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
                         </label>
                     </div>
-                    <button type="button" id="registerBtn" @click="register()" class="btn-primary" :disabled="passwordScore < 3 || !passwordValidation.match || !registration.terms" :class="{'opacity-50 cursor-not-allowed': passwordScore < 3 || !passwordValidation.match || !registration.terms}">
+                    <button type="submit" id="registerBtn" class="btn-primary" :disabled="passwordScore < 3 || !passwordValidation.match || !registration.terms" :class="{'opacity-50 cursor-not-allowed': passwordScore < 3 || !passwordValidation.match || !registration.terms}">
                         Register
                     </button>
                     <div class="text-center mt-4">
@@ -466,6 +466,8 @@
     <script>
         const API_BASE_URL = ''; // Use relative path so it works on any IP
 
+        var currentStep = 0; // Declare globally for script access
+
         function authComponent() {
             return {
                 view: 'login',
@@ -539,8 +541,8 @@
                     if (!value || value.length < 3) { this[`${type}Status`] = ''; return; }
                     this[`${type}Status`] = 'checking';
                     fetch(`${API_BASE_URL}/api/check_${type}?${type}=${encodeURIComponent(value)}`)
-                        .then(res => {
-                            if (!res.ok) throw new Error('Network Error');
+                         .then(res => {
+                            if (!res.ok) throw new Error('API Error');
                             return res.json();
                         }).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
@@ -593,6 +595,7 @@
                     if (s > this.currentStep && this.currentStep > 0 && !validateStep(this.currentStep)) return;
                     if (s === 6 && this.currentStep === 5) { this.sendRegistrationOTP(e); return; }
                     this.currentStep = s;
+                    window.currentStep = s; // Sync global variable
                     this.saveAuthProgress();
                 },
                 startTimer(seconds = 180) {
@@ -613,12 +616,15 @@
                     }
                     const originalHtml = btn.innerHTML;
                     btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
-                    fetch('/api/send-reg-otp', {
+                    fetch(`${API_BASE_URL}/api/send-reg-otp`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ identity: email, account_type: 'maiga' })
-                    }).then(res => res.json()).then(data => {
+                    }).then(async res => {
+                        const data = await res.json();
                         if (data.success || res.status === 429) { 
-                            this.currentStep = 6; this.saveAuthProgress(true); 
+                            this.currentStep = 6;
+                            window.currentStep = 6;
+                            this.saveAuthProgress(true); 
                             this.startTimer(data.remaining || 180); 
                         } else showMessage(data.message, 'error');
                     }).finally(() => { btn.disabled = false; btn.innerHTML = originalHtml; });
@@ -643,6 +649,7 @@
                         if (age < 60 && state.currentStep > 0 && state.authType === 'register') {
                             this.view = 'register';
                             this.currentStep = state.currentStep;
+                            window.currentStep = state.currentStep;
                             this.$nextTick(() => {
                                 Object.keys(state.data).forEach(key => {
                                     const input = document.querySelector(`[name="${key.replace('[]', '\\[\\]')}"]`);
@@ -828,6 +835,10 @@
                 timeLeft--;
                 const mins = Math.floor(timeLeft / 60);
                 const secs = timeLeft % 60;
+                
+                if (window.Alpine) {
+                    Alpine.$data(document.getElementById('authCard')).otpTimer = timeLeft;
+                }
                     if (timerDisplay)
                 timerDisplay.innerText = `${mins}:${secs < 10 ? '0' + secs : secs}`;
                 if (timeLeft <= 0) {
@@ -974,6 +985,7 @@
             document.getElementById(`reg-${currentStep}`)?.classList.remove('active');
             document.getElementById(step === 0 ? 'page-login' : `reg-${step}`).classList.add('active');
             currentStep = step;
+            if (window.Alpine) Alpine.$data(document.getElementById('authCard')).currentStep = step;
             saveAuthProgress();
             updateProgress();
         }
@@ -1081,7 +1093,7 @@
         
         // Add shaking animation on disabled button click
         const registerBtn = document.getElementById('registerBtn');
-        registerBtn.addEventListener('click', function(event) {
+        registerBtn?.addEventListener('click', function(event) {
             if (this.disabled) {
                 event.preventDefault();
                 this.classList.add('shake-btn', 'border-red-500');

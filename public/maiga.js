@@ -381,6 +381,8 @@ const initMaiga = () => {
         pullStartY: 0,
         touchStartX: 0,
         touchStartY: 0,
+        reelTouchStartY: 0,
+        isScrollingReel: false,
         lastScrollTop: 0,
         isHeaderHidden: false,
         hasScrolled: false,
@@ -4524,19 +4526,18 @@ const initMaiga = () => {
                 clearTimeout(this.reelHintTimer);
                 this.showSwipeHint = false;
 
-                // 1. Capture exact tap coordinates relative to the video container
-                 const rect = event.target.getBoundingClientRect();
-                reel.heartX = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
-                reel.heartY = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
-                
-                // 2. Re-trigger animation for every single tap in a sequence
+                // 1. Capture coordinates immediately before async nextTick call.
+                // Browser nullifies event.currentTarget after handler execution.
+                const rect = event.currentTarget.getBoundingClientRect();
+                const x = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
+                const y = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
+
+                // 2. Re-trigger animation
                 reel.showHeart = false;
                 this.$nextTick(() => {
                     reel.showHeart = true;
-                    // Position heart exactly where clicked
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    reel.heartX = (event.clientX || event.touches?.[0]?.clientX) - rect.left;
-                    reel.heartY = (event.clientY || event.touches?.[0]?.clientY) - rect.top;
+                    reel.heartX = x;
+                    reel.heartY = y;
                     if (navigator.vibrate) navigator.vibrate(30);
                     clearTimeout(reel.heartTimer);
                     reel.heartTimer = setTimeout(() => reel.showHeart = false, 800);
@@ -7361,9 +7362,6 @@ const initMaiga = () => {
         },
         stopCreatePostDrag() {
             this.isCreatePostDragging = false;
-        },
-        setupReelsObserver() {
-            // ... (existing code)
         },
         saveCreatePostDraft() {
             localStorage.setItem('maiga_create_post_draft', JSON.stringify({
