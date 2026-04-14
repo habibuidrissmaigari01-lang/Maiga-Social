@@ -462,7 +462,10 @@
                     if (!value || value.length < 3) { this[`${type}Status`] = ''; return; }
                     this[`${type}Status`] = 'checking';
                     fetch(`${API_BASE_URL}/api/check_${type}?${type}=${encodeURIComponent(value)}`)
-                        .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Network Error');
+                            return res.json();
+                        }).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
                 },
                 nextStep(s, e) {

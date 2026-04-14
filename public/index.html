@@ -339,7 +339,7 @@
                             <a href="#" onclick="showTerms(event)" class="font-medium text-indigo-600 hover:underline">Terms and Conditions</a>.
                         </label>
                     </div>
-                    <button type="button" @click="register()" class="btn-primary" :disabled="passwordScore < 3 || !passwordValidation.match || !registration.terms" :class="{'opacity-50 cursor-not-allowed': passwordScore < 3 || !passwordValidation.match || !registration.terms}">
+                    <button type="button" id="registerBtn" @click="register()" class="btn-primary" :disabled="passwordScore < 3 || !passwordValidation.match || !registration.terms" :class="{'opacity-50 cursor-not-allowed': passwordScore < 3 || !passwordValidation.match || !registration.terms}">
                         Register
                     </button>
                     <div class="text-center mt-4">
@@ -539,7 +539,10 @@
                     if (!value || value.length < 3) { this[`${type}Status`] = ''; return; }
                     this[`${type}Status`] = 'checking';
                     fetch(`${API_BASE_URL}/api/check_${type}?${type}=${encodeURIComponent(value)}`)
-                        .then(res => res.json()).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
+                        .then(res => {
+                            if (!res.ok) throw new Error('Network Error');
+                            return res.json();
+                        }).then(data => { this[`${type}Status`] = data.available ? 'available' : 'taken'; })
                         .catch(() => { this[`${type}Status`] = ''; });
                 },
                 async submitForm(e) {
