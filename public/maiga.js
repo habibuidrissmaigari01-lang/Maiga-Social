@@ -4563,6 +4563,25 @@ const initMaiga = () => {
             this.lastReelClick = now;
         },
 
+         handleReelWheel(e) {
+            if (this.isScrollingReel) return;
+            this.isScrollingReel = true;
+            const direction = e.deltaY > 0 ? 1 : -1;
+            this.scrollReel(direction);
+            setTimeout(() => { this.isScrollingReel = false; }, 600);
+       
+        },
+        handleReelTouchStart(e) {
+        this.reelTouchStartY = e.touches[0].clientY;
+    },
+    handleReelTouchEnd(e) {
+        const touchEndY = e.changedTouches[0].clientY;
+        const deltaY = this.reelTouchStartY - touchEndY;
+        if (Math.abs(deltaY) > 50) {
+            this.scrollReel(deltaY > 0 ? 1 : -1);
+        }
+    },
+
         startReelHold(reel) {
             this.reelForwardSearchQuery = '';
             this.selectedReel = reel;
@@ -4899,6 +4918,7 @@ const initMaiga = () => {
              const formData = new FormData(); // Fixed: user.nickname to user.name
             formData.append('name', this.editUser.name);
             formData.append('username', this.editUser.username);
+            formData.append('gender', this.editUser.gender);
             formData.append('bio', this.editUser.bio || '');
             
             this.isSavingProfile = true; // Disable button
@@ -5176,6 +5196,23 @@ const initMaiga = () => {
                 this.openUserProfile(member.id);
             }
         },
+         async setGroupAnnouncement(msg) {
+            if (!this.activeChat || this.activeChat.role !== 'admin') return;
+            const data = await this.apiFetch('/api/set_group_announcement', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    group_id: this.activeChat.id, 
+                    message_id: msg.id 
+                })
+            });
+            if (data?.success) {
+                this.activeChat.announcement = msg;
+                this.showToast('Success', 'Announcement updated!', 'success');
+            }
+            this.showMessageOptions = false;
+        },
+
         promoteToAdmin(member) {
             if (!confirm(`Make ${member.first_name} an admin?`)) return;
             this.apiFetch('/api/promote_group_member', { // Fixed: promoteGroupMember route was missing
@@ -7628,12 +7665,12 @@ const initMaiga = () => {
         scrollReel(direction) {
             if (this.activeTab !== 'reels') return;
             const container = this.$refs.reelsContainer;
-            const reelHeight = container.clientHeight;
-            const currentIndex = Math.round(container.scrollTop / reelHeight); // Ensure reel.id is string
+            const reelHeight = container.getBoundingClientRect().height;
+            const currentIndex = Math.round(container.scrollTop / reelHeight);
             const nextIndex = Math.max(0, Math.min(this.reels.length - 1, currentIndex + direction));
             container.scrollTo({
                 top: reelHeight * nextIndex,
-                behavior: 'smooth'
+                behavior: 'auto'
             });
         },
         shareReel(reel) {

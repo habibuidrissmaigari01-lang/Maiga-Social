@@ -395,6 +395,7 @@ const groupSchema = new mongoose.Schema({
         can_send_messages: { type: Boolean, default: true },
         can_add_members: { type: Boolean, default: false }
     },
+    announcement: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
     approve_members: { type: Boolean, default: false },
     invite_link_code: String,
     join_requests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]

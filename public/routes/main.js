@@ -233,17 +233,28 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
 router.post('/update_profile', isAuthenticated, async (req, res) => {
     try {
          const { fields, files } = await parseForm(req);
+        const user = await User.findById(req.session.userId);
+
         const name = fields.name?.[0] || fields.name;
         const username = fields.username?.[0] || fields.username;
         const bio = fields.bio?.[0] || fields.bio;
         const dept = fields.dept?.[0] || fields.dept;
+        const gender = fields.gender?.[0] || fields.gender;
         
-        const updates = { name, username, bio, dept };
+        const updates = { name, username, bio, dept, gender };
          const avatarFile = files.avatar?.[0] || files.avatar;
         
-        if (avatarFile) {
-            const user = await User.findById(req.session.userId);
+        // If no new file is uploaded, check if we should swap the default avatar based on a gender change
+        if (!avatarFile && gender && gender !== user.gender) {
+            const defaultAvatars = ['img/male.png', 'img/female.png', 'img/default-avatar.png'];
+            const isUsingDefault = !user.avatar || defaultAvatars.some(d => user.avatar.includes(d)) || user.avatar.includes('dicebear.com');
             
+            if (isUsingDefault) {
+                updates.avatar = (gender === 'female') ? 'img/female.png' : 'img/male.png';
+            }
+        }
+
+        if (avatarFile) {
             // If current avatar is an R2 URL (starts with http), delete the old file
             if (user && user.avatar && user.avatar.startsWith('http')) {
                 try {

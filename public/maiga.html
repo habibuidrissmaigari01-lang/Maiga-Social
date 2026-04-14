@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/font/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/font/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
     <title>Maiga Social</title>
     <link href="css/main.css" rel="stylesheet">
      <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
@@ -2737,14 +2737,12 @@
     </main>
 
     <!-- MAIN VIEW: REELS -->
-    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="h-full bg-black lg:bg-gray-100 dark:lg:bg-gray-900 lg:h-[calc(100vh-65px)] lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
+    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[65px] bg-black z-40 lg:static lg:h-[calc(100vh-65px)] lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" 
-             class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-none" 
+             class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y" 
              x-init="setupReelsObserver()" 
              @scroll.passive="handleReelsScroll($event.target)"
-             @wheel.prevent="handleReelWheel($event)"
-             @touchstart="handleReelTouchStart($event)"
-             @touchend="handleReelTouchEnd($event)">
+             @wheel.prevent="handleReelWheel($event)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 

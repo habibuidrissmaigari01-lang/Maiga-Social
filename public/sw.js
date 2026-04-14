@@ -11,11 +11,11 @@ const ASSETS_TO_CACHE = [
   '/img/logo.png',
   '/img/ysu.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  '/font/inter-regular.woff2',
-  '/font/IntelOneMono-Regular.woff2',
-  '/font/IntelOneMono-Bold.woff2',
-  '/font/IntelOneMono-Italic.woff2',
-  '/font/IntelOneMono-BoldItalic.woff2',
+  '/fonts/inter-regular.woff2',
+  '/fonts/IntelOneMono-Regular.woff2',
+  '/fonts/IntelOneMono-Bold.woff2',
+  '/fonts/IntelOneMono-Italic.woff2',
+  '/fonts/IntelOneMono-BoldItalic.woff2',
 ];
 
 // Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
