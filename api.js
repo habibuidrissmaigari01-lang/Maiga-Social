@@ -328,10 +328,11 @@ io.on('connection', (socket) => {
 
         // Persist the seen status to the database
         // This triggers the Mongoose Change Stream which emits 'read_receipt'
-        const user = await User.findById(socket.userId);
+        const user = await User.findById(socket.userId).select('name');
+        if (!user) return;
         await Message.updateMany(filter, { 
             $set: { is_read: true },
-            $addToSet: { read_by: { user: socket.userId, first_name: user.name.split(' ')[0] } } 
+            $addToSet: { read_by: { user: socket.userId, first_name: (user.name || 'User').split(' ')[0] } } 
         });
 
         const target = data.type === 'group' ? `group_${data.chat_id}` : data.chat_id;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <!-- Preload self-hosted font to prevent layout shift -->
-    <link rel="preload" href="/fonts/inter-regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/Inter-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/IntelOneMono-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/IntelOneMono-Bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/fonts/IntelOneMono-Italic.woff2" as="font" type="font/woff2" crossorigin>
@@ -3667,6 +3667,17 @@
             </button>
         </div>
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
+            <div class="space-y-2">
+                <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Profile Banner</label>
+                <div @click="$refs.profileBannerInput.click()" class="relative h-32 w-full rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 cursor-pointer group">
+                    <img x-show="editUser.banner" :src="editUser.banner" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                        <i class="fa-solid fa-camera text-white text-2xl mb-1"></i>
+                        <span class="text-[10px] text-white font-bold uppercase">Change Banner</span>
+                    </div>
+                </div>
+                <input type="file" x-ref="profileBannerInput" @change="handleProfileBannerChange($event)" class="hidden" accept="image/*">
+            </div>
             <div class="flex flex-col items-center">
                 <div @click="$refs.profileAvatarInput.click()" class="relative group cursor-pointer">
                     <img :src="editUser.avatar" class="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-800 shadow-lg">
@@ -3681,6 +3692,17 @@
             <div class="space-y-4">
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Full Name</label><input type="text" x-model="editUser.name" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Username</label><input type="text" x-model="editUser.username" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
+                <div>
+                    <div class="flex justify-between items-center mb-1 px-1">
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Gender</label>
+                    </div>
+                    <select x-model="editUser.gender" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500">
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                        <option value="prefer_not_to_say">Prefer not to say</option>
+                    </select>
+                </div>
                 <div>
                     <div class="flex justify-between items-center mb-1 px-1">
                         <label class="text-[10px] font-black text-gray-400 uppercase">Bio</label>

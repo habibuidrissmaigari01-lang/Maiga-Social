@@ -1,2 +1,479 @@
-my IMEI: 861239057036255
-my model no: 21091116UG
+2026-04-14T14:22:00.153667205Z [inf]  Starting Container
+2026-04-14T14:31:05.555960076Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T14:31:05.555963162Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T14:31:05.555967430Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T14:31:05.555972130Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T14:31:05.555972688Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:31:05.555978897Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T14:31:05.555978917Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:31:05.555984324Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:31:05.555986185Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:31:05.555988882Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:31:05.555997251Z [err]      at /app/public/routes/main.js:498:17
+2026-04-14T14:31:05.556000748Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:31:05.556004849Z [err]    errors: {
+2026-04-14T14:31:05.556009051Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:31:05.556068771Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T14:31:05.556071828Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T14:31:05.556075139Z [err]                                 ^
+2026-04-14T14:31:05.556078286Z [err]  
+2026-04-14T14:31:05.556081377Z [err]  ValidationError: Message validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:31:05.556768403Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:31:05.556771355Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:31:05.556774412Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:31:05.556777302Z [err]          at /app/public/routes/main.js:498:17
+2026-04-14T14:31:05.556780315Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:31:05.556783689Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T14:31:05.556787512Z [err]        messageFormat: undefined,
+2026-04-14T14:31:05.556790801Z [err]        kind: 'string',
+2026-04-14T14:31:05.556794229Z [err]        value: [ '' ],
+2026-04-14T14:31:05.556797400Z [err]        path: 'content',
+2026-04-14T14:31:05.556800449Z [err]        reason: null,
+2026-04-14T14:31:05.556803480Z [err]        valueType: 'Array'
+2026-04-14T14:31:05.556806852Z [err]      }
+2026-04-14T14:31:05.556810158Z [err]    },
+2026-04-14T14:31:05.556813250Z [err]    _message: 'Message validation failed'
+2026-04-14T14:31:05.556816298Z [err]  }
+2026-04-14T14:31:05.556819463Z [err]  
+2026-04-14T14:31:05.556822667Z [err]  Node.js v22.22.2
+2026-04-14T14:44:16.075311574Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T14:44:16.075334983Z [err]  
+2026-04-14T14:44:16.075343184Z [err]                                 ^
+2026-04-14T14:44:16.075345608Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T14:44:16.075345892Z [err]  ValidationError: Message validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:44:16.075364397Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T14:44:16.075364797Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T14:44:16.075369593Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:44:16.075374565Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:44:16.075374917Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T14:44:16.075379592Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T14:44:16.075386908Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T14:44:16.075388129Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:44:16.075390086Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:44:16.075396240Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:44:16.075398999Z [err]      at /app/public/routes/main.js:498:17
+2026-04-14T14:44:16.075399919Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:44:16.075406102Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:44:16.075420112Z [err]    errors: {
+2026-04-14T14:44:16.076277827Z [err]        value: [ '' ],
+2026-04-14T14:44:16.076282446Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:44:16.076284078Z [err]        path: 'content',
+2026-04-14T14:44:16.076290448Z [err]        reason: null,
+2026-04-14T14:44:16.076294218Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:44:16.076299422Z [err]      }
+2026-04-14T14:44:16.076302586Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:44:16.076304662Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:44:16.076308003Z [err]    },
+2026-04-14T14:44:16.076314303Z [err]        messageFormat: undefined,
+2026-04-14T14:44:16.076315736Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T14:44:16.076316545Z [err]          at /app/public/routes/main.js:498:17
+2026-04-14T14:44:16.076318581Z [err]    _message: 'Message validation failed'
+2026-04-14T14:44:16.076321341Z [err]        valueType: 'Array'
+2026-04-14T14:44:16.076322486Z [err]        kind: 'string',
+2026-04-14T14:44:16.076327198Z [err]  Node.js v22.22.2
+2026-04-14T14:44:16.076327405Z [err]  }
+2026-04-14T14:44:16.076331014Z [err]                                 ^
+2026-04-14T14:44:16.076335081Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T14:44:16.076340877Z [err]  
+2026-04-14T14:44:16.076341903Z [err]  
+2026-04-14T14:44:16.076343191Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T14:44:16.076349048Z [err]  ValidationError: Message validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:44:16.076353606Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T14:44:16.076357918Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T14:44:16.077772149Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:44:16.077779631Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:44:16.077780313Z [err]      at /app/public/routes/main.js:498:17
+2026-04-14T14:44:16.077786545Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T14:44:16.077788343Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T14:44:16.077792206Z [err]    errors: {
+2026-04-14T14:44:16.077795303Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T14:44:16.077798880Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T14:44:16.077803486Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T14:44:16.077804674Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T14:44:16.077810929Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:44:16.077811712Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T14:44:16.077817669Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:44:16.077820571Z [err]          at /app/public/routes/main.js:498:17
+2026-04-14T14:44:16.077825331Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:44:16.077828083Z [err]        messageFormat: undefined,
+2026-04-14T14:44:16.077836106Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T14:44:16.077840901Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T14:44:16.077846008Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T14:44:16.079616526Z [err]        kind: 'string',
+2026-04-14T14:44:16.079620745Z [err]        value: [ '' ],
+2026-04-14T14:44:16.079624134Z [err]        path: 'content',
+2026-04-14T14:44:16.079627577Z [err]        reason: null,
+2026-04-14T14:44:16.079630902Z [err]        valueType: 'Array'
+2026-04-14T14:44:16.079634057Z [err]      }
+2026-04-14T14:44:16.079637402Z [err]    },
+2026-04-14T14:44:16.079640506Z [err]    _message: 'Message validation failed'
+2026-04-14T14:44:16.079647085Z [err]  }
+2026-04-14T14:44:16.079651913Z [err]  
+2026-04-14T14:44:16.079656615Z [err]  Node.js v22.22.2
+2026-04-14T18:35:41.482704158Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T18:35:41.482705846Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T18:35:41.482706437Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T18:35:41.482714210Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T18:35:41.482715042Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T18:35:41.482717474Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T18:35:41.482720744Z [err]                                 ^
+2026-04-14T18:35:41.482725884Z [err]  
+2026-04-14T18:35:41.482729547Z [err]  ValidationError: Post validation failed: feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T18:35:41.482732694Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T18:35:41.482815831Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T18:35:41.482819336Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T18:35:41.482822650Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T18:35:41.482828651Z [err]    errors: {
+2026-04-14T18:35:41.482831972Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T18:35:41.482835004Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T18:35:41.482837736Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T18:35:41.482840666Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T18:35:41.482844570Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T18:35:41.483765775Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T18:35:41.483771513Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T18:35:41.483776266Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T18:35:41.483779990Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T18:35:41.483783742Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T18:35:41.483788907Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T18:35:41.483793852Z [err]        messageFormat: undefined,
+2026-04-14T18:35:41.483798201Z [err]        kind: 'string',
+2026-04-14T18:35:41.483802521Z [err]        value: [ '' ],
+2026-04-14T18:35:41.483806776Z [err]        path: 'feeling',
+2026-04-14T18:35:41.483811203Z [err]        reason: null,
+2026-04-14T18:35:41.483815308Z [err]        valueType: 'Array'
+2026-04-14T18:35:41.483819179Z [err]      }
+2026-04-14T18:35:41.483823355Z [err]    },
+2026-04-14T18:35:41.483827671Z [err]    _message: 'Post validation failed'
+2026-04-14T18:35:41.483830798Z [err]  }
+2026-04-14T18:35:41.483834169Z [err]  
+2026-04-14T18:35:41.483837553Z [err]  Node.js v22.22.2
+2026-04-14T18:56:32.711372155Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T18:56:32.711382427Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T18:56:32.711387388Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T18:56:32.711392537Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T18:56:32.711397022Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T18:56:32.711403130Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T18:56:32.711409398Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T18:56:32.711414614Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T18:56:32.711418922Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T18:56:32.711422720Z [err]    errors: {
+2026-04-14T18:56:32.711427614Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T18:56:32.711432411Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T18:56:32.711438179Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T18:56:32.711440388Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T18:56:32.711444604Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T18:56:32.711445307Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T18:56:32.711449467Z [err]                                 ^
+2026-04-14T18:56:32.711453914Z [err]  
+2026-04-14T18:56:32.712831003Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T18:56:32.712834785Z [err]      },
+2026-04-14T18:56:32.712842119Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T18:56:32.712844200Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T18:56:32.712847607Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T18:56:32.712852801Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T18:56:32.712853710Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T18:56:32.712861168Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T18:56:32.712861255Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T18:56:32.712867111Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T18:56:32.712870939Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T18:56:32.712872578Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T18:56:32.712877351Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T18:56:32.712880060Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T18:56:32.712884576Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T18:56:32.712888876Z [err]        messageFormat: undefined,
+2026-04-14T18:56:32.712894562Z [err]        kind: 'string',
+2026-04-14T18:56:32.712899029Z [err]        value: [ '' ],
+2026-04-14T18:56:32.712903754Z [err]        path: 'content',
+2026-04-14T18:56:32.712908234Z [err]        reason: null,
+2026-04-14T18:56:32.712912522Z [err]        valueType: 'Array'
+2026-04-14T18:56:32.714266878Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T18:56:32.714275067Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T18:56:32.714281856Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T18:56:32.714283856Z [err]        reason: null,
+2026-04-14T18:56:32.714290579Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T18:56:32.714292204Z [err]        valueType: 'Array'
+2026-04-14T18:56:32.714298387Z [err]      }
+2026-04-14T18:56:32.714299606Z [err]        messageFormat: undefined,
+2026-04-14T18:56:32.714305944Z [err]    },
+2026-04-14T18:56:32.714307430Z [err]        kind: 'string',
+2026-04-14T18:56:32.714314312Z [err]    _message: 'Post validation failed'
+2026-04-14T18:56:32.714314962Z [err]        value: [ '' ],
+2026-04-14T18:56:32.714320269Z [err]  }
+2026-04-14T18:56:32.714322778Z [err]        path: 'feeling',
+2026-04-14T18:56:32.714326024Z [err]  
+2026-04-14T18:56:32.714329759Z [err]  Node.js v22.22.2
+2026-04-14T19:08:44.140765360Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T19:08:44.140774242Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T19:08:44.140778401Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:08:44.140781636Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:08:44.140784642Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:08:44.140787572Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:08:44.140790317Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T19:08:44.140793371Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:08:44.140797219Z [err]    errors: {
+2026-04-14T19:08:44.140800215Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T19:08:44.140803350Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:08:44.140806586Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:08:44.140809621Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:08:44.140852406Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T19:08:44.140858750Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T19:08:44.140864742Z [err]                                 ^
+2026-04-14T19:08:44.140869430Z [err]  
+2026-04-14T19:08:44.140873652Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:08:44.142421488Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:08:44.142428222Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:08:44.142433126Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:08:44.142438302Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:08:44.142443465Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:08:44.142449279Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:08:44.142457036Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:08:44.142462734Z [err]        messageFormat: undefined,
+2026-04-14T19:08:44.142467510Z [err]        kind: 'string',
+2026-04-14T19:08:44.142472456Z [err]        value: [ '' ],
+2026-04-14T19:08:44.142477607Z [err]        path: 'content',
+2026-04-14T19:08:44.142482359Z [err]        reason: null,
+2026-04-14T19:08:44.142489217Z [err]        valueType: 'Array'
+2026-04-14T19:08:44.142496057Z [err]      },
+2026-04-14T19:08:44.142500592Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:08:44.142505657Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:08:44.142512153Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:08:44.142518123Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:08:44.142522393Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:08:44.142525732Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:08:44.142530645Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:08:44.143879631Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:08:44.143887781Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:08:44.143889714Z [err]        valueType: 'Array'
+2026-04-14T19:08:44.143895465Z [err]      }
+2026-04-14T19:08:44.143896435Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:08:44.143901477Z [err]    },
+2026-04-14T19:08:44.143905544Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:08:44.143907851Z [err]    _message: 'Post validation failed'
+2026-04-14T19:08:44.143912961Z [err]        messageFormat: undefined,
+2026-04-14T19:08:44.143913028Z [err]  }
+2026-04-14T19:08:44.143918407Z [err]  
+2026-04-14T19:08:44.143920792Z [err]        kind: 'string',
+2026-04-14T19:08:44.143923421Z [err]  Node.js v22.22.2
+2026-04-14T19:08:44.143926723Z [err]        value: [ '' ],
+2026-04-14T19:08:44.143932227Z [err]        path: 'feeling',
+2026-04-14T19:08:44.143937240Z [err]        reason: null,
+2026-04-14T19:11:53.824650683Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T19:11:53.824657342Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T19:11:53.824659828Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T19:11:53.824666202Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:11:53.824666709Z [err]                                 ^
+2026-04-14T19:11:53.824670703Z [err]    errors: {
+2026-04-14T19:11:53.824675642Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T19:11:53.824676725Z [err]  
+2026-04-14T19:11:53.824681248Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:11:53.824684147Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:11:53.824686818Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:11:53.824691800Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T19:11:53.824691886Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:11:53.824697650Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T19:11:53.824701878Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:11:53.824705931Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:11:53.824709944Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:11:53.824716026Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:11:53.826846863Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:11:53.826855567Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:11:53.826861990Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:11:53.826866511Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:11:53.826871899Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:11:53.826876461Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:11:53.826881036Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:11:53.826885988Z [err]        messageFormat: undefined,
+2026-04-14T19:11:53.826890565Z [err]        kind: 'string',
+2026-04-14T19:11:53.826895983Z [err]        value: [ '' ],
+2026-04-14T19:11:53.826900628Z [err]        path: 'content',
+2026-04-14T19:11:53.826904496Z [err]        reason: null,
+2026-04-14T19:11:53.826908176Z [err]        valueType: 'Array'
+2026-04-14T19:11:53.826911746Z [err]      },
+2026-04-14T19:11:53.826915412Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:11:53.826919002Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:11:53.826925210Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:11:53.826930653Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:11:53.826934825Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:11:53.826941321Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:11:53.826945239Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:11:53.829489883Z [err]      }
+2026-04-14T19:11:53.829501098Z [err]    },
+2026-04-14T19:11:53.829501407Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:11:53.829508292Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:11:53.829509305Z [err]    _message: 'Post validation failed'
+2026-04-14T19:11:53.829512859Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:11:53.829517647Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:11:53.829519506Z [err]  }
+2026-04-14T19:11:53.829522524Z [err]        messageFormat: undefined,
+2026-04-14T19:11:53.829526397Z [err]        kind: 'string',
+2026-04-14T19:11:53.829531358Z [err]        value: [ '' ],
+2026-04-14T19:11:53.829535520Z [err]        path: 'feeling',
+2026-04-14T19:11:53.829536364Z [err]  
+2026-04-14T19:11:53.829540447Z [err]        reason: null,
+2026-04-14T19:11:53.829544581Z [err]        valueType: 'Array'
+2026-04-14T19:11:53.829547950Z [err]  Node.js v22.22.2
+2026-04-14T19:13:03.839048391Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:13:03.839050130Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T19:13:03.839053657Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:03.839055642Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:13:03.839060489Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T19:13:03.839064424Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:03.839067226Z [err]                                 ^
+2026-04-14T19:13:03.839075291Z [err]  
+2026-04-14T19:13:03.839075464Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T19:13:03.839081828Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:13:03.839085767Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:03.839088703Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T19:13:03.839093735Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T19:13:03.839097380Z [err]    errors: {
+2026-04-14T19:13:03.839100646Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:03.839106525Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T19:13:03.839107660Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:03.839111868Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:13:03.841652304Z [err]      },
+2026-04-14T19:13:03.841652346Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:03.841659313Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:13:03.841661762Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:03.841664720Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:13:03.841669163Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:03.841671357Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:13:03.841675722Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:13:03.841676956Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:03.841680659Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:03.841683388Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:13:03.841686216Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:03.841691686Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:03.841692066Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:03.841696954Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:13:03.841701648Z [err]        messageFormat: undefined,
+2026-04-14T19:13:03.841705939Z [err]        kind: 'string',
+2026-04-14T19:13:03.841710165Z [err]        value: [ '' ],
+2026-04-14T19:13:03.841714274Z [err]        path: 'content',
+2026-04-14T19:13:03.841719275Z [err]        reason: null,
+2026-04-14T19:13:03.841724341Z [err]        valueType: 'Array'
+2026-04-14T19:13:03.843942553Z [err]      }
+2026-04-14T19:13:03.843946506Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:03.843949738Z [err]    },
+2026-04-14T19:13:03.843954185Z [err]    _message: 'Post validation failed'
+2026-04-14T19:13:03.843955704Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:13:03.843959741Z [err]  }
+2026-04-14T19:13:03.843963843Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:03.843965218Z [err]  
+2026-04-14T19:13:03.843970705Z [err]  Node.js v22.22.2
+2026-04-14T19:13:03.843972368Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:13:03.843976969Z [err]        messageFormat: undefined,
+2026-04-14T19:13:03.843982680Z [err]        kind: 'string',
+2026-04-14T19:13:03.843986605Z [err]        value: [ '' ],
+2026-04-14T19:13:03.843991633Z [err]        path: 'feeling',
+2026-04-14T19:13:03.843995561Z [err]        reason: null,
+2026-04-14T19:13:03.843999607Z [err]        valueType: 'Array'
+2026-04-14T19:13:23.842968793Z [err]    errors: {
+2026-04-14T19:13:23.842976844Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-14T19:13:23.842977664Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-14T19:13:23.842984276Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-14T19:13:23.842986008Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:13:23.842989349Z [err]                                 ^
+2026-04-14T19:13:23.842993889Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:13:23.842994601Z [err]  
+2026-04-14T19:13:23.843000190Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:13:23.843001721Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:13:23.843004812Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-14T19:13:23.843008331Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-14T19:13:23.843012193Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:23.843015288Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:23.843018245Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:23.843022021Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:23.843024694Z [err]      at /app/public/routes/main.js:425:18
+2026-04-14T19:13:23.843027455Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:23.845256137Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:23.845265982Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:23.845270474Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:23.845273369Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-14T19:13:23.845276006Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:23.845279589Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:13:23.845283528Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:23.845287182Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:13:23.845290309Z [err]        messageFormat: undefined,
+2026-04-14T19:13:23.845293539Z [err]        kind: 'string',
+2026-04-14T19:13:23.845296863Z [err]        value: [ '' ],
+2026-04-14T19:13:23.845300240Z [err]        path: 'content',
+2026-04-14T19:13:23.845303409Z [err]        reason: null,
+2026-04-14T19:13:23.845306671Z [err]        valueType: 'Array'
+2026-04-14T19:13:23.845309730Z [err]      },
+2026-04-14T19:13:23.845312920Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-14T19:13:23.845316461Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-14T19:13:23.845320024Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-14T19:13:23.845324107Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-14T19:13:23.845327652Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-14T19:13:23.845331437Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-14T19:13:23.847410636Z [err]  Node.js v22.22.2
+2026-04-14T19:13:23.847419081Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-14T19:13:23.847423624Z [err]          at /app/public/routes/main.js:425:18
+2026-04-14T19:13:23.847426741Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-14T19:13:23.847430752Z [err]        stringValue: `"[ '' ]"`,
+2026-04-14T19:13:23.847433375Z [err]        messageFormat: undefined,
+2026-04-14T19:13:23.847436246Z [err]        kind: 'string',
+2026-04-14T19:13:23.847439407Z [err]        value: [ '' ],
+2026-04-14T19:13:23.847442492Z [err]        path: 'feeling',
+2026-04-14T19:13:23.847445143Z [err]        reason: null,
+2026-04-14T19:13:23.847448327Z [err]        valueType: 'Array'
+2026-04-14T19:13:23.847451055Z [err]      }
+2026-04-14T19:13:23.847453767Z [err]    },
+2026-04-14T19:13:23.847456642Z [err]    _message: 'Post validation failed'
+2026-04-14T19:13:23.847459782Z [err]  }
+2026-04-14T19:13:23.847462547Z [err]  
+2026-04-15T10:28:35.232633271Z [err]  ValidationError: Post validation failed: content: Cast to string failed for value "[ '' ]" (type Array) at path "content", feeling: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-15T10:28:35.232642185Z [err]      at Document.invalidate (/app/node_modules/mongoose/lib/document.js:3381:32)
+2026-04-15T10:28:35.232647856Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1498:12)
+2026-04-15T10:28:35.232654121Z [err]  /app/node_modules/mongoose/lib/document.js:3381
+2026-04-15T10:28:35.232654770Z [err]      at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-15T10:28:35.232660680Z [err]      this.$__.validationError = new ValidationError(this);
+2026-04-15T10:28:35.232661349Z [err]      at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-15T10:28:35.232666739Z [err]                                 ^
+2026-04-15T10:28:35.232670139Z [err]      at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-15T10:28:35.232673058Z [err]  
+2026-04-15T10:28:35.232675913Z [err]      at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-15T10:28:35.232680306Z [err]      at /app/public/routes/main.js:425:18
+2026-04-15T10:28:35.232683797Z [err]      at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-15T10:28:35.232687145Z [err]    errors: {
+2026-04-15T10:28:35.232690246Z [err]      content: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "content"
+2026-04-15T10:28:35.232693683Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-15T10:28:35.232696957Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-15T10:28:35.232700138Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-15T10:28:35.233435953Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-15T10:28:35.233443055Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-15T10:28:35.233448097Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-15T10:28:35.233453519Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-15T10:28:35.233458353Z [err]          at /app/public/routes/main.js:425:18
+2026-04-15T10:28:35.233463113Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-15T10:28:35.233467717Z [err]        stringValue: `"[ '' ]"`,
+2026-04-15T10:28:35.233472516Z [err]        messageFormat: undefined,
+2026-04-15T10:28:35.233477347Z [err]        kind: 'string',
+2026-04-15T10:28:35.233482363Z [err]        value: [ '' ],
+2026-04-15T10:28:35.233487073Z [err]        path: 'content',
+2026-04-15T10:28:35.233492190Z [err]        reason: null,
+2026-04-15T10:28:35.233496336Z [err]        valueType: 'Array'
+2026-04-15T10:28:35.233501504Z [err]      },
+2026-04-15T10:28:35.233506706Z [err]      feeling: CastError: Cast to string failed for value "[ '' ]" (type Array) at path "feeling"
+2026-04-15T10:28:35.233512988Z [err]          at SchemaString.cast (/app/node_modules/mongoose/lib/schema/string.js:609:11)
+2026-04-15T10:28:35.233518136Z [err]          at SchemaType.applySetters (/app/node_modules/mongoose/lib/schemaType.js:1288:12)
+2026-04-15T10:28:35.233523110Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1456:22)
+2026-04-15T10:28:35.233527682Z [err]          at model.$set (/app/node_modules/mongoose/lib/document.js:1150:16)
+2026-04-15T10:28:35.233532047Z [err]          at model.Document (/app/node_modules/mongoose/lib/document.js:180:12)
+2026-04-15T10:28:35.233536505Z [err]          at model.Model (/app/node_modules/mongoose/lib/model.js:127:12)
+2026-04-15T10:28:35.235215699Z [err]          at new model (/app/node_modules/mongoose/lib/model.js:4866:15)
+2026-04-15T10:28:35.235221390Z [err]          at /app/public/routes/main.js:425:18
+2026-04-15T10:28:35.235226052Z [err]          at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+2026-04-15T10:28:35.235231992Z [err]        stringValue: `"[ '' ]"`,
+2026-04-15T10:28:35.235232012Z [err]    },
+2026-04-15T10:28:35.235236282Z [err]        messageFormat: undefined,
+2026-04-15T10:28:35.235241759Z [err]        kind: 'string',
+2026-04-15T10:28:35.235242657Z [err]    _message: 'Post validation failed'
+2026-04-15T10:28:35.235247039Z [err]        value: [ '' ],
+2026-04-15T10:28:35.235251302Z [err]  }
+2026-04-15T10:28:35.235253392Z [err]        path: 'feeling',
+2026-04-15T10:28:35.235259084Z [err]        reason: null,
+2026-04-15T10:28:35.235259742Z [err]  
+2026-04-15T10:28:35.235265622Z [err]        valueType: 'Array'
+2026-04-15T10:28:35.235266630Z [err]  Node.js v22.22.2
+2026-04-15T10:28:35.235271566Z [err]      }

@@ -406,8 +406,8 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
 
 router.post('/create_post', isAuthenticated, async (req, res) => {
     const { fields, files } = await parseForm(req);
-    const content = fields.content?.[0] || fields.content;
-    const feeling = fields.feeling?.[0] || fields.feeling;
+    const content = Array.isArray(fields.content) ? fields.content[0] : fields.content;
+    const feeling = Array.isArray(fields.feeling) ? fields.feeling[0] : fields.feeling;
     const mediaFiles = files.media ? (Array.isArray(files.media) ? files.media : [files.media]) : [];
 
     let mediaUrls = [];
@@ -463,11 +463,11 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
 
 router.post('/send_message', isAuthenticated, async (req, res) => {
     const { fields, files } = await parseForm(req);
-    const receiver_id = fields.receiver_id?.[0] || fields.receiver_id;
-    const group_id = fields.group_id?.[0] || fields.group_id;
-    const content = fields.content?.[0] || fields.content;
-    const media_type = fields.media_type?.[0] || fields.media_type;
-    const reply_to_id = fields.reply_to_id?.[0] || fields.reply_to_id;
+    const receiver_id = Array.isArray(fields.receiver_id) ? fields.receiver_id[0] : fields.receiver_id;
+    const group_id = Array.isArray(fields.group_id) ? fields.group_id[0] : fields.group_id;
+    const content = Array.isArray(fields.content) ? fields.content[0] : fields.content;
+    const media_type = Array.isArray(fields.media_type) ? fields.media_type[0] : fields.media_type;
+    const reply_to_id = Array.isArray(fields.reply_to_id) ? fields.reply_to_id[0] : fields.reply_to_id;
     
     let targetReceiverId = receiver_id;
     // Handle special case for 'support-admin'
@@ -521,11 +521,11 @@ router.post('/send_message', isAuthenticated, async (req, res) => {
 router.post('/create_group', isAuthenticated, async (req, res) => {
     try {
         const { fields, files } = await parseForm(req);
-        const name = fields.name?.[0] || fields.name;
-        const description = fields.description?.[0] || fields.description;
-        const members = fields.members?.[0] || fields.members;
-        const permissions = fields.permissions?.[0] || fields.permissions;
-        const approve_members = fields.approve_members?.[0] || fields.approve_members;
+        const name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
+        const description = Array.isArray(fields.description) ? fields.description[0] : fields.description;
+        const members = Array.isArray(fields.members) ? fields.members[0] : fields.members;
+        const permissions = Array.isArray(fields.permissions) ? fields.permissions[0] : fields.permissions;
+        const approve_members = Array.isArray(fields.approve_members) ? fields.approve_members[0] : fields.approve_members;
 
         let avatarUrl = 'img/default-group.png';
         const avatarFile = files.avatar?.[0] || files.avatar;
@@ -1299,10 +1299,10 @@ router.get('/get_comments', isAuthenticated, async (req, res) => {
 router.post('/add_comment', isAuthenticated, async (req, res) => {
     try {
         const { fields, files } = await parseForm(req);
-        const post_id = fields.post_id?.[0] || fields.post_id;
-        const content = fields.content?.[0] || fields.content;
-        const parent_comment_id = fields.parent_comment_id?.[0] || fields.parent_comment_id;
-        const media_type = fields.media_type?.[0] || fields.media_type;
+        const post_id = Array.isArray(fields.post_id) ? fields.post_id[0] : fields.post_id;
+        const content = Array.isArray(fields.content) ? fields.content[0] : fields.content;
+        const parent_comment_id = Array.isArray(fields.parent_comment_id) ? fields.parent_comment_id[0] : fields.parent_comment_id;
+        const media_type = Array.isArray(fields.media_type) ? fields.media_type[0] : fields.media_type;
 
         let mediaUrl = null;
         const mediaFile = files.media?.[0] || files.media;
@@ -1334,7 +1334,7 @@ router.post('/add_comment', isAuthenticated, async (req, res) => {
             }
         }
 
-        res.json({ success: true, comment_id: comment._id, content, media: mediaUrl });
+        res.json({ success: true, comment_id: comment._id, content, media: mediaUrl, media_type: comment.media_type });
     } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -1571,10 +1571,10 @@ router.post('/create_story', isAuthenticated, async (req, res) => {
         if (!mediaFile) return res.status(400).json({ error: 'Media file is required' });
 
         const mediaUrl = await uploadToR2(mediaFile, 'stories');
-        const audience = fields.audience?.[0] || fields.audience;
-        const type = fields.type?.[0] || fields.type;
-        const has_music = fields.has_music?.[0] || fields.has_music;
-        const music_track = fields.music_track?.[0] || fields.music_track;
+        const audience = Array.isArray(fields.audience) ? fields.audience[0] : fields.audience;
+        const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
+        const has_music = Array.isArray(fields.has_music) ? fields.has_music[0] : fields.has_music;
+        const music_track = Array.isArray(fields.music_track) ? fields.music_track[0] : fields.music_track;
 
         const story = new Story({
             user: req.session.userId,
@@ -1813,10 +1813,10 @@ router.post('/report_message', isAuthenticated, async (req, res) => {
 router.post('/report_user', isAuthenticated, async (req, res) => {
     try {
         const { fields, files } = await parseForm(req);
-        const user_id = fields.user_id?.[0] || fields.user_id;
-        const reason = fields.reason?.[0] || fields.reason;
-        const details = fields.details?.[0] || fields.details;
-        const priority = fields.priority?.[0] || fields.priority;
+        const user_id = Array.isArray(fields.user_id) ? fields.user_id[0] : fields.user_id;
+        const reason = Array.isArray(fields.reason) ? fields.reason[0] : fields.reason;
+        const details = Array.isArray(fields.details) ? fields.details[0] : fields.details;
+        const priority = Array.isArray(fields.priority) ? fields.priority[0] : fields.priority;
 
         let screenshotUrl = null;
        const screenshotFile = files.screenshot?.[0] || files.screenshot;
@@ -2229,11 +2229,11 @@ router.get('/get_stickers', isAuthenticated, (req, res) => {
 router.post('/update_group_info', isAuthenticated, async (req, res) => {
     try {
         const { fields, files } = await parseForm(req);
-        const group_id = fields.group_id?.[0] || fields.group_id;
-        const name = fields.name?.[0] || fields.name;
-        const description = fields.description?.[0] || fields.description;
-        const permissions = fields.permissions?.[0] || fields.permissions;
-        const approve_members = fields.approve_members?.[0] || fields.approve_members;
+        const group_id = Array.isArray(fields.group_id) ? fields.group_id[0] : fields.group_id;
+        const name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
+        const description = Array.isArray(fields.description) ? fields.description[0] : fields.description;
+        const permissions = Array.isArray(fields.permissions) ? fields.permissions[0] : fields.permissions;
+        const approve_members = Array.isArray(fields.approve_members) ? fields.approve_members[0] : fields.approve_members;
 
         const group = await Group.findById(group_id);
         if (!group) return res.status(404).json({ error: 'Group not found' });
@@ -2553,7 +2553,7 @@ router.post('/admin/send_broadcast', isAuthenticated, isAdmin, async (req, res) 
 router.post('/admin/update_admin_profile', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const { fields, files } = await parseForm(req);
-        const name = fields.name?.[0] || fields.name;
+        const name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
 
         const updates = { name };
         const avatarFile = files.avatar?.[0] || files.avatar;

@@ -1,7 +1,7 @@
 const ASSETS_TO_CACHE = [
   '/offline.html',
   '/', // Main entry point for Maiga
-  '/index.html', 
+  '/index.html',
   '/ysu.html',
   '/maiga.js',
   '/alpine.js',
@@ -11,6 +11,8 @@ const ASSETS_TO_CACHE = [
   '/img/logo.png',
   '/img/ysu.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+  '/fonts/inter-regular.woff2',
+  '/font/inter-regular.woff2',
   '/fonts/inter-regular.woff2',
   '/fonts/IntelOneMono-Regular.woff2',
   '/fonts/IntelOneMono-Bold.woff2',

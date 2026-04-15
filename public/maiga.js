@@ -14,6 +14,13 @@ const API_BASE_URL = (function() {
     return (host === 'localhost' || host === '127.0.0.1') ? 'http://localhost:3000' : '';
 })();
 
+// Silence harmless Alpine.js transition cancellation errors
+window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason && event.reason.isFromCancelledTransition) {
+        event.preventDefault();
+    }
+});
+
 
 let isMaigaInitialized = false;
 const initMaiga = () => {
@@ -94,7 +101,7 @@ const initMaiga = () => {
         },
         installPrompt: null,
         // Core App State
-        user: { id: 0, name: '', username: '', nickname: '', avatar: '', gender: 'male', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
+        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         theme: localStorage.getItem('theme') || 'system',
         darkMode: false,
@@ -2281,7 +2288,7 @@ const initMaiga = () => {
 
             // --- RESILIENT SOCKET.IO INITIALIZATION ---
             if (typeof io !== 'undefined') {
-                this.socket = io(API_BASE_URL);
+                this.socket = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
                 this.isSocketConnected = this.socket.connected;
             } else {
                 this.socket = { on: () => {}, emit: () => {}, connected: false };
@@ -2390,9 +2397,9 @@ const initMaiga = () => {
                 } else {
                     // Create new entry if it doesn't exist
                     const newEntry = {
-                        id: chatId,
-                        name: data.group_name || data.author,
-                        avatar: data.group_avatar || data.avatar,
+                        id: chatId, // Ensure ID is string
+                        name: data.group_name || data.author || 'Unknown Group', // Provide fallback
+                        avatar: data.group_avatar || data.avatar || 'img/default-group.png', // Provide fallback
                         type: data.group_id ? 'group' : 'user',
                         lastMsg: (data.group_id ? `<span class="text-indigo-500 font-bold">${(data.author || 'User').split(' ')[0]}:</span> ` : '') + (data.media_type === 'text' ? data.content : `<i>Sent a ${data.media_type}</i>`),
                         lastMsgId: data.id,
@@ -3426,6 +3433,12 @@ const initMaiga = () => {
             const isVideo = this.mediaType === 'video';
             
             const formData = new FormData();
+            
+            // Check for large files that might cause 502 Bad Gateway via Proxy
+            if (this.postFile && this.postFile.size > 50 * 1024 * 1024) {
+                this.showToast('Large File', 'Files over 50MB may fail via proxy. Please wait...', 'info');
+            }
+
             formData.append('content', finalContent);
             formData.append('feeling', this.newPostFeeling);
             
@@ -3558,7 +3571,7 @@ const initMaiga = () => {
         async sendMessage(mediaData = null, type = 'text', contentOverride = null, fileObject = null) {
             // Existing sendMessage logic
 
-            if (this.isBlocked(this.activeChat?.id)) return;
+            if (!this.activeChat || this.isBlocked(this.activeChat?.id)) return;
             let content = contentOverride || this.newMessage;
             this.isSendingMessage = true;
             
@@ -4328,7 +4341,6 @@ const initMaiga = () => {
             } else if (type === 'sticker') {
                 formData.append('content', contentOrBlob);
                 formData.append('media_type', 'sticker');
-            formData.append('media_type', 'sticker'); // Fixed: finalType was undefined
             } else {
                 formData.append('content', this.commentInput);
                 formData.append('media_type', 'text');
@@ -4385,6 +4397,7 @@ const initMaiga = () => {
             .finally(() => {
                 this.commentInput = '';
                 this.replyingToComment = null;
+                this.isSendingComment = false;
             });
         },
         sendCommentSticker(sticker) {
@@ -4888,13 +4901,9 @@ const initMaiga = () => {
                 this.mediaRecorder.onstop = () => {
                     cancelAnimationFrame(this.recordAnimationId);
                     const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                    this.postFile = new File([audioBlob], `voice_post_${Date.now()}.webm`, { type: 'audio/webm' });
-                    this.mediaType = 'audio';
-                    this.selectedMedia = 'voice_note_placeholder'; 
-                    this.saveCreatePostDraft();
+                    this.sendMessage(audioBlob, 'audio');
                     this.audioChunks = [];
                     stream.getTracks().forEach(track => track.stop());
-                    this.isSendingPost = false; // Reset after recording stops
                 };
                 this.mediaRecorder.start();
                 this.visualizeStream(stream, 'post-record-waveform');
@@ -4909,10 +4918,39 @@ const initMaiga = () => {
         stopRecording() {
             if (!this.isRecording || !this.mediaRecorder) return;
             this.mediaRecorder.stop();
-            this.isSendingPost = false; // Reset after recording stops
             cancelAnimationFrame(this.recordAnimationId);
             this.isRecording = false;
             clearInterval(this.recordingTimer);
+        },
+        async startPostRecording() {
+            if (this.isRecordingPost || this.isSendingPost) return;
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
+                this.postMediaRecorder = Alpine.raw(new MediaRecorder(stream));
+                this.postAudioChunks = [];
+                this.postMediaRecorder.ondataavailable = e => this.postAudioChunks.push(e.data);
+                this.postMediaRecorder.onstop = () => {
+                    cancelAnimationFrame(this.recordAnimationId);
+                    const blob = new Blob(this.postAudioChunks, { type: 'audio/webm' });
+                    this.postFile = new File([blob], `voice_post_${Date.now()}.webm`, { type: 'audio/webm' });
+                    this.mediaType = 'audio';
+                    this.selectedMedia = URL.createObjectURL(blob);
+                    this.saveCreatePostDraft();
+                    this.postAudioChunks = [];
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                this.postMediaRecorder.start();
+                this.visualizeStream(stream, 'post-record-waveform');
+                this.isRecordingPost = true;
+                this.postRecordingDuration = 0;
+                this.postRecordingTimer = setInterval(() => this.postRecordingDuration++, 1000);
+            } catch (e) { this.showToast('Error', 'Mic access failed', 'error'); }
+        },
+        stopPostRecording() {
+            if (!this.isRecordingPost || !this.postMediaRecorder) return;
+            this.postMediaRecorder.stop();
+            this.isRecordingPost = false;
+            clearInterval(this.postRecordingTimer);
         },
         saveProfile() {
              const formData = new FormData(); // Fixed: user.nickname to user.name
@@ -7271,7 +7309,7 @@ const initMaiga = () => {
                 }
 
                 // Send call log to chat
-                this.sendMessage(messageContent, 'call_log');
+                this.sendMessage(null, 'call_log', messageContent);
             }
             
             this.callStatus = '';

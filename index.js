@@ -37,6 +37,11 @@ export default {
                 headers.set('Host', backendUrl.hostname); 
                 headers.set('X-Forwarded-Host', url.host);
                 headers.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '');
+                
+                // Ensure WebSocket headers are preserved for the handshake
+                if (request.headers.get('Upgrade') === 'websocket') {
+                    headers.set('Connection', 'Upgrade');
+                }
 
                 // For WebSockets, we must use the original request to preserve the upgrade handshake
                 if (request.headers.get('Upgrade') === 'websocket') {

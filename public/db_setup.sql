@@ -20,6 +20,7 @@ CREATE TABLE `users` (
   `dept` varchar(255) DEFAULT NULL,
   `is_admin` tinyint(1) NOT NULL DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `banner` varchar(255) DEFAULT NULL,
   `is_verified` tinyint(1) NOT NULL DEFAULT 0,
   `verification_token` varchar(255) DEFAULT NULL,
   `reset_token_hash` varchar(255) DEFAULT NULL,
