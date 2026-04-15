@@ -77,6 +77,7 @@ const initMaiga = () => {
                 });
             }
             this.$watch('appFontSize', (value) => localStorage.setItem('maiga_app_font_size', value));
+            this.$watch('showChatShadows', (value) => localStorage.setItem('maiga_chat_shadows', value));
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.loadSavedWallpaper();
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
@@ -106,6 +107,7 @@ const initMaiga = () => {
         theme: localStorage.getItem('theme') || 'system',
         darkMode: false,
         appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
+        showChatShadows: localStorage.getItem('maiga_chat_shadows') !== 'false',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
@@ -283,7 +285,7 @@ const initMaiga = () => {
         animatedStickers: [],
         mostActiveUsers: [],
         wallpaperTemplates: [
-            'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png', // Default WhatsApp
+            'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png', // Default Maiga
             'https://i.pinimg.com/originals/85/3c/69/853c696e174a169b50877a064082269a.jpg', // Dark geometric
             'https://i.pinimg.com/originals/0b/4e/7a/0b4e7a7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Light abstract
             'https://i.pinimg.com/originals/a8/1c/7e/a81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Minimalist white
@@ -314,6 +316,9 @@ const initMaiga = () => {
         isChangingPassword: false,
         isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
         isSavingProfile: false,
+        avatarFileToUpload: null,
+        avatarOriginalFile: null,
+        bannerFile: null,
         isSubmittingGroup: false,
         isSubmittingReport: false,
         showReactionsModal: false,
@@ -4313,11 +4318,28 @@ const initMaiga = () => {
             this.showMessageOptions = false;
         },
         openComments(item, type) {
+        // Stop all video playback to prevent background audio from interfering with voice notes
+        document.querySelectorAll('video').forEach(v => v.pause());
+
             this.fetchComments(item.id.toString(), item.user_id.toString()); // Ensure IDs are strings
             if (this.viewingComments) {
                 this.viewingComments.type = type;
             }
         },
+    closeComments() {
+        this.viewingComments = null;
+        // Automatically resume video playback for visible elements
+        this.$nextTick(() => {
+            document.querySelectorAll('video').forEach(v => {
+                const rect = v.getBoundingClientRect();
+                const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+                // Only resume if it's visible and not part of the story viewer
+                if (isVisible && !v.classList.contains('story-video')) {
+                    v.play().catch(() => {});
+                }
+            });
+        });
+    },
         fetchComments(postId, postAuthorId) {
             this.viewingComments = { id: postId, type: 'post', list: [], post_author_id: postAuthorId };
             this.apiFetch(`/api/get_comments?post_id=${postId}`)
@@ -4960,8 +4982,14 @@ const initMaiga = () => {
             formData.append('bio', this.editUser.bio || '');
             
             this.isSavingProfile = true; // Disable button
-            if (this.$refs.profileAvatarInput.files.length > 0) {
-                formData.append('avatar', this.$refs.profileAvatarInput.files[0]);
+            const avatarFile = this.avatarFileToUpload || this.$refs.profileAvatarInput.files[0];
+            if (avatarFile) {
+                formData.append('avatar', avatarFile);
+            }
+            
+            const bannerFile = this.bannerFile || this.$refs.profileBannerInput.files[0];
+            if (bannerFile) {
+                formData.append('banner', bannerFile);
             }
 
 
@@ -4971,10 +4999,7 @@ const initMaiga = () => {
                 headers: {
                     'X-CSRF-Token': CSRF_TOKEN
                 }
-            }).finally(() => {
-                this.isSavingProfile = false; // Re-enable button
-            })
-            .then(data => {
+            }).then(data => {
                 if (data && data.success) {
                     this.showToast('Success', 'Profile updated successfully.');
                     // Refresh user data to get new avatar URL if changed
@@ -4993,6 +5018,8 @@ const initMaiga = () => {
                 } else {
                     this.showToast('Error', data?.error || 'Failed to update profile.', 'error');
                 }
+            }).finally(() => {
+                this.isSavingProfile = false;
             })
             .catch(err => {
                 this.showToast('Error', 'Network error.', 'error');
@@ -6199,7 +6226,11 @@ const initMaiga = () => {
 
         // --- GENERIC MEDIA EDITOR FUNCTIONS ---
         openMediaEditor(source) {
-            const file = source === 'post' ? this.postFile : this.storyFile;
+            let file;
+            if (source === 'post') file = this.postFile;
+            else if (source === 'avatar') file = this.avatarOriginalFile;
+            else file = this.storyFile;
+            
             if (!file) {
                 this.showToast('Error', 'Please select media first', 'error');
                 return;
@@ -6233,6 +6264,10 @@ const initMaiga = () => {
             }
             
             this.isMediaEditorOpen = true;
+            
+            if (source === 'avatar') {
+                this.startCrop();
+            }
             
             // Initialize History
             this.editorHistory = [];
@@ -6339,7 +6374,13 @@ const initMaiga = () => {
             this.$nextTick(() => {
                 const image = this.$refs.editorImage;
                 if (this.cropper) this.cropper.destroy();
-                this.cropper = new Cropper(image, { viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false });
+                
+                const options = { viewMode: 1, dragMode: 'move', autoCropArea: 1, background: false };
+                if (this.editorSource === 'avatar') {
+                    options.aspectRatio = 1; // Square crop for avatars
+                }
+                
+                this.cropper = new Cropper(image, options);
             });
         },
 
@@ -6467,6 +6508,9 @@ const initMaiga = () => {
                 this.postFile = finalFile;
                 this.selectedMedia = URL.createObjectURL(finalFile);
                 // Music for post is stored in editorMusic, used in createPost
+            } else if (this.editorSource === 'avatar') {
+                this.avatarFileToUpload = finalFile;
+                this.editUser.avatar = URL.createObjectURL(finalFile);
             } else {
                 this.storyFile = finalFile;
                 this.storyMediaPreview = URL.createObjectURL(finalFile);
@@ -6904,9 +6948,20 @@ const initMaiga = () => {
         handleProfileAvatarChange(event) {
             const file = event.target.files[0];
             if (!file) return;
+             
+            // Use media editor for cropping
+            this.avatarOriginalFile = file;
+            this.openMediaEditor('avatar');
+            
+            event.target.value = '';
+        },
+        handleProfileBannerChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.bannerFile = file;
             const reader = new FileReader();
             reader.onload = (e) => {
-                this.editUser.avatar = e.target.result;
+                this.editUser.banner = e.target.result;
             };
             reader.readAsDataURL(file);
         },

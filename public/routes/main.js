@@ -202,10 +202,11 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         res.json({
             user: {
                 id: user._id, name: user.name, username: user.username, 
-                avatar: user.avatar, dept: user.dept, bio: user.bio,
+                avatar: user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png'),
+                dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
-            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
+            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
             chats: Array.from(processedChats.values()),
             groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
@@ -223,7 +224,8 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
     const postsCount = await Post.countDocuments({ user: user._id });
     res.json({
         id: user._id, name: user.name, username: user.username, account_type: user.account_type,
-        avatar: user.avatar, dept: user.dept, bio: user.bio,
+        avatar: user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png'),
+        dept: user.dept, bio: user.bio,
         email: user.email, is_admin: user.is_admin,gender: user.gender,
         followerIds: user.followers, followingIds: user.following,
         total_posts_count: postsCount
@@ -232,17 +234,18 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
 
 router.post('/update_profile', isAuthenticated, async (req, res) => {
     try {
-         const { fields, files } = await parseForm(req);
+        const { fields, files } = await parseForm(req);
         const user = await User.findById(req.session.userId);
 
-        const name = fields.name?.[0] || fields.name;
-        const username = fields.username?.[0] || fields.username;
-        const bio = fields.bio?.[0] || fields.bio;
-        const dept = fields.dept?.[0] || fields.dept;
-        const gender = fields.gender?.[0] || fields.gender;
+        const name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
+        const username = Array.isArray(fields.username) ? fields.username[0] : fields.username;
+        const bio = Array.isArray(fields.bio) ? fields.bio[0] : fields.bio;
+        const dept = Array.isArray(fields.dept) ? fields.dept[0] : fields.dept;
+        const gender = Array.isArray(fields.gender) ? fields.gender[0] : fields.gender;
         
         const updates = { name, username, bio, dept, gender };
-         const avatarFile = files.avatar?.[0] || files.avatar;
+        const avatarFile = files.avatar?.[0] || files.avatar;
+        const bannerFile = files.banner?.[0] || files.banner;
         
         // If no new file is uploaded, check if we should swap the default avatar based on a gender change
         if (!avatarFile && gender && gender !== user.gender) {
@@ -268,6 +271,20 @@ router.post('/update_profile', isAuthenticated, async (req, res) => {
                 } catch (cleanupErr) { }
             }
             updates.avatar = await uploadToR2(avatarFile, 'avatars');
+        }
+
+        if (bannerFile) {
+            if (user && user.banner && user.banner.startsWith('http')) {
+                try {
+                    const oldUrl = new URL(user.banner);
+                    const oldKey = oldUrl.pathname.startsWith('/') ? oldUrl.pathname.substring(1) : oldUrl.pathname;
+                    await s3Client.send(new DeleteObjectCommand({
+                        Bucket: process.env.R2_BUCKET_NAME,
+                        Key: oldKey
+                    }));
+                } catch (cleanupErr) { }
+            }
+            updates.banner = await uploadToR2(bannerFile, 'banners');
         }
 
         await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
@@ -637,11 +654,11 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
             
             const isMe = lastMessage ? (lastMessage.sender?._id.toString() === req.session.userId.toString()) : false;
             const senderPrefix = lastMessage ? (isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${(lastMessage.sender?.name || 'User').split(' ')[0]}:</span> `) : '';
-            const lastMsgText = lastMessage ? (lastMessage.media_type === 'text' ? lastMessage.content : `<i>Sent a ${lastMessage.media_type}</i>`) : 'No messages yet';
+            const lastMsgText = lastMessage ? (lastMessage.media_type === 'text' ? (lastMessage.content || '') : `<i>Sent a ${lastMessage.media_type}</i>`) : 'No messages yet';
             
             return {
                 id: g._id,
-                name: g.name,
+                name: g.name || 'Unnamed Group',
                 avatar: g.avatar || 'img/default-group.png',
                 type: 'group',
                 lastMsg: senderPrefix + lastMsgText,
