@@ -6020,14 +6020,14 @@ const initMaiga = () => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true } });
                 this.storyReplyMediaRecorder = new MediaRecorder(stream);
-                this.storyReplyAudioChunks = [];
+                this.storyReplyAudioChunks = []; // Initialize chunks array
                 this.storyReplyMediaRecorder.addEventListener("dataavailable", event => {
-                    this.storyReplyAudioChunks.push(event.data);
+                    this.storyReplyAudioChunks.push(event.data); // Correctly push to reply chunks
                 });
                 this.storyReplyMediaRecorder.onstop = () => {
                     cancelAnimationFrame(this.recordAnimationId);
                     const audioBlob = new Blob(this.storyReplyAudioChunks, { type: 'audio/webm' });
-                    this.postFile = new File([audioBlob], `voice_post_${Date.now()}.webm`, { type: 'audio/webm' });
+                    this.sendStoryReply(audioBlob, 'audio'); // Actually send the reply
                     this.mediaType = 'audio';
                     this.selectedMedia = URL.createObjectURL(audioBlob);
                     this.storyReplyAudioChunks = [];
@@ -7224,7 +7224,7 @@ const initMaiga = () => {
             this.activeChat = chat;
             this.isMessaging = true;
         },
-        startCall(type) {
+        async startCall(type) {
             if (!this.activeChat) return;
             this.activeChat = { ...this.activeChat }; // Clone to ensure reactivity for call UI
 
@@ -7417,7 +7417,7 @@ const initMaiga = () => {
         pollCallStatus() {
             // Polling deprecated in favor of Socket events (call_accepted, call_ended)
         },
-        acceptCall() {
+        async acceptCall() {
             const callData = this.incomingCall;
             this.incomingCall = null;
             document.getElementById('ringing-sound')?.pause();
