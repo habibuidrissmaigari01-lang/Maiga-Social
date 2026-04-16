@@ -8181,30 +8181,19 @@ const initMaiga = () => {
 
             async init(appInstance) {
                 this.app = appInstance;
-                return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(this.dbName, 3); // Standardized to v3
-                    request.onupgradeneeded = e => {
-                        this.db = e.target.result;
-                        if (!this.db.objectStoreNames.contains(this.storeName)) {
-                            this.db.createObjectStore(this.storeName, { keyPath: 'id' });
-                        }
-                        if (!this.db.objectStoreNames.contains('pending_messages')) {
-                            this.db.createObjectStore('pending_messages', { keyPath: 'id', autoIncrement: true });
-                        }
-                        if (!this.db.objectStoreNames.contains('pending_posts')) {
-                            this.db.createObjectStore('pending_posts', { keyPath: 'id', autoIncrement: true });
-                        }
-                    };
-                    request.onsuccess = e => { 
-                        this.db = e.target.result; 
+                try {
+                    this.db = await openMaigaDB();
+                    if (this.db) {
                         // Load existing pending items into UI on init
                         this.loadPendingUI();
-                        resolve(); };
-                    request.onerror = e => { reject(e.target.error); };
-                });
+                    }
+                } catch (e) {
+                    console.error("IndexedDB load failed", e);
+                }
             },
 
              async loadPendingUI() {
+                if (!this.db || !this.db.objectStoreNames.contains('pending_posts')) return;
                 const txPosts = this.db.transaction('pending_posts', 'readonly');
                 const storePosts = txPosts.objectStore('pending_posts');
                 storePosts.getAll().onsuccess = (e) => {
@@ -8213,6 +8202,7 @@ const initMaiga = () => {
             },
 
             async refreshPendingTokens(newToken) {
+                if (!this.db || !this.db.objectStoreNames.contains('pending_posts')) return;
                 return new Promise((resolve) => {
                     const tx = this.db.transaction('pending_posts', 'readwrite');
                     const store = tx.objectStore('pending_posts');
@@ -8227,6 +8217,7 @@ const initMaiga = () => {
             },
 
             async _get(key) {
+                if (!this.db || !this.db.objectStoreNames.contains(this.storeName)) return null;
                 return new Promise((resolve, reject) => {
                     const tx = this.db.transaction(this.storeName, 'readonly');
                     const store = tx.objectStore(this.storeName);
@@ -8237,6 +8228,7 @@ const initMaiga = () => {
             },
 
             async _set(key, value) {
+                if (!this.db || !this.db.objectStoreNames.contains(this.storeName)) return;
                 return new Promise((resolve, reject) => {
                     const tx = this.db.transaction(this.storeName, 'readwrite');
                     const store = tx.objectStore(this.storeName);
@@ -8247,6 +8239,7 @@ const initMaiga = () => {
             },
 
             async savePendingMessage(msg) {
+                if (!this.db || !this.db.objectStoreNames.contains('pending_messages')) return;
                 return new Promise((resolve, reject) => {
                     const tx = this.db.transaction('pending_messages', 'readwrite');
                     const store = tx.objectStore('pending_messages');
@@ -8257,6 +8250,7 @@ const initMaiga = () => {
             },
 
             async savePendingPost(post) {
+                if (!this.db || !this.db.objectStoreNames.contains('pending_posts')) return;
                 return new Promise((resolve, reject) => {
                     const tx = this.db.transaction('pending_posts', 'readwrite');
                     const store = tx.objectStore('pending_posts');

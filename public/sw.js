@@ -1,3 +1,6 @@
+// Load shared database configuration
+importScripts('/db-helper.js');
+
 const ASSETS_TO_CACHE = [
   '/offline.html',
   '/', // Main entry point for Maiga
@@ -13,6 +16,7 @@ const ASSETS_TO_CACHE = [
   '/img/ysu.png',
   '/img/male.png',
   '/img/female.png',
+  '/img/default-group.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   '/fonts/Inter-Regular.woff2',
   '/font/Inter-Regular.woff2',
@@ -34,21 +38,21 @@ const DB_NAME = 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
 
 // Helper: Check IndexedDB for persistent session marker
+async function openDB() {
+  return openMaigaDB();
+}
+
 async function isSessionPersistent() {
-  return new Promise((resolve) => {
-    const request = indexedDB.open(DB_NAME, 3);
-    request.onsuccess = () => {
-      const db = request.result;
-      try {
-        const tx = db.transaction('keys', 'readonly');
-        const store = tx.objectStore('keys');
-        const getReq = store.get('persistent_session');
-        getReq.onsuccess = () => resolve(!!getReq.result?.value);
-        getReq.onerror = () => resolve(false);
-      } catch (e) { resolve(false); }
-    };
-    request.onerror = () => resolve(false);
-  });
+  try {
+    const db = await openDB();
+    const tx = db.transaction('keys', 'readonly');
+    const store = tx.objectStore('keys');
+    return new Promise((resolve) => {
+      const getReq = store.get('persistent_session');
+      getReq.onsuccess = () => resolve(!!getReq.result?.value);
+      getReq.onerror = () => resolve(false);
+    });
+  } catch (e) { return false; }
 }
 
 // List of essential assets to pre-cache
@@ -64,11 +68,7 @@ self.addEventListener('sync', (event) => {
 });
 
 async function sendPendingMessages() {
-  const db = await new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 3);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  const db = await openDB();
 
   const tx = db.transaction(STORE_NAME, 'readonly');
   const store = tx.objectStore(STORE_NAME);
@@ -119,11 +119,7 @@ async function sendPendingMessages() {
 }
 
 async function sendPendingPosts() {
-  const db = await new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 3);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  const db = await openDB();
 
   const tx = db.transaction('pending_posts', 'readonly');
   const store = tx.objectStore('pending_posts');
