@@ -1,6 +1,7 @@
 const ASSETS_TO_CACHE = [
   '/offline.html',
   '/', // Main entry point for Maiga
+  '/maiga.html',
   '/index.html',
   '/ysu.html',
   '/maiga.js',
@@ -10,6 +11,8 @@ const ASSETS_TO_CACHE = [
   '/manifest-ysu.json',
   '/img/logo.png',
   '/img/ysu.png',
+  '/img/male.png',
+  '/img/female.png',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   '/fonts/Inter-Regular.woff2',
   '/font/Inter-Regular.woff2',
@@ -20,6 +23,7 @@ const ASSETS_TO_CACHE = [
   '/fonts/IntelOneMono-BoldItalic.woff2',
 ];
 
+const API_CACHE_NAME = 'maiga-api-cache-v1';
 // Extract the app type from the registration URL (e.g., /sw.js?app=ysu)
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
@@ -29,6 +33,24 @@ const OFFLINE_URL = '/offline.html';
 const DB_NAME = 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
 
+// Helper: Check IndexedDB for persistent session marker
+async function isSessionPersistent() {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(DB_NAME, 3);
+    request.onsuccess = () => {
+      const db = request.result;
+      try {
+        const tx = db.transaction('keys', 'readonly');
+        const store = tx.objectStore('keys');
+        const getReq = store.get('persistent_session');
+        getReq.onsuccess = () => resolve(!!getReq.result?.value);
+        getReq.onerror = () => resolve(false);
+      } catch (e) { resolve(false); }
+    };
+    request.onerror = () => resolve(false);
+  });
+}
+
 // List of essential assets to pre-cache
 
 // 6. Background Sync: Send messages when connection is restored
@@ -36,11 +58,14 @@ self.addEventListener('sync', (event) => {
   if (event.tag === 'send-pending-messages') {
     event.waitUntil(sendPendingMessages());
   }
+  if (event.tag === 'send-pending-posts') {
+    event.waitUntil(sendPendingPosts());
+  }
 });
 
 async function sendPendingMessages() {
   const db = await new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 2);
+    const request = indexedDB.open(DB_NAME, 3);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -51,7 +76,14 @@ async function sendPendingMessages() {
     const req = store.getAll();
     req.onsuccess = () => res(req.result);
   });
+  
+  if (messages.length > 0) {
+    self.clients.matchAll().then(clients => {
+      clients.forEach(c => c.postMessage({ type: 'SYNC_START', total: messages.length, store: 'messages' }));
+    });
+  }
 
+  let processed = 0;
   for (const msg of messages) {
     const formData = new FormData();
     formData.append('content', msg.content);
@@ -65,19 +97,91 @@ async function sendPendingMessages() {
         method: 'POST',
         body: formData
       });
+
       if (response.ok) {
         const delTx = db.transaction(STORE_NAME, 'readwrite');
         delTx.objectStore(STORE_NAME).delete(msg.id);
+        processed++;
+        // Notify clients that this message is no longer pending
+        self.clients.matchAll().then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SYNC_PROGRESS', current: processed, total: messages.length, store: 'messages', id: msg.id }));
+        });
+      } else if (response.status === 401 || response.status === 403) {
+        // Session expired or CSRF invalid - notify app to prompt re-login/refresh
+        self.clients.matchAll().then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SYNC_ERROR', status: response.status }));
+        });
+        return; // Stop trying to send further items this session
       }
     } catch (err) {
     }
   }
 }
 
+async function sendPendingPosts() {
+  const db = await new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 3);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+  const tx = db.transaction('pending_posts', 'readonly');
+  const store = tx.objectStore('pending_posts');
+  const posts = await new Promise(res => {
+    const req = store.getAll();
+    req.onsuccess = () => res(req.result);
+  });
+
+  if (posts.length > 0) {
+    self.clients.matchAll().then(clients => {
+      clients.forEach(c => c.postMessage({ type: 'SYNC_START', total: posts.length, store: 'posts' }));
+    });
+  }
+
+  let processed = 0;
+  for (const post of posts) {
+    const formData = new FormData();
+    formData.append('content', post.content);
+    formData.append('feeling', post.feeling);
+    if (post.file) formData.append('media', post.file);
+
+    try {
+      const response = await fetch('/api/create_post', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-Token': post.csrfToken }
+      });
+
+      if (response.ok) {
+        const delTx = db.transaction('pending_posts', 'readwrite');
+        delTx.objectStore('pending_posts').delete(post.id);
+        processed++;
+        // Notify clients that this post is no longer pending
+        self.clients.matchAll().then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SYNC_PROGRESS', current: processed, total: posts.length, store: 'posts', id: post.id }));
+        });
+      } else if (response.status === 401 || response.status === 403) {
+        self.clients.matchAll().then(clients => {
+          clients.forEach(c => c.postMessage({ type: 'SYNC_ERROR', status: response.status }));
+        });
+        return;
+      }
+    } catch (err) {
+    }
+  }
+}
+
+
 // 7. Handle manual update skipping
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'MANUAL_SYNC') {
+    event.waitUntil(Promise.all([
+      sendPendingMessages(),
+      sendPendingPosts()
+    ]));
   }
 });
 
@@ -108,7 +212,7 @@ self.addEventListener('activate', (event) => {
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            if (cacheName !== CACHE_NAME) {
+             if (cacheName !== CACHE_NAME && cacheName !== API_CACHE_NAME) {
               return caches.delete(cacheName);
             }
           })
@@ -125,6 +229,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const isNavigate = event.request.mode === 'navigate';
+  
+  // SPEED OPTIMIZATION: Bypass SW for Video/Audio streams (R2 URLs)
+  // Service Workers often throttle large media chunks. Direct browser handling is faster.
+  if (event.request.url.match(/\.(mp4|webm|ogg|mp3|wav)$/) || event.request.url.includes('r2.dev') || event.request.url.includes('public_url')) return;
+
   const isApi = event.request.url.includes('/api/');
   // Fix: Explicitly ignore Tailwind CDN to avoid CORS fetch errors in SW
   if (event.request.url.includes('cdn.tailwindcss.com')) return;
@@ -138,6 +247,21 @@ self.addEventListener('fetch', (event) => {
   if (isNavigate || (isLocalAsset && !isApi)) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
+        if (isNavigate) {
+          return Promise.all([
+            cache.match('/auth-session-active'),
+            isSessionPersistent()
+          ]).then(async ([sessionMarker, isPersistent]) => {
+            if (sessionMarker || isPersistent) {
+              // Custom Splash Timeout: Delay by 1s to match app boot time
+              await new Promise(r => setTimeout(r, 1000));
+              const shell = await cache.match('/maiga.html');
+              if (shell) return shell;
+            }
+            return fetch(event.request);
+          }).catch(() => fetch(event.request));
+        }
+
         return cache.match(event.request).then((cachedResponse) => {
           const fetchPromise = fetch(event.request).then((networkResponse) => {
             if (networkResponse && networkResponse.status === 200) {
@@ -156,8 +280,24 @@ self.addEventListener('fetch', (event) => {
       })
     );
   }
-  // For other requests (e.g., API calls, external images not in ASSETS_TO_CACHE),
-  // let the browser handle them normally (network-only or default caching)
+ 
+  // API GET requests: Network-first, fallback to cache for offline feed access
+  if (isApi && event.request.method === 'GET') {
+    event.respondWith(
+      fetch(event.request)
+        .then(async (response) => {
+          if (response && response.status === 200) {
+            const cache = await caches.open(API_CACHE_NAME);
+            cache.put(event.request, response.clone());
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(API_CACHE_NAME);
+          return cache.match(event.request) || new Response(JSON.stringify({ error: 'Offline' }), { status: 503 });
+        })
+    );
+  }
 });
 
 // 4. Push Notification Implementation

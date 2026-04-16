@@ -74,6 +74,26 @@ const initMaiga = () => {
                     if (event.data?.type === 'PLAY_CALL_RINGTONE' && !this.isCalling) {
                         document.getElementById('ringing-sound')?.play().catch(() => {});
                     }
+                    if (event.data?.type === 'SYNC_START') {
+                        this.syncState.active = true;
+                        this.syncState.total = event.data.total;
+                    }
+                    if (event.data?.type === 'SYNC_PROGRESS') {
+                        this.syncState.current = event.data.current;
+                        if (event.data.store === 'posts') {
+                            this.pendingPosts = this.pendingPosts.filter(p => p.id !== event.data.id);
+                            this.refreshHomeFeed(false);
+                        } else {
+                            // Message synced, trigger individual chat refresh if active
+                            if (this.activeChat) this.fetchMessages(this.activeChat, false);
+                        }
+                        if (this.syncState.current >= this.syncState.total) {
+                            setTimeout(() => { this.syncState.active = false; this.syncState.current = 0; }, 2000);
+                        }
+                    }
+                    if (event.data?.type === 'SYNC_ERROR' && event.data.status === 401) {
+                        this.showToast('Auth Error', 'Your session expired. Please log in again to sync pending items.', 'error');
+                    }
                 });
             }
             this.$watch('appFontSize', (value) => localStorage.setItem('maiga_app_font_size', value));
@@ -112,6 +132,17 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: false,
         customWallpaperFile: null,
+        pendingPosts: [],
+        pendingMessages: [],
+        syncState: { active: false, current: 0, total: 0 },
+        iceTimeoutTimer: null,
+        isNetworkBlocked: false,
+        confirmModal: {
+            show: false,
+            title: '',
+            message: '',
+            confirmAction: () => {}
+        },
         activeTab: (function() {
             if (!sessionStorage.getItem('maiga_session_initialized')) {
                 sessionStorage.setItem('maiga_session_initialized', 'true');
@@ -346,6 +377,7 @@ const initMaiga = () => {
         isCallMinimized: false,
         isCallChatOpen: false,
         showStoryStickerPicker: false,
+        showAllStoryColors: false,
         showMusicPicker: false,
         showStickerPicker: false,
         showCommentStickers: false,
@@ -1769,6 +1801,17 @@ const initMaiga = () => {
         async logout() {
             if (!confirm('Are you sure you want to log out?')) return;
 
+            // Clear PWA Session Marker
+            if ('caches' in window) {
+                const cache = await caches.open(`${this.user.account_type || 'maiga'}-offline-v5`);
+                await cache.delete('/auth-session-active');
+            }
+
+            // Clear Persistent IDB Marker
+            if (this.crypto && this.crypto.db) {
+                await this.crypto._set('persistent_session', false);
+            }
+
             await this.apiFetch('/api/logout');
 
             // Clear local application storage
@@ -2259,6 +2302,13 @@ const initMaiga = () => {
             if (this.activeReactionPostId === postId) {
                 this.activeReactionPostId = null;
             }
+        },
+
+        openConfirmModal(title, message, action) {
+            this.confirmModal.title = title;
+            this.confirmModal.message = message;
+            this.confirmModal.confirmAction = action;
+            this.confirmModal.show = true;
         },
 
         async mainInit() {
@@ -2902,6 +2952,8 @@ const initMaiga = () => {
                 
                 if (initData) {
                     this.user = { ...this.user, ...initData.user };
+                    this.user.total_posts_count = initData.total_posts_count || 0;
+                    this.myPosts = initData.myPosts || [];
                     this.editUser = { ...this.user };
                     this.posts = initData.posts;
                     this.chats = initData.chats;
@@ -2909,6 +2961,13 @@ const initMaiga = () => {
                     this.notifications = initData.notifications;
                     this.followingList = initData.following;
                     this.followerList = initData.followers || [];
+
+                    // Set PWA Session Marker for direct-to-app launch
+                    if ('caches' in window) {
+                        const cache = await caches.open(`${this.user.account_type || 'maiga'}-offline-v5`);
+                        await cache.put('/auth-session-active', new Response('active'));
+                    }
+
                     this.loadProgress = 60; // Huge jump in progress
                 }
 
@@ -3003,6 +3062,15 @@ const initMaiga = () => {
             if (window.isSecureContext && window.crypto && window.crypto.subtle) {
                 try {
                     await this.crypto.init(this);
+                    
+                    // Update CSRF tokens for any pending posts in IndexedDB
+                    await this.crypto.refreshPendingTokens(CSRF_TOKEN);
+                    
+                    // Set Persistent Session Marker in IDB
+                    if (this.dataLoaded || this.user.id !== 0) {
+                        await this.crypto._set('persistent_session', true);
+                    }
+
                     const hasKeys = await this.crypto.hasKeys();
                     if (!hasKeys) {
                         await this.crypto.generateAndStoreKeys();
@@ -3412,6 +3480,55 @@ const initMaiga = () => {
             reader.onload = (e) => this.newGroup.avatarPreview = e.target.result;
             reader.readAsDataURL(file);
         },
+         async handleOfflinePost(content, feeling, file) {
+            let fileToSave = file;
+            if (file && file.type.startsWith('image/')) {
+                this.showToast('Offline', 'Compressing image for offline storage...', 'info');
+                const compressedBlob = await this.compressImage(file);
+                fileToSave = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+            }
+
+            const pendingPost = {
+                id: Date.now(), // Local temporary ID
+                content: content,
+                feeling: feeling,
+                file: fileToSave, // Blobs/Files can be stored directly in IndexedDB
+                csrfToken: CSRF_TOKEN,
+                timestamp: Date.now()
+            };
+
+            try {
+                await this.crypto.savePendingPost(pendingPost);
+                this.pendingPosts.push({ ...pendingPost, pending: true, author: this.user.name, avatar: this.user.avatar, time: 'Pending Sync' });
+                
+                // Register Background Sync if supported
+                if ('serviceWorker' in navigator && 'SyncManager' in window) {
+                    const reg = await navigator.serviceWorker.ready;
+                    await reg.sync.register('send-pending-posts');
+                }
+
+                this.showToast('Offline', 'Post saved! It will upload automatically when you are back online.', 'info');
+                this.newPostContent = '';
+                this.selectedMedia = null;
+                this.isCreatingPost = false;
+            } catch (err) {
+                this.showToast('Error', 'Failed to save post locally.', 'error');
+            }
+        },
+        async retrySync() {
+            if (!('serviceWorker' in navigator)) return;
+            const reg = await navigator.serviceWorker.ready;
+            
+            // 1. Re-register tags to wake up the browser sync manager
+            if ('SyncManager' in window) {
+                await reg.sync.register('send-pending-messages');
+                await reg.sync.register('send-pending-posts');
+            }
+
+            // 2. Direct message to SW for immediate execution
+            navigator.serviceWorker.controller?.postMessage({ type: 'MANUAL_SYNC' });
+            this.showToast('Syncing', 'Attempting to upload pending items...', 'info');
+        },
         async createPost() {
             if ((!this.newPostContent && !this.selectedMedia) || this.isUploadingPost || this.isUploadingReel) return;
 
@@ -3447,6 +3564,11 @@ const initMaiga = () => {
             formData.append('content', finalContent);
             formData.append('feeling', this.newPostFeeling);
             
+            if (!navigator.onLine) {
+                await this.handleOfflinePost(finalContent, this.newPostFeeling, this.postFile);
+                return;
+            }
+
             if (isVideo) this.isUploadingReel = true; else this.isUploadingPost = true;
             this.uploadProgress = 0;
 
@@ -3709,6 +3831,7 @@ const initMaiga = () => {
                     timestamp: now
                 };
 
+                this.chatMessages[this.activeChat.id].find(m => m.id === messagePayload.id).pending = true;
                 await this.crypto.savePendingMessage(pendingMsg);
                 const reg = await navigator.serviceWorker.ready;
                 await reg.sync.register('send-pending-messages');
@@ -5025,6 +5148,26 @@ const initMaiga = () => {
                 this.showToast('Error', 'Network error.', 'error');
             });
         },
+
+        async deleteProfilePicture() {
+            const data = await this.apiFetch('/api/delete_profile_picture', { method: 'POST' });
+            if (data?.success) {
+                this.showToast('Success', 'Profile picture deleted.', 'success');
+                this.viewingPost = null;
+                this.editUser.avatar = (this.user.gender === 'female' ? '/img/female.png' : '/img/male.png');
+                // Refresh user data to get new avatar URL if changed
+                this.apiFetch(`/api/get_user?t=${Date.now()}`)
+                    .then(userData => {
+                        if(userData) {
+                            this.user = { ...this.user, ...userData };
+                            this.editUser = { ...this.user };
+                        }
+                    });
+            } else {
+                this.showToast('Error', data?.error || 'Failed to delete.', 'error');
+            }
+        },
+
         toggleReelLike(reel) {
             // Optimistic update
             reel.liked = !reel.liked;
@@ -7093,6 +7236,7 @@ const initMaiga = () => {
             this.isCallChatOpen = false;
             this.callType = type;
             this.callStatus = 'Calling...'; // Ensure activeChat.id is string
+            this.isNetworkBlocked = false;
             this.callDuration = 0;
             this.isMicMuted = false;
             this.isCameraOff = false;
@@ -7100,6 +7244,8 @@ const initMaiga = () => {
             this.isPoorConnection = false;
             this.isReconnecting = false;
             this.isScreenSharing = false;
+            
+            const iceServers = await this.apiFetch('/api/get_ice_credentials');
             document.getElementById('ringing-sound')?.play().catch(()=>{});
 
             navigator.mediaDevices.getUserMedia({
@@ -7116,7 +7262,7 @@ const initMaiga = () => {
                 this.isMicMuted = !stream.getAudioTracks().some(track => track.enabled);
                 this.isCameraOff = type === 'video' ? !stream.getVideoTracks().some(track => track.enabled) : true;
 
-                this.setupPeerConnection();
+                this.setupPeerConnection(iceServers);
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
                 // Create Offer
@@ -7155,26 +7301,31 @@ const initMaiga = () => {
                 this.endCall();
             });
         },
-        setupPeerConnection() {
+        setupPeerConnection(iceServers) {
             if (this.peerConnection) {
                 return;
             }
 
             const servers = { 
-                iceServers: [
-                    { urls: ['stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
-                    // { urls: 'turn:your-turn-server.com', username: 'user', credential: 'password' } // Recommended for real-world NAT traversal
-                ] 
+                iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] 
             };
+            
+            // Start 15-second timeout timer for ICE negotiation
+            clearTimeout(this.iceTimeoutTimer);
+            this.iceTimeoutTimer = setTimeout(() => this.handleCallTimeout(), 15000);
+
             this.peerConnection = new RTCPeerConnection(servers);
             this.pendingIceCandidates = this.pendingIceCandidates || [];
 
             this.peerConnection.onicecandidate = event => {
-                if (event.candidate && this.activeChat) {
-                    this.socket.emit('ice_candidate', { // Ensure activeChat.id is string
-                        to: this.activeChat.id,
-                        candidate: event.candidate
-                    });
+                if (event.candidate) {
+                    const targetId = this.activeChat?.id || this.incomingCall?.caller_id;
+                    if (targetId) {
+                        this.socket.emit('ice_candidate', {
+                            to: targetId.toString(),
+                            candidate: event.candidate
+                        });
+                    }
                 }
             };
 
@@ -7184,6 +7335,17 @@ const initMaiga = () => {
                 }
                 if (this.$refs.remoteAudio) {
                     this.$refs.remoteAudio.srcObject = event.streams[0];
+                }
+            };
+            
+            this.peerConnection.oniceconnectionstatechange = () => {
+                console.log('ICE State:', this.peerConnection.iceConnectionState);
+                if (this.peerConnection.iceConnectionState === 'checking') {
+                    this.callStatus = 'Negotiating path...';
+                }
+                if (this.peerConnection.iceConnectionState === 'failed') {
+                    this.isNetworkBlocked = true;
+                    this.showToast('Network Restriction', 'Your current network may be blocking the connection.', 'error');
                 }
             };
 
@@ -7200,6 +7362,8 @@ const initMaiga = () => {
                         this.isPoorConnection = false;
                         this.isPoorConnection = false;
                         this.callStatus = 'Connected';
+                        // SUCCESS: Clear the timeout timer
+                        clearTimeout(this.iceTimeoutTimer);
                         this.showToast('Call Status', 'Connected!', 'success');
                         clearInterval(this.callTimer);
                         this.callTimer = setInterval(() => { this.callDuration++; }, 1000);
@@ -7213,28 +7377,34 @@ const initMaiga = () => {
 
             this.processPendingSignaling();
         },
+        handleCallTimeout() {
+            if (this.isCalling && this.callStatus !== 'Connected') {
+                this.showToast('Call Failed', 'Connection timeout. The network might be blocking the call.', 'error');
+                this.endCall(true, true);
+            }
+        },
         async processPendingSignaling() {
             if (!this.peerConnection) {
                 return;
             }
 
             if (this.pendingRemoteDescription) {
-                const remoteType = this.pendingRemoteDescription.type;
-                const localType = this.peerConnection.localDescription?.type;
-                const shouldApplyRemote = remoteType === 'offer' || (remoteType === 'answer' && localType === 'offer');
-
-                if (shouldApplyRemote) {
-                    try {
-                        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(this.pendingRemoteDescription));
-                        this.pendingRemoteDescription = null;
-                        clearInterval(this.connectionInterval);
-                    } catch (error) {
-                        console.error('Failed to apply queued remote description:', error);
-                    }
+                try {
+                    const desc = new RTCSessionDescription(
+                        typeof this.pendingRemoteDescription === 'string' 
+                        ? JSON.parse(this.pendingRemoteDescription) 
+                        : this.pendingRemoteDescription
+                    );
+                    await this.peerConnection.setRemoteDescription(desc);
+                    this.pendingRemoteDescription = null;
+                    console.log("Remote Description Set Successfully");
+                } catch (error) {
+                    console.error('Failed to apply remote description:', error);
                 }
             }
 
-            if (this.peerConnection.remoteDescription?.type && this.pendingIceCandidates?.length) {
+            // CRITICAL: Flush candidates only AFTER remote description is set
+            if (this.peerConnection.remoteDescription && this.pendingIceCandidates.length > 0) {
                 const queuedCandidates = [...this.pendingIceCandidates];
                 this.pendingIceCandidates = [];
                 for (const candidate of queuedCandidates) {
@@ -7254,6 +7424,7 @@ const initMaiga = () => {
             clearInterval(this.vibrationInterval);
             if (navigator.vibrate) navigator.vibrate(0); // Stop vibration
             clearTimeout(this.callTimeoutTimer);
+            this.isNetworkBlocked = false;
 
             const chatInList = this.chats.find(c => c.id.toString() === callData.caller_id.toString());
             if (chatInList) chatInList.callInProgress = true;
@@ -7266,8 +7437,8 @@ const initMaiga = () => {
             this.callStatus = 'Connecting...';
             this.callDuration = 0;
               
-            // Pre-initialize connection to queue any incoming ICE candidates immediately
-            this.setupPeerConnection();
+            const iceServers = await this.apiFetch('/api/get_ice_credentials');
+            this.setupPeerConnection(iceServers);
 
 
             navigator.mediaDevices.getUserMedia({
@@ -7282,9 +7453,9 @@ const initMaiga = () => {
                 
                 this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
 
-               await this.peerConnection.setRemoteDescription(new RTCSessionDescription(typeof callData.sdp === 'string' ? JSON.parse(callData.sdp) : callData.sdp));
-                // Process candidates that arrived while camera was starting
-                this.processPendingSignaling();
+                // Set the offer first
+                this.pendingRemoteDescription = callData.sdp;
+                await this.processPendingSignaling();
 
                 const answer = await this.peerConnection.createAnswer();
                 await this.peerConnection.setLocalDescription(answer);
@@ -7314,6 +7485,7 @@ const initMaiga = () => {
             clearInterval(this.vibrationInterval);
             if (navigator.vibrate) navigator.vibrate(0);
             clearTimeout(this.callTimeoutTimer);
+            clearTimeout(this.iceTimeoutTimer);
 
             if (this.isCallRecording && this.callRecorder && this.callRecorder.state !== 'inactive') {
                 this.callRecorder.stop();
@@ -7338,6 +7510,7 @@ const initMaiga = () => {
             clearInterval(this.connectionInterval);
             this.isPoorConnection = false;
             this.isReconnecting = false;
+            this.isNetworkBlocked = false;
             const ringingSound = document.getElementById('ringing-sound');
             if (ringingSound) {
                 ringingSound.pause();
@@ -7553,6 +7726,18 @@ const initMaiga = () => {
                         video.play().catch(error => {
                             if (error && error.name === 'AbortError') return;
                         });
+
+                        // PREFETCH LOGIC: Fetch the next 2 reels to ensure instant playback on swipe
+                        const currentIndex = this.reels.findIndex(r => r.id == reelId);
+                        for (let i = 1; i <= 2; i++) {
+                            const nextReel = this.reels[currentIndex + i];
+                            if (nextReel && nextReel.media) {
+                                const link = document.createElement('link');
+                                link.rel = 'prefetch';
+                                link.href = nextReel.media;
+                                document.head.appendChild(link);
+                            }
+                        }
 
                         // Swipe Hint Logic
                         clearTimeout(this.reelHintTimer);
@@ -7997,7 +8182,7 @@ const initMaiga = () => {
             async init(appInstance) {
                 this.app = appInstance;
                 return new Promise((resolve, reject) => {
-                    const request = indexedDB.open(this.dbName, 2); // Bump version to add store
+                    const request = indexedDB.open(this.dbName, 3); // Standardized to v3
                     request.onupgradeneeded = e => {
                         this.db = e.target.result;
                         if (!this.db.objectStoreNames.contains(this.storeName)) {
@@ -8006,9 +8191,38 @@ const initMaiga = () => {
                         if (!this.db.objectStoreNames.contains('pending_messages')) {
                             this.db.createObjectStore('pending_messages', { keyPath: 'id', autoIncrement: true });
                         }
+                        if (!this.db.objectStoreNames.contains('pending_posts')) {
+                            this.db.createObjectStore('pending_posts', { keyPath: 'id', autoIncrement: true });
+                        }
                     };
-                    request.onsuccess = e => { this.db = e.target.result; resolve(); };
+                    request.onsuccess = e => { 
+                        this.db = e.target.result; 
+                        // Load existing pending items into UI on init
+                        this.loadPendingUI();
+                        resolve(); };
                     request.onerror = e => { reject(e.target.error); };
+                });
+            },
+
+             async loadPendingUI() {
+                const txPosts = this.db.transaction('pending_posts', 'readonly');
+                const storePosts = txPosts.objectStore('pending_posts');
+                storePosts.getAll().onsuccess = (e) => {
+                    this.app.pendingPosts = e.target.result.map(p => ({ ...p, pending: true, author: this.app.user.name, avatar: this.app.user.avatar, time: 'Waiting for network...' }));
+                };
+            },
+
+            async refreshPendingTokens(newToken) {
+                return new Promise((resolve) => {
+                    const tx = this.db.transaction('pending_posts', 'readwrite');
+                    const store = tx.objectStore('pending_posts');
+                    store.getAll().onsuccess = (e) => {
+                        e.target.result.forEach(post => {
+                            post.csrfToken = newToken;
+                            store.put(post);
+                        });
+                        resolve();
+                    };
                 });
             },
 
@@ -8037,6 +8251,16 @@ const initMaiga = () => {
                     const tx = this.db.transaction('pending_messages', 'readwrite');
                     const store = tx.objectStore('pending_messages');
                     store.add(msg);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = e => reject(e.target.error);
+                });
+            },
+
+            async savePendingPost(post) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction('pending_posts', 'readwrite');
+                    const store = tx.objectStore('pending_posts');
+                    store.add(post);
                     tx.oncomplete = () => resolve();
                     tx.onerror = e => reject(e.target.error);
                 });

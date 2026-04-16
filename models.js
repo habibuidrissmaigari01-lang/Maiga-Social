@@ -56,7 +56,7 @@ const userSchema = new mongoose.Schema({
         type: String, 
         default: function() {
             // Detect gender and return the corresponding local image path
-            return this.gender === 'female' ? 'img/female.png' : 'img/male.png';
+            return this.gender === 'female' ? '/img/female.png' : '/img/male.png';
         }
     },
     bio: String,

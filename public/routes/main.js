@@ -171,7 +171,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         const userId = req.session.userId;
         
         // Fetch all critical data in parallel on the server
-        const [user, posts, chats, groups, connections, followersData, trending, notifications] = await Promise.all([
+        const [user, posts, chats, groups, connections, followersData, trending, notifications, postsCount, myPosts] = await Promise.all([
             User.findById(userId),
             Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
             Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender'),
@@ -179,7 +179,9 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             User.findById(userId).populate('following', 'name avatar username online dept gender'),
             User.find({ following: userId }).select('name first_name surname avatar username online dept gender'),
             Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
-            Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10)
+            Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10),
+            Post.countDocuments({ user: userId }),
+            Post.find({ user: userId }).sort({ createdAt: -1 }).limit(12)
         ]);
 
         const processedChats = new Map();
@@ -202,11 +204,13 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         res.json({
             user: {
                 id: user._id, name: user.name, username: user.username, 
-                avatar: user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png'),
+                avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
             posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
+            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0 })),
+            total_posts_count: postsCount,
             chats: Array.from(processedChats.values()),
             groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
@@ -224,7 +228,7 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
     const postsCount = await Post.countDocuments({ user: user._id });
     res.json({
         id: user._id, name: user.name, username: user.username, account_type: user.account_type,
-        avatar: user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png'),
+        avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
         dept: user.dept, bio: user.bio,
         email: user.email, is_admin: user.is_admin,gender: user.gender,
         followerIds: user.followers, followingIds: user.following,
@@ -249,11 +253,11 @@ router.post('/update_profile', isAuthenticated, async (req, res) => {
         
         // If no new file is uploaded, check if we should swap the default avatar based on a gender change
         if (!avatarFile && gender && gender !== user.gender) {
-            const defaultAvatars = ['img/male.png', 'img/female.png', 'img/default-avatar.png'];
+            const defaultAvatars = ['/img/male.png', '/img/female.png', '/img/default-avatar.png', 'img/male.png', 'img/female.png'];
             const isUsingDefault = !user.avatar || defaultAvatars.some(d => user.avatar.includes(d)) || user.avatar.includes('dicebear.com');
             
             if (isUsingDefault) {
-                updates.avatar = (gender === 'female') ? 'img/female.png' : 'img/male.png';
+                updates.avatar = (gender === 'female') ? '/img/female.png' : '/img/male.png';
             }
         }
 
@@ -291,6 +295,27 @@ router.post('/update_profile', isAuthenticated, async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to update profile details.' });
+    }
+});
+
+router.post('/delete_profile_picture', isAuthenticated, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        
+        // Cleanup R2 if it was a custom upload
+        if (user.avatar && user.avatar.startsWith('http')) {
+            try {
+                const url = new URL(user.avatar);
+                const key = url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname;
+                await s3Client.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: key }));
+            } catch (e) { }
+        }
+
+        user.avatar = undefined; // Triggers the default gender-based image in models.js
+        await user.save();
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to delete profile picture' });
     }
 });
 
@@ -2012,6 +2037,21 @@ router.get('/admin/get_logs', isAuthenticated, async (req, res) => {
 
 router.get('/vapid_public_key', isAuthenticated, (req, res) => {
     res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
+router.get('/get_ice_credentials', isAuthenticated, async (req, res) => {
+    try {
+        const apiKey = process.env.METERED_SECRET_KEY;
+        const domain = process.env.METERED_DOMAIN; // e.g. "maiga.metered.ca"
+        
+        if (!apiKey || !domain) return res.status(500).json({ error: 'TURN configuration missing' });
+
+        const response = await fetch(`https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`);
+        const iceServers = await response.json();
+        res.json(iceServers);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch TURN credentials' });
+    }
 });
 
 router.get('/get_archived_chats', isAuthenticated, async (req, res) => {
