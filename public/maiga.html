@@ -558,8 +558,8 @@
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo shrink-0">
-                <span class="amazing-logo text-4xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+                <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale floating-logo shrink-0">
+                <span class="amazing-logo text-3xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
