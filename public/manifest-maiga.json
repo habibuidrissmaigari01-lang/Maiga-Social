@@ -2,7 +2,7 @@
   "name": "Maiga Social",
   "short_name": "Maiga",
   "description": "Connect with your campus community.",
-  "start_url": "https://maigasocial.com/",
+  "start_url": "/home",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#667eea",

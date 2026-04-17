@@ -119,6 +119,12 @@ const initMaiga = () => {
             if (!localStorage.getItem('guide_shown')) {
                 this.showGuideOverlay = true;
             }
+
+            // Handle database version changes from other tabs
+            window.addEventListener('maiga-db-outdated', () => {
+                this.showToast('App Updated', 'A new version is available. Reloading...', 'info');
+                setTimeout(() => window.location.reload(), 2000);
+            });
         },
         installPrompt: null,
         // Core App State
@@ -2314,9 +2320,15 @@ const initMaiga = () => {
         async mainInit() {
             // --- PWA Force Update Logic ---
             if ('serviceWorker' in navigator) {
-                // Check the server for a new service worker version immediately
-                navigator.serviceWorker.getRegistration().then(reg => {
-                    if (reg) reg.update();
+                const appType = this.user.account_type || 'maiga';
+                
+                // Register and handle updates automatically
+                navigator.serviceWorker.register(`/sw.js?app=${appType}`).then(reg => {
+                    // Check for updates immediately on load
+                    reg.update();
+                    
+                    // Check for updates whenever the tab is focused
+                    window.addEventListener('focus', () => reg.update());
                 });
 
                 // Detect when the new service worker has activated and taken control
@@ -2324,8 +2336,10 @@ const initMaiga = () => {
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
                     if (refreshing) return;
                     refreshing = true;
-                    this.showToast('System Update', 'New version installed. Refreshing app...', 'success');
-                    setTimeout(() => window.location.reload(), 1500);
+                    // Visual Notification
+                    this.showToast('App Updated', 'Installing the latest version... Excellence is arriving.', 'success');
+                    // Delay reload by 2 seconds so user sees the message
+                    setTimeout(() => window.location.reload(), 2000);
                 });
             }
 
@@ -5100,6 +5114,7 @@ const initMaiga = () => {
         saveProfile() {
              const formData = new FormData(); // Fixed: user.nickname to user.name
             formData.append('name', this.editUser.name);
+            formData.append('nickname', this.editUser.nickname || '');
             formData.append('username', this.editUser.username);
             formData.append('gender', this.editUser.gender);
             formData.append('bio', this.editUser.bio || '');
@@ -5125,18 +5140,42 @@ const initMaiga = () => {
             }).then(data => {
                 if (data && data.success) {
                     this.showToast('Success', 'Profile updated successfully.');
-                    // Refresh user data to get new avatar URL if changed
-                    
-                    this.apiFetch(`/api/get_user?t=${Date.now()}`) // Cache-bust avatar refresh
-                        .then(userData => {
-                            if(userData) {
-                                this.user = { ...this.user, ...userData };
-                                if (userData.first_name && userData.surname) {
-                                    this.user.name = userData.first_name + ' ' + userData.surname;
-                                }
-                                this.editUser = { ...this.user };
+
+                    // Instant Sync across all lists
+                    const updated = data.user;
+                    const oldAvatar = this.user.avatar;
+                    this.user = { ...this.user, ...updated };
+                    this.editUser = { ...this.user };
+
+                    // Update posts locally
+                    this.posts = this.posts.map(p => {
+                        if (String(p.user_id) === String(this.user.id)) {
+                            return { ...p, avatar: updated.avatar, author: updated.name };
+                        }
+                        return p;
+                    });
+
+                    // Update reels locally
+                    this.reels = this.reels.map(r => {
+                        if (String(r.user_id) === String(this.user.id)) {
+                            return { ...r, avatar: updated.avatar, author: updated.name };
+                        }
+                        return r;
+                    });
+
+                    // Update myPosts tab
+                    this.myPosts = this.myPosts.map(p => ({ ...p, avatar: updated.avatar, author: updated.name }));
+
+                    // Update open comments if viewing own post
+                    if (this.viewingComments && this.viewingComments.list) {
+                        this.viewingComments.list = this.viewingComments.list.map(c => {
+                            if (String(c.user_id) === String(this.user.id)) {
+                                return { ...c, avatar: updated.avatar, author: updated.name };
                             }
+                            return c;
                         });
+                    }
+
                     this.isEditingProfile = false;
                 } else {
                     this.showToast('Error', data?.error || 'Failed to update profile.', 'error');
@@ -8077,7 +8116,6 @@ const initMaiga = () => {
         async initPushNotifications() {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
             if (Notification.permission === 'denied') {
-                console.info('Push notification permission has been denied by the user.');
                 return;
             }
 
@@ -8085,19 +8123,15 @@ const initMaiga = () => {
                 try {
                     const permission = await Notification.requestPermission();
                     if (permission !== 'granted') {
-                        console.info('Push notification permission not granted:', permission);
                         return;
                     }
                 } catch (err) {
-                    console.warn('Notification permission request failed:', err);
                     return;
                 }
             }
 
             // Register Service Worker if not already done
             try {
-                const appType = this.user.account_type || 'maiga';
-                await navigator.serviceWorker.register(`/sw.js?app=${appType}`);
                 const registration = await navigator.serviceWorker.ready;
 
                 const vapidResp = await fetch(`${API_BASE_URL}/api/vapid_public_key`);

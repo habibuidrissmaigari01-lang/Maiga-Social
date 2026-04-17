@@ -64,13 +64,13 @@
     <style> /* Fixed: Removed duplicate style tag */
         @font-face {
             font-family: 'Inter';
-            src: url('/font/Inter-Regular.woff2') format('woff2');
+            src: url('/fonts/Inter-Regular.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/font/IntelOneMono-Regular.woff2') format('woff2');
+            src: url('/fonts/IntelOneMono-Regular.woff2') format('woff2');
             font-weight: normal;
             font-style: normal;
         }
@@ -312,7 +312,7 @@
              x-transition:leave-end="-translate-x-full">
             <div class="p-6 border-b dark:border-gray-700">
                 <div class="relative w-16 h-16 mb-4">
-                    <img :src="user.avatar" class="w-16 h-16 parallelogram-sm object-cover">
+                    <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-16 h-16 parallelogram-sm object-cover">
                     <div class="absolute bottom-0 right-0 bg-green-500 w-4 h-4 parallelogram-sm border-2 border-white dark:border-gray-900"></div>
                 </div>
                 <h3 class="font-bold text-lg text-gray-900 dark:text-white" x-text="user.name"></h3>
@@ -358,9 +358,12 @@
             <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-gray-800 dark:text-gray-200 italic fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
-            <img :src="user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png')" @error="$el.src=(user.gender === 'female' ? 'img/female.png' : 'img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
+            <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
             <div x-show="!isLeftSidebarCollapsed">
-                <h3 class="font-bold text-md text-gray-900 dark:text-white" x-text="user.name"></h3>
+                <h3 class="font-bold text-md text-gray-900 dark:text-white">
+                    <span x-text="user.nickname || user.name"></span>
+                    <template x-if="user.nickname"><span class="text-[10px] opacity-50 ml-1 font-normal" x-text="'(' + user.name + ')'"></span></template>
+                </h3>
                 <p class="text-gray-500 text-xs" x-text="'@' + user.username"></p>
             </div>
         </div>
@@ -540,7 +543,7 @@
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <div class="relative">
-                                <img :src="chat.avatar || (chat.type === 'group' ? 'img/default-group.png' : (chat.gender === 'female' ? 'img/female.png' : 'img/male.png'))" @error="$el.src=(chat.type === 'group' ? 'img/default-group.png' : (chat.gender === 'female' ? 'img/female.png' : 'img/male.png'))" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                                <img :src="chat.avatar || (chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-14 h-14 rounded-full border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
                                     <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                                 </template>
@@ -611,10 +614,10 @@
                                  @touchend="handleChatSwipeEnd()"
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === group.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                             <img :src="group.avatar || 'img/default-group.png'" @error="$el.src='img/default-group.png'" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                             <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 rounded-full border dark:border-gray-700 object-cover">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
-                                    <span class="font-bold" x-text="group.name"></span>
+                                    <span class="font-bold" x-text="group.name || 'Unnamed Group'"></span>
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="group.time"></span>
                                 </div>
                                 <div class="flex justify-between items-center mt-1">
@@ -736,45 +739,108 @@
         <!-- Create Group View -->
         <div x-show="isCreatingGroup" class="flex flex-col h-full animate-fadeIn" x-cloak>
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
-                <button @click="isCreatingGroup = false; newGroup = { name: '', members: [] }" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
-                <h3 class="text-lg font-black flex-1 text-center">New Group</h3>
-                <button @click="createGroup()" :disabled="!newGroup.name.trim() || newGroup.members.length < 1 || isSubmittingGroup" class="text-sm font-bold text-blue-600 disabled:text-gray-400 pr-2">
-                    <i x-show="isSubmittingGroup" class="fa-solid fa-spinner fa-spin mr-1"></i>
-                    <span>Create</span>
+                <button @click="if(createGroupStep === 1) { isCreatingGroup = false; } else { createGroupStep--; }" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800">
+                    <i class="fa-solid" :class="createGroupStep === 1 ? 'fa-xmark' : 'fa-chevron-left'"></i>
                 </button>
-            </div>
-            <div class="p-4 border-b dark:border-gray-800">
-                <div class="flex justify-between items-center mb-1 px-1">
-                    <label class="text-[10px] font-black text-gray-400 uppercase">Name Your Group</label>
-                    <span class="text-[10px] font-bold" :class="newGroup.name.length >= 25 ? 'text-red-500' : 'text-gray-400'" x-text="newGroup.name.length + ' / 25'"></span>
+                <div class="flex-1 text-center">
+                    <h3 class="text-lg font-black">New Group</h3>
+                    <p class="text-[9px] font-black text-gray-400 uppercase tracking-widest" x-text="'Step ' + createGroupStep + ' of 4'"></p>
                 </div>
-                <input type="text" x-model="newGroup.name" maxlength="25" placeholder="Group Name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-blue-500">
+                <template x-if="createGroupStep < 4">
+                    <button @click="createGroupStep++" :disabled="createGroupStep === 1 && !newGroup.name.trim()" class="text-sm font-bold text-blue-600 disabled:opacity-30">Next</button>
+                </template>
+                <template x-if="createGroupStep === 4">
+                    <button @click="createGroup()" :disabled="isSubmittingGroup" class="text-sm font-black text-green-600">
+                        <i x-show="isSubmittingGroup" class="fa-solid fa-circle-notch fa-spin mr-1"></i>
+                        <span>Create</span>
+                    </button>
+                </template>
             </div>
-            <div class="p-4 border-b dark:border-gray-800">
-                <div class="relative">
-                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-                    <input type="text" x-model="groupSearchQuery" placeholder="Search following..." class="w-full bg-gray-50 dark:bg-gray-800/50 border-none rounded-xl py-2 pl-9 pr-4 text-xs focus:ring-1 focus:ring-blue-500">
-                </div>
-            </div>
-            <div class="p-4 flex items-center justify-between">
-                <h4 class="text-xs font-bold text-gray-400 uppercase">Select Members</h4>
-                <button @click="toggleSelectAll()" class="text-xs font-bold text-blue-600 hover:underline">
-                    <span x-text="newGroup.members.length === filteredFollowingForGroup.length && filteredFollowingForGroup.length > 0 ? 'Deselect All' : 'Select All'"></span>
-                </button>
-            </div>
+
             <div class="flex-1 overflow-y-auto">
-                <template x-for="friend in filteredFollowingForGroup" :key="friend.id">
-                    <div @click="toggleNewGroupMember(friend.id)" class="flex items-center p-4 space-x-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                        <img :src="friend.avatar" class="w-12 h-12 rounded-full">
-                        <div class="flex-1">
-                            <p class="font-bold text-sm" x-text="friend.name"></p>
-                            <p class="text-xs text-gray-500" x-text="friend.dept"></p>
-                        </div>
-                        <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all" :class="newGroup.members.includes(friend.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'">
-                            <i x-show="newGroup.members.includes(friend.id)" class="fa-solid fa-check text-white text-xs"></i>
+                <!-- Step 1: Basic Info -->
+                <div x-show="createGroupStep === 1" class="p-6 space-y-6 animate-fadeIn">
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Group Name</label>
+                        <input type="text" x-model="newGroup.name" maxlength="25" placeholder="Enter group name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-lg font-bold mt-1 focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Description (Optional)</label>
+                        <textarea x-model="newGroup.description" rows="4" placeholder="What is this group about?" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-sm mt-1 focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                    </div>
+                </div>
+
+                <!-- Step 2: Avatar -->
+                <div x-show="createGroupStep === 2" class="p-6 flex flex-col items-center space-y-6 animate-fadeIn">
+                    <div @click="$refs.groupAvatarInput.click()" class="relative group cursor-pointer">
+                        <img :src="newGroup.avatarPreview || '/img/default-group.png'" class="w-40 h-40 rounded-full border-4 border-white dark:border-gray-800 shadow-2xl object-cover">
+                        <div class="absolute inset-0 bg-black/40 rounded-full flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="fa-solid fa-camera text-3xl mb-2"></i>
+                            <span class="text-[10px] font-bold uppercase">Upload Photo</span>
                         </div>
                     </div>
-                </template>
+                    <input type="file" x-ref="groupAvatarInput" class="hidden" accept="image/*" @change="handleGroupAvatarChange($event)">
+                    <p class="text-sm text-gray-500 text-center px-8">A great group photo helps people recognize your community instantly.</p>
+                </div>
+
+                <!-- Step 3: Members -->
+                <div x-show="createGroupStep === 3" class="flex flex-col h-full animate-fadeIn">
+                    <div class="p-4 border-b dark:border-gray-800">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                            <input type="text" x-model="groupSearchQuery" placeholder="Search friends..." class="w-full bg-gray-50 dark:bg-gray-800/50 border-none rounded-xl py-2.5 pl-9 pr-4 text-xs focus:ring-1 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div class="p-4 flex items-center justify-between bg-gray-50 dark:bg-gray-800/30">
+                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Members (<span x-text="newGroup.members.length"></span>)</h4>
+                        <button @click="toggleSelectAll()" class="text-[10px] font-black text-blue-600 uppercase hover:underline">Toggle All</button>
+                    </div>
+                    <template x-for="friend in filteredFollowingForGroup" :key="friend.id">
+                        <div @click="toggleNewGroupMember(friend.id)" class="flex items-center p-4 space-x-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 border-b dark:border-gray-800/50">
+                            <img :src="friend.avatar" class="w-12 h-12 rounded-full object-cover">
+                            <div class="flex-1">
+                                <p class="font-bold text-sm" x-text="friend.name"></p>
+                                <p class="text-[10px] text-gray-500 uppercase font-bold" x-text="friend.dept"></p>
+                            </div>
+                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all" :class="newGroup.members.includes(friend.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'">
+                                <i x-show="newGroup.members.includes(friend.id)" class="fa-solid fa-check text-white text-[10px]"></i>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Step 4: Settings & Review -->
+                <div x-show="createGroupStep === 4" class="p-6 space-y-6 animate-fadeIn">
+                    <div class="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border dark:border-blue-900/30 flex items-center space-x-4">
+                        <img :src="newGroup.avatarPreview || '/img/default-group.png'" class="w-16 h-16 rounded-full object-cover shadow-md">
+                        <div>
+                            <h4 class="font-black text-lg" x-text="newGroup.name"></h4>
+                            <p class="text-xs text-blue-600 font-bold" x-text="newGroup.members.length + ' members selected'"></p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Privacy & Permissions</h4>
+                        <div class="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800 rounded-2xl">
+                            <div>
+                                <p class="font-bold text-sm">Approve Members</p>
+                                <p class="text-[10px] text-gray-500">Admins must approve new join requests.</p>
+                            </div>
+                            <div @click="newGroup.approve_members = !newGroup.approve_members" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer" :class="newGroup.approve_members ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'">
+                                <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="newGroup.approve_members ? 'left-7' : 'left-1'"></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-800 rounded-2xl">
+                            <div>
+                                <p class="font-bold text-sm">Member Editing</p>
+                                <p class="text-[10px] text-gray-500">Allow members to edit group info.</p>
+                            </div>
+                            <div @click="newGroup.permissions.can_edit_settings = !newGroup.permissions.can_edit_settings" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer" :class="newGroup.permissions.can_edit_settings ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-700'">
+                                <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="newGroup.permissions.can_edit_settings ? 'left-7' : 'left-1'"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -782,7 +848,7 @@
         <div x-show="activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn" x-transition>
             <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md overflow-visible relative z-50">
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
-                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? 'img/default-group.png' : (activeChat?.gender === 'female' ? 'img/female.png' : 'img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? 'img/default-group.png' : (activeChat?.gender === 'female' ? 'img/female.png' : 'img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
+                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <p class="font-bold text-sm" x-text="activeChat?.name"></p>
                     <p class="text-xs text-gray-500"> 
@@ -891,7 +957,7 @@
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="w-fit max-w-[85%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me min-w-[3.5rem]' : 'chat-bubble-them min-w-[3.5rem]'), (showChatShadows && msg.type !== 'sticker') ? 'shadow-md dark:shadow-xl dark:shadow-black/50' : 'shadow-none', msg.type === 'text' || !msg.type ? 'px-4 py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="w-fit max-w-[90%] md:max-w-[85%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me min-w-[3.5rem]' : 'chat-bubble-them min-w-[3.5rem]'), (showChatShadows && msg.type !== 'sticker') ? 'shadow-md dark:shadow-xl dark:shadow-black/50' : 'shadow-none', msg.type === 'text' || !msg.type ? 'px-3 py-2 md:px-4 md:py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
                                     <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 w-full" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
@@ -1056,7 +1122,7 @@
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
                 <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
-                    <textarea x-model="newMessage" @keyup.ctrl.enter="sendMessage()" rows="1" :placeholder="isBlocked(activeChat?.id) ? 'You have blocked this user' : 'Message... (Ctrl+Enter to send)'" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 6rem;"></textarea>
+                    <textarea x-model="newMessage" @keyup.ctrl.enter="sendMessage()" rows="1" placeholder="Message..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 6rem;"></textarea>
                     <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
                         <i class="fa-solid fa-face-smile text-xl"></i>
                     </button>
@@ -1130,9 +1196,9 @@
         <div class="flex-1 overflow-y-auto">
             <template x-for="friend in potentialGroupMembers" :key="friend.id">
                 <div @click="toggleMemberToAdd(friend.id)" class="flex items-center p-4 space-x-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <img :src="friend.avatar" class="w-12 h-12 rounded-full">
+                            <img :src="friend.avatar || (friend.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 rounded-full object-cover">
                     <div class="flex-1">
-                        <p class="font-bold text-sm" x-text="friend.name"></p>
+                                <p class="font-bold text-sm" x-text="friend.nickname || friend.name"></p>
                         <p class="text-xs text-gray-500" x-text="friend.dept"></p>
                     </div>
                     <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all" :class="membersToAdd.includes(friend.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-300 dark:border-gray-600'">
@@ -1396,10 +1462,10 @@
                 <button @click="togglePinMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-thumbtack text-yellow-500 w-5"></i><span x-text="selectedMessageForOptions?.pinned ? 'Unpin' : 'Pin'"></span></button>
                 <button @click="copyMessageText()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-regular fa-copy text-gray-500 w-5"></i><span>Copy</span></button>
                 
-                <template x-if="selectedMessageForOptions?.sender === 'me'">
+                <template x-if="selectedMessageForOptions?.sender === 'me' || (activeChat?.type === 'group' && activeChat?.role === 'admin')">
                     <div class="space-y-2">
-                        <button x-show="selectedMessageForOptions.type === 'text'" @click="editMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-pen text-gray-600 w-5"></i><span>Edit</span></button>
-                        <button @click="deleteMessage('everyone')" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500"><i class="fa-solid fa-trash-can w-5"></i><span>Delete for Everyone</span></button>
+                        <button x-show="selectedMessageForOptions.sender === 'me' && selectedMessageForOptions.type === 'text'" @click="editMessage()" class="w-full flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl text-left"><i class="fa-solid fa-pen text-gray-600 w-5"></i><span>Edit</span></button>
+                        <button @click="deleteMessage('everyone')" class="w-full flex items-center space-x-3 p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-left text-red-500 font-bold"><i class="fa-solid fa-trash-can w-5"></i><span>Delete for Everyone</span></button>
                     </div>
                 </template>
                 <template x-if="selectedMessageForOptions?.sender !== 'me'">
@@ -1683,7 +1749,7 @@
             </div>
             <div class="p-6 bg-black flex justify-between items-center space-x-4">
                 <button @click="postStory('public')" class="flex-1 bg-white text-black py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2">
-                    <img :src="user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png')" class="w-6 h-6 rounded-full object-cover">
+                    <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-6 h-6 rounded-full object-cover">
                     <span>Your Story</span>
                 </button>
                 <button @click="if(closeFriends.length === 0) { showCloseFriendsManager = true; } else { postStory('close_friends'); }" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 relative">
@@ -3323,7 +3389,7 @@
         </div>
         <div class="px-4 -mt-14 relative">
             <div @click="viewingPost = { avatar: user.avatar, media: user.avatar, author: user.name, content: 'Profile Picture', time: 'Now', mediaType: 'image', isOwnProfilePic: true }" class="relative inline-block cursor-pointer">
-                <img :src="user.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png')" @error="$el.src=(user.gender === 'female' ? 'img/female.png' : 'img/male.png')" class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover">
+                <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover">
                 <div class="absolute -bottom-2 -right-2 border-4 border-white dark:border-gray-900 w-8 h-8 parallelogram-sm flex items-center justify-center transition-colors duration-500"
                      :class="isOffline ? 'bg-gray-500' : 'bg-green-500'">
                      <i x-show="isOffline" class="fa-solid fa-wifi-slash text-white text-[10px]"></i>
@@ -3737,7 +3803,7 @@
             </div>
             <div class="flex flex-col items-center">
                 <div @click="$refs.profileAvatarInput.click()" class="relative group cursor-pointer">
-                    <img :src="editUser.avatar || (user.gender === 'female' ? 'img/female.png' : 'img/male.png')" @error="$el.src=(user.gender === 'female' ? 'img/female.png' : 'img/male.png')" class="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
+                    <img :src="editUser.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
                     <div class="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                         <i class="fa-solid fa-camera text-2xl"></i>
                     </div>
@@ -3751,6 +3817,7 @@
             
             <div class="space-y-4">
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Full Name</label><input type="text" x-model="editUser.name" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
+                <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Nickname</label><input type="text" x-model="editUser.nickname" placeholder="e.g. Lucky" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
                 <div><label class="text-[10px] font-black text-gray-400 uppercase ml-1">Username</label><input type="text" x-model="editUser.username" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-xl p-3 text-sm mt-1 focus:ring-1 focus:ring-blue-500"></div>
                 <div>
                     <div class="flex justify-between items-center mb-1 px-1">
@@ -3929,7 +3996,7 @@
                       class="w-full bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-bold transition-all duration-500" 
                       :class="postBgStyleIndex !== -1 ? 'text-center text-3xl' : 'text-left'"
                       :style="postBgStyleIndex !== -1 ? `color: ${textStoryStyles[postBgStyleIndex].color};` : ''"
-                      :placeholder="'What\'s on your mind, ' + user.nickname + '?'"></textarea>
+                      :placeholder="'What\'s on your mind, ' + (user.nickname || user.name.split(' ')[0]) + '?'"></textarea>
         </div>
         <div class="flex justify-end px-2 py-1">
             <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="(1000 - newPostContent.length) + ' characters remaining'"></span>
@@ -4195,7 +4262,7 @@
                     <div class="flex-1 overflow-y-auto">
                         <div class="p-6 flex flex-col items-center">
                             <div class="relative">
-                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? 'img/female.png' : 'img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? 'img/female.png' : 'img/male.png')" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
+                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
                                 <template x-if="viewingUser?.online">
                                     <div class="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-900 rounded-full"></div>
                                 </template>

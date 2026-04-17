@@ -47,6 +47,7 @@ const schemaOptions = {
 
 const userSchema = new mongoose.Schema({
     name: String,
+    nickname: String,
     first_name: String, // Added to support virtual logic
     surname: String,    // Added to support virtual logic
     username: { type: String, unique: true },

@@ -69,11 +69,11 @@ export default {
             // The ASSETS binding is automatically available in the Worker environment
             // and handles requests for static files from the 'public' directory.
             // For specific HTML files, we can redirect or serve directly if needed.
-            if (path === '/' || path === '/index.html') {
+            if (path === '/' || path === '/index.html' || path === '/login') {
                 return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
             } else if (path === '/ysu') {
                 return env.ASSETS.fetch(new Request(new URL('/ysu.html', request.url), request));
-            } else if (path === '/home') {
+            } else if (path === '/home' || path === '/maiga') {
                 return env.ASSETS.fetch(new Request(new URL('/maiga.html', request.url), request));
             } else if (path === '/admin') {
                 return env.ASSETS.fetch(new Request(new URL('/admin.html', request.url), request));

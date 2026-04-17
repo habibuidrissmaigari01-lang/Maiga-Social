@@ -377,8 +377,8 @@ const requireLogin = (req, res, next) => {
     }
 };
 
-// Intercept maiga.html to check session
-app.get('/maiga.html', requireLogin, (req, res) => {
+// Intercept app routes to check session and serve the shell
+app.get(['/maiga.html', '/maiga', '/home'], (req, res) => {
     // Adjusted path to find the HTML in the public subfolder
     res.sendFile(path.join(__dirname, 'public', 'maiga.html'));
 });

@@ -184,6 +184,26 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             Post.find({ user: userId }).sort({ createdAt: -1 }).limit(12)
         ]);
 
+        // Process Group Data with Last Messages (Prevents 'undefined' in UI)
+        const groupData = await Promise.all(groups.map(async g => {
+            const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 }).populate('sender', 'name');
+            const isMe = lastMessage ? (lastMessage.sender?._id.toString() === userId.toString()) : false;
+            const senderPrefix = lastMessage ? (isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : `<span class="text-indigo-500 dark:text-indigo-400 font-bold">${(lastMessage.sender?.name || 'User').split(' ')[0]}:</span> `) : '';
+            const lastMsgText = lastMessage ? (lastMessage.media_type === 'text' ? (lastMessage.content || '') : `<i>Sent a ${lastMessage.media_type}</i>`) : 'No messages yet';
+            
+            return {
+                id: g._id,
+                name: g.name || 'Unnamed Group',
+                avatar: g.avatar || '/img/default-group.png',
+                type: 'group',
+                lastMsg: senderPrefix + lastMsgText,
+                lastMsgTimestamp: lastMessage ? lastMessage.createdAt : null,
+                time: lastMessage ? formatTime(lastMessage.createdAt) : '',
+                unread: false, // Initial state
+                role: g.members.find(m => m.user.toString() === userId.toString())?.role || 'member'
+            };
+        }));
+
         const processedChats = new Map();
         chats.forEach(m => {
             if (!m.sender || !m.receiver || !m.sender._id || !m.receiver._id) return;
@@ -203,16 +223,16 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
 
         res.json({
             user: {
-                id: user._id, name: user.name, username: user.username, 
+                id: user._id, name: user.name, username: user.username, nickname: user.nickname,
                 avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
             posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
-            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0 })),
+            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0, author: user.name, avatar: user.avatar })),
             total_posts_count: postsCount,
             chats: Array.from(processedChats.values()),
-            groups: groups.map(g => ({ id: g._id, name: g.name, avatar: g.avatar, type: 'group' })),
+            groups: groupData,
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
             followers: followersData.map(f => ({ id: f._id, name: f.full_name || f.name, avatar: f.avatar, username: f.username, dept: f.dept, online: f.online })),
             trending: [], // Map trending logic here
@@ -227,7 +247,7 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
     const user = await User.findById(req.session.userId);
     const postsCount = await Post.countDocuments({ user: user._id });
     res.json({
-        id: user._id, name: user.name, username: user.username, account_type: user.account_type,
+        id: user._id, name: user.name, nickname: user.nickname, username: user.username, account_type: user.account_type,
         avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
         dept: user.dept, bio: user.bio,
         email: user.email, is_admin: user.is_admin,gender: user.gender,
@@ -242,12 +262,13 @@ router.post('/update_profile', isAuthenticated, async (req, res) => {
         const user = await User.findById(req.session.userId);
 
         const name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
+        const nickname = Array.isArray(fields.nickname) ? fields.nickname[0] : fields.nickname;
         const username = Array.isArray(fields.username) ? fields.username[0] : fields.username;
         const bio = Array.isArray(fields.bio) ? fields.bio[0] : fields.bio;
         const dept = Array.isArray(fields.dept) ? fields.dept[0] : fields.dept;
         const gender = Array.isArray(fields.gender) ? fields.gender[0] : fields.gender;
         
-        const updates = { name, username, bio, dept, gender };
+        const updates = { name, nickname, username, bio, dept, gender };
         const avatarFile = files.avatar?.[0] || files.avatar;
         const bannerFile = files.banner?.[0] || files.banner;
         
@@ -291,8 +312,8 @@ router.post('/update_profile', isAuthenticated, async (req, res) => {
             updates.banner = await uploadToR2(bannerFile, 'banners');
         }
 
-        await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true });
-        res.json({ success: true });
+        const updatedUser = await User.findByIdAndUpdate(req.session.userId, { $set: updates }, { runValidators: true, new: true });
+        res.json({ success: true, user: updatedUser });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Failed to update profile details.' });
     }
@@ -684,7 +705,7 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
             return {
                 id: g._id,
                 name: g.name || 'Unnamed Group',
-                avatar: g.avatar || 'img/default-group.png',
+                avatar: g.avatar || '/img/default-group.png',
                 type: 'group',
                 lastMsg: senderPrefix + lastMsgText,
                 lastMsgId: lastMessage?._id,
@@ -693,7 +714,8 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
                 lastMsgTimestamp: lastMessage ? lastMessage.createdAt : null,
                 time: lastMessage ? formatTime(lastMessage.createdAt) : '',
                 unread: groupUnreadMap.has(g._id.toString()),
-                unreadCount: groupUnreadMap.get(g._id.toString()) || 0
+                unreadCount: groupUnreadMap.get(g._id.toString()) || 0,
+                role: g.members.find(m => m.user.toString() === req.session.userId.toString())?.role || 'member'
             };
         }));
         res.json(groupData);
@@ -1762,7 +1784,20 @@ router.post('/delete_message', isAuthenticated, async (req, res) => {
         if (!message) return res.status(404).json({ error: 'Message not found' });
 
         if (mode === 'everyone') {
-            if (!message.sender.equals(userId)) {
+            let canDelete = message.sender.equals(userId);
+
+            // Allow deletion if the message is in a group and the requester is an admin
+            if (!canDelete && message.group) {
+                const group = await Group.findById(message.group);
+                if (group) {
+                    const member = group.members.find(m => m.user.equals(userId));
+                    if (member && member.role === 'admin') {
+                        canDelete = true;
+                    }
+                }
+            }
+
+            if (!canDelete) {
                 return res.status(403).json({ error: 'Unauthorized' });
             }
 

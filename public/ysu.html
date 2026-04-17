@@ -1175,7 +1175,19 @@
 
             // Register Service Worker for YSU
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js?app=ysu');
+                navigator.serviceWorker.register('/sw.js?app=ysu').then(reg => {
+                    reg.update();
+                });
+
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) return;
+                    refreshing = true;
+                    // Visual feedback on login page
+                    showMessage('Updating app to latest version...', 'success');
+                    // Delay reload so user can see the message
+                    setTimeout(() => window.location.reload(), 1500);
+                });
             }
             if (!isStandalone) { // Show popup if not in standalone mode
                 setTimeout(() => {
