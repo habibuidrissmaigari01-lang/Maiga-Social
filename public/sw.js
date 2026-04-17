@@ -246,13 +246,12 @@ self.addEventListener('fetch', (event) => {
             cache.match('/auth-session-active'),
             isSessionPersistent()
           ]).then(async ([sessionMarker, isPersistent]) => {
-            // Always attempt to serve the shell for navigation requests
             const shell = await cache.match('/maiga.html');
-            if (shell) return shell;
+            if (shell && (sessionMarker || isPersistent)) return shell;
 
             // Fallback to network if shell isn't cached
-            return fetch(event.request);
-          }).catch(() => fetch(event.request));
+            return fetch(event.request).catch(() => cache.match(OFFLINE_URL));
+          }).catch(() => cache.match(OFFLINE_URL));
         }
 
         return cache.match(event.request).then((cachedResponse) => {
