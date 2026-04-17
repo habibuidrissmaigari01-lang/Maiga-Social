@@ -240,34 +240,26 @@ self.addEventListener('fetch', (event) => {
 
   if (isNavigate || (isLocalAsset && !isApi)) {
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        if (isNavigate) {
-          // Robust Navigation Recovery:
-          // 1. Try to serve the cached app shell (maiga.html)
-          // 2. If shell is missing, try the network
-          // 3. If network fails, serve the offline page
-          return cache.match('/maiga.html')
-            .then(shell => shell || fetch(event.request))
-            .catch(() => cache.match(OFFLINE_URL))
-            .then(response => response || new Response('Offline', { status: 503 }));
-        }
-
-        return cache.match(event.request).then((cachedResponse) => {
-          const fetchPromise = fetch(event.request).then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
-          
-          // Serve cached response immediately if found, but update it in the background.
-          // This provides an "instant" feel on reload while keeping the app current.
-          return cachedResponse || fetchPromise;
-        }).catch(() => {
-          if (isNavigate) return cache.match(OFFLINE_URL);
-          return new Response(null, { status: 503 });
-        });
-      })
+       fetch(event.request)
+        .then(async (networkResponse) => {
+          // Success: Update the cache with the fresh version and return the response
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        })
+        .catch(async () => {
+          // Offline/Stable Network Failure: Look in the cache
+          const cache = await caches.open(CACHE_NAME);
+          if (isNavigate) {
+            // For navigation (refreshing /maiga), return the cached shell
+            const shell = await cache.match('/maiga.html');
+            return shell || cache.match(OFFLINE_URL);
+          }
+          // For other local assets (CSS, JS, Fonts), return from cache
+          return cache.match(event.request) || cache.match(OFFLINE_URL);
+        })
     );
   }
  
