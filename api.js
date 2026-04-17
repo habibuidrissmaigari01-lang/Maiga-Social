@@ -226,6 +226,24 @@ mongoConnection.then(() => {
 }).catch(err => { });
 
 // --- Routes ---
+app.get('/api/get_ice_credentials', async (req, res) => {
+    try {
+        // Using the key provided in your .env (handling both your spelling and standard)
+        const apiKey = process.env.MOTERED_SECRET_KEY || process.env.METERED_SECRET_KEY;
+        
+        if (!apiKey) {
+            console.warn('METERED_SECRET_KEY missing in .env, falling back to STUN only');
+            return res.json([{ urls: 'stun:stun.l.google.com:19302' }]);
+        }
+
+        const response = await fetch(`https://metered.ca/api/v1/turn/credentials?apiKey=${apiKey}`);
+        const iceServers = await response.json();
+        res.json(iceServers);
+    } catch (error) {
+        res.json([{ urls: 'stun:stun.l.google.com:19302' }]);
+    }
+});
+
 app.use('/api', authRoutes); // Auth (login/reg) should always be accessible to check user type
 app.use('/api', checkMaintenance, mainRoutes);
 

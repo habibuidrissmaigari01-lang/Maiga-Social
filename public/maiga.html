@@ -4318,7 +4318,7 @@
                             </div>
 
                             <div x-show="profileTab === 'posts'" class="grid grid-cols-3 gap-1">
-                                <template x-for="post in viewingUser?.posts" :key="post.id"><div @click="viewingPost = post; showUserProfile = false" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer"><template x-if="post.media"><img :src="post.media" class="w-full h-full object-cover"></template><template x-if="!post.media"><div class="w-full h-full flex items-center justify-center p-2 text-[8px] text-center" x-text="post.content"></div></template></div></template>
+                                <template x-for="post in (viewingUser?.posts || []).filter(p => (p.mediaType || p.media_type) !== 'video')" :key="post.id"><div @click="viewingPost = post; showUserProfile = false" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden relative group cursor-pointer"><template x-if="post.media"><img :src="post.media" class="w-full h-full object-cover"></template><template x-if="!post.media"><div class="w-full h-full flex items-center justify-center p-2 text-[8px] text-center" x-text="post.content"></div></template></div></template>
                             </div>
 
                             <div x-show="profileTab === 'media'" class="grid grid-cols-3 gap-1">

@@ -2584,16 +2584,13 @@ const initMaiga = () => {
                 this.pendingRemoteDescription = signal;
 
                 if (!this.peerConnection) {
-                    console.warn('call_accepted received before peerConnection was created; initializing peer connection now.');
-                    this.setupPeerConnection();
+                    // Fetch fresh credentials if the connection is missing
+                    const iceServers = await this.apiFetch('/api/get_ice_credentials');
+                    this.setupPeerConnection(iceServers);
+                    
                     if (this.localStream) {
                         this.localStream.getTracks().forEach(track => this.peerConnection.addTrack(track, this.localStream));
                     }
-                }
-
-                if (!this.peerConnection) {
-                    console.error('Unable to process call_accepted: peerConnection unavailable.');
-                    return;
                 }
 
                 await this.processPendingSignaling();
