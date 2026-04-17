@@ -181,7 +181,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
             Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10),
             Post.countDocuments({ user: userId }),
-            Post.find({ user: userId }).sort({ createdAt: -1 }).limit(12)
+            Post.find({ user: userId, media_type: { $ne: 'video' } }).sort({ createdAt: -1 }).limit(12)
         ]);
 
         // Process Group Data with Last Messages (Prevents 'undefined' in UI)
@@ -223,7 +223,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
 
         res.json({
             user: {
-                id: user._id, name: user.name, username: user.username, nickname: user.nickname,
+                id: user._id, name: user.name, username: user.username, nickname: user.nickname, account_type: user.account_type,
                 avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
@@ -2075,17 +2075,24 @@ router.get('/vapid_public_key', isAuthenticated, (req, res) => {
 });
 
 router.get('/get_ice_credentials', isAuthenticated, async (req, res) => {
-    try {
-        const apiKey = process.env.METERED_SECRET_KEY;
-        const domain = process.env.METERED_DOMAIN; // e.g. "maiga.metered.ca"
-        
-        if (!apiKey || !domain) return res.status(500).json({ error: 'TURN configuration missing' });
+    const fallbackStun = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+    ];
 
-        const response = await fetch(`https://${domain}/api/v1/turn/credentials?apiKey=${apiKey}`);
+    try {
+        const apiKey = process.env.TURNEX_SECRET_KEY;
+        
+        if (!apiKey) return res.json(fallbackStun);
+
+        const response = await fetch(`https://api.turnix.io/v1/turn/credentials?apiKey=${apiKey}`);
         const iceServers = await response.json();
         res.json(iceServers);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch TURN credentials' });
+        res.json(fallbackStun);
     }
 });
 

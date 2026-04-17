@@ -15,6 +15,7 @@ const ASSETS_TO_CACHE = [
   '/manifest-maiga.json',
   '/manifest-ysu.json',
   '/img/logo.png',
+  '/img/ysu.png',
   '/img/male.png',
   '/img/female.png',
   '/img/default-group.png',
@@ -246,7 +247,7 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request).catch(async () => {
         const cache = await caches.open(CACHE_NAME);
         // Return the custom offline page if the network is unreachable
-        return (await cache.match(OFFLINE_URL)) || (await cache.match('/maiga.html'));
+        return (await cache.match(OFFLINE_URL)) || (await cache.match('/maiga.html')) || new Response('Offline', { status: 503 });
       })
     );
     return;
@@ -269,7 +270,7 @@ self.addEventListener('fetch', (event) => {
           // Offline/Stable Network Failure: Look in the cache
           const cache = await caches.open(CACHE_NAME);
           // For other local assets (CSS, JS, Fonts), return from cache
-          return cache.match(event.request) || cache.match(OFFLINE_URL);
+          return (await cache.match(event.request)) || (await cache.match(OFFLINE_URL)) || new Response('Asset not found', { status: 404 });
         })
     );
   }

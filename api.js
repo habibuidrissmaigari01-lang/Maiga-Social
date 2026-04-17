@@ -227,20 +227,27 @@ mongoConnection.then(() => {
 
 // --- Routes ---
 app.get('/api/get_ice_credentials', async (req, res) => {
+    const fallbackStun = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+    ];
+
     try {
-        // Using the key provided in your .env (handling both your spelling and standard)
-        const apiKey = process.env.MOTERED_SECRET_KEY || process.env.METERED_SECRET_KEY;
+        const apiKey = process.env.TURNEX_SECRET_KEY;
         
         if (!apiKey) {
-            console.warn('METERED_SECRET_KEY missing in .env, falling back to STUN only');
-            return res.json([{ urls: 'stun:stun.l.google.com:19302' }]);
+            console.warn('TURNEX_SECRET_KEY missing in .env, falling back to STUN only');
+            return res.json(fallbackStun);
         }
 
-        const response = await fetch(`https://metered.ca/api/v1/turn/credentials?apiKey=${apiKey}`);
+        const response = await fetch(`https://api.turnix.io/v1/turn/credentials?apiKey=${apiKey}`, { timeout: 5000 });
         const iceServers = await response.json();
         res.json(iceServers);
     } catch (error) {
-        res.json([{ urls: 'stun:stun.l.google.com:19302' }]);
+        res.json(fallbackStun);
     }
 });
 

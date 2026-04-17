@@ -493,6 +493,24 @@ const initMaiga = () => {
             video.currentTime = clampedPos * video.duration;
             reel.progress = clampedPos * 100;
         },
+        handleReelLoading(reel, isLoading) {
+            if (!isLoading) {
+                clearTimeout(reel._loadTimer);
+                reel.isLoading = false;
+                return;
+            }
+            // Prevent multiple timers if already trying to load
+            if (reel._loadTimer) return;
+            
+            // Only show the spinner if the video is stalled/waiting for more than 700ms
+            reel._loadTimer = setTimeout(() => {
+                const video = document.getElementById('reel-video-' + reel.id);
+                if (video && (video.readyState < 3 || video.seeking || video.networkState === 2)) {
+                    reel.isLoading = true;
+                }
+                reel._loadTimer = null;
+            }, 700);
+        },
         toggleReelDescription(reel) {
             reel.isExpanded = !reel.isExpanded;
         },
@@ -1804,10 +1822,11 @@ const initMaiga = () => {
                 this.recordAnalyser.getByteFrequencyData(dataArray);
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 const barWidth = (canvas.width / dataArray.length) * 2;
+                const isYsu = this.user.account_type === 'ysu';
                 let x = 0;
                 for (let i = 0; i < dataArray.length; i++) {
                     const barHeight = (dataArray[i] / 255) * canvas.height;
-                    ctx.fillStyle = this.darkMode ? '#60a5fa' : '#2563eb';
+                    ctx.fillStyle = isYsu ? (this.darkMode ? '#34d399' : '#10b981') : (this.darkMode ? '#60a5fa' : '#2563eb');
                     ctx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
                     x += barWidth;
                 }
@@ -2584,7 +2603,7 @@ const initMaiga = () => {
                 this.pendingRemoteDescription = signal;
 
                 if (!this.peerConnection) {
-                    // Fetch fresh credentials if the connection is missing
+                    console.log("PeerConnection missing on acceptance, initializing...");
                     const iceServers = await this.apiFetch('/api/get_ice_credentials');
                     this.setupPeerConnection(iceServers);
                     
@@ -3136,7 +3155,7 @@ const initMaiga = () => {
                 } catch (e) { }
             }
 
-            this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'Ysu Social' : 'Maiga Social');
+            this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'YSU Social' : 'Maiga Social');
         },
         toggleFullScreen() {
             if (!document.fullscreenElement) {
@@ -5386,7 +5405,7 @@ const initMaiga = () => {
                 });
         },
         get userPosts() {
-            return this.myPosts;
+            return (this.myPosts || []).filter(p => (p.mediaType || p.media_type) !== 'video');
         },
         addToRecent(term) {
             if (!term) return;
@@ -7387,6 +7406,13 @@ const initMaiga = () => {
             if (this.peerConnection) {
                 return;
             }
+            
+            // Log to console so you can verify TURN is actually being used in F12
+            if (iceServers && iceServers.some(s => s.urls.includes('turn:'))) {
+                console.log("WebRTC: TURN servers loaded. External networks supported.");
+            } else {
+                console.warn("WebRTC: Using STUN only. Calls may fail across different networks.");
+            }
 
             const servers = { 
                 iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] 
@@ -7813,7 +7839,7 @@ const initMaiga = () => {
                         const currentIndex = this.reels.findIndex(r => r.id == reelId);
                         for (let i = 1; i <= 2; i++) {
                             const nextReel = this.reels[currentIndex + i];
-                            if (nextReel && nextReel.media) {
+                            if (nextReel && nextReel.media && !document.querySelector(`link[href="${nextReel.media}"]`)) {
                                 const link = document.createElement('link');
                                 link.rel = 'prefetch';
                                 link.href = nextReel.media;

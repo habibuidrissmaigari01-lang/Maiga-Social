@@ -11,18 +11,18 @@
     <link rel="preload" href="/fonts/IntelOneMono-BoldItalic.woff2" as="font" type="font/woff2" crossorigin>
     <title>Maiga Social</title>
     <link href="/css/main.css" rel="stylesheet">
-     <link rel="icon" type="image/png" sizes="48x48" href="img/logo.png">
-     <link rel="apple-touch-icon" sizes="180x180" href="img/logo.png">
+     <link rel="icon" id="app-icon" type="image/png" sizes="48x48" href="img/logo.png">
+     <link rel="apple-touch-icon" id="apple-icon" sizes="180x180" href="img/logo.png">
      <meta name="mobile-web-app-capable" content="yes">
      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- iOS Splash Screens -->
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_Max_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
-    <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
+    <link rel="apple-touch-startup-image" id="splash-15-pm" media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" id="splash-15-p" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_portrait.png">
+    <link rel="apple-touch-startup-image" id="splash-14-pl" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
+    <link rel="apple-touch-startup-image" id="splash-14-p" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" id="app-manifest" href="manifest-maiga.json">
     <link rel="service-worker" href="sw.js">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
@@ -96,6 +96,110 @@
         html {
             font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
         }
+
+        /* Theme Variables */
+        :root {
+            --logo-primary: #2563eb; /* Professional Blue */
+            --logo-shadow-1: #1e40af;
+            --logo-shadow-2: #1e3a8a;
+            --logo-shadow-3: #172554;
+            --logo-glow: rgba(37, 99, 235, 0.4);
+            --logo-secondary: #8b5cf6; /* Creative Purple */
+            --logo-sec-shadow-1: #7c3aed;
+            --logo-sec-shadow-2: #6d28d9;
+            --logo-sec-shadow-3: #4c1d95;
+            --logo-sec-glow: rgba(139, 92, 246, 0.5);
+        }
+
+        .theme-ysu {
+            --logo-primary: #10b981; /* Emerald Green */
+            --logo-shadow-1: #059669;
+            --logo-shadow-2: #047857;
+            --logo-shadow-3: #064e3b;
+            --logo-glow: rgba(16, 185, 129, 0.4);
+            --logo-secondary: #06b6d4; /* Cyan/Teal */
+            --logo-sec-shadow-1: #0891b2;
+            --logo-sec-shadow-2: #0e7490;
+            --logo-sec-shadow-3: #155e75;
+            --logo-sec-glow: rgba(6, 182, 212, 0.5);
+        }
+
+        /* YSU Dynamic Theme Overrides for Tailwind Utility Classes */
+        .theme-ysu .text-blue-600, .theme-ysu .text-blue-500, .theme-ysu .dark .text-blue-400 { color: #10b981 !important; }
+        .theme-ysu .bg-blue-600, .theme-ysu .bg-blue-500, .theme-ysu .dark .bg-blue-600 { background-color: #10b981 !important; }
+        .theme-ysu .border-blue-600, .theme-ysu .border-blue-500, .theme-ysu .dark .border-blue-500 { border-color: #10b981 !important; }
+        .theme-ysu .bg-blue-50, .theme-ysu .bg-blue-100 { background-color: #ecfdf5 !important; }
+        .theme-ysu .text-blue-800 { color: #064e3b !important; }
+        .theme-ysu .shadow-blue-500\/30, .theme-ysu .shadow-blue-600\/30, .theme-ysu .shadow-blue-200 { box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3) !important; }
+
+        /* Amazing App Logo Styling */
+        .amazing-logo {
+            font-weight: 900;
+            display: inline-block;
+            perspective: 500px;
+            animation: amazing-glow 4s ease-in-out infinite alternate;
+            letter-spacing: -0.04em;
+            text-transform: uppercase;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .amazing-logo:hover {
+            transform: scale(1.1) rotateY(15deg) translateY(-2px);
+            filter: brightness(1.2);
+        }
+
+        @keyframes amazing-glow {
+            0% {
+                color: var(--logo-primary);
+                text-shadow: 
+                    1px 1px 0px var(--logo-shadow-1),
+                    2px 2px 0px var(--logo-shadow-2),
+                    3px 3px 0px var(--logo-shadow-3),
+                    0 5px 15px var(--logo-glow);
+            }
+            100% {
+                color: var(--logo-secondary);
+                text-shadow: 
+                    1px 1px 0px var(--logo-sec-shadow-1),
+                    2px 2px 0px var(--logo-sec-shadow-2),
+                    3px 3px 0px var(--logo-sec-shadow-3),
+                    0 10px 25px var(--logo-sec-glow);
+                transform: skewX(-5deg);
+            }
+        }
+
+        /* Gentle Floating Animation for the Logo Image */
+        @keyframes logo-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            33% { transform: translateY(-4px) rotate(-2deg); }
+            66% { transform: translateY(-2px) rotate(2deg); }
+        }
+        .floating-logo {
+            animation: logo-float 4s ease-in-out infinite;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+            transition: all 0.3s ease;
+        }
+        .floating-logo:hover {
+            transform: scale(1.1) rotate(5deg);
+            filter: drop-shadow(0 8px 12px rgba(59, 130, 246, 0.3));
+        }
+
+        /* Enhanced Glassmorphism for Header */
+        .glass-header-scrolled {
+            background: rgba(255, 255, 255, 0.6) !important;
+            backdrop-filter: blur(16px) saturate(180%) !important;
+            -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05) !important;
+        }
+        .dark .glass-header-scrolled {
+            background: rgba(0, 0, 0, 0.5) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
+        }
+
         .fixed-font { font-size: 16px !important; }
         body { font-family: 'Intel One Mono', 'Inter', sans-serif !important; }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
@@ -209,8 +313,8 @@
         }
     </style>
 </head>
-<body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
-      :class="[{ 'dark': darkMode }, desktopGridCols]"
+    <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
+      :class="[{ 'dark': darkMode, 'theme-ysu': user.account_type === 'ysu' }, desktopGridCols]"
       :style="`--app-base-font-size: ${appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px'};`"
       x-data="appData">
 
@@ -355,8 +459,8 @@
     <!-- Desktop Sidebar -->
     <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0 transition-all duration-300 z-40" :class="isLeftSidebarCollapsed ? 'w-24' : 'w-72'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
-            <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale">
-            <span x-show="!isLeftSidebarCollapsed" class="text-2xl font-black text-gray-800 dark:text-gray-200 italic fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
+            <span x-show="!isLeftSidebarCollapsed" class="amazing-logo text-2xl fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
             <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
@@ -450,12 +554,13 @@
     </div>
 
     <!-- Top Navigation -->
-    <header class="sticky top-0 flex-none bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg px-4 flex justify-between items-center z-[100] transition-all duration-300"
-            :class="hasScrolled ? 'py-1.5 shadow-lg border-transparent' : 'py-3 border-b dark:border-gray-800'">
+    <header class="sticky top-0 flex-none px-4 flex justify-between items-center z-[100] transition-all duration-300"
+            :class="hasScrolled ? 'py-1.5 glass-header-scrolled' : 'py-3 bg-white dark:bg-gray-900 border-b dark:border-gray-800'">
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <span class="text-2xl font-black italic fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+                <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale floating-logo shrink-0">
+                <span class="amazing-logo text-2xl fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
@@ -2856,16 +2961,16 @@
                 <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
                         class="w-full h-full object-cover" 
-                        playsinline muted loop 
+                        playsinline muted loop preload="auto"
                         :src="reel.media" 
                         @ended="scrollToNextReel(index)" 
-                        @loadstart="reel.isLoading = true"
-                        @waiting="reel.isLoading = true"
-                        @seeking="reel.isLoading = true"
-                        @playing="reel.isLoading = false"
-                        @canplay="reel.isLoading = false"
-                        @stalled="reel.isLoading = true"
-                        @timeupdate="reel.progress = ($el.currentTime / $el.duration) * 100"
+                        @loadstart="handleReelLoading(reel, true)"
+                        @waiting="handleReelLoading(reel, true)"
+                        @seeking="handleReelLoading(reel, true)"
+                        @playing="handleReelLoading(reel, false)"
+                        @canplay="handleReelLoading(reel, false)"
+                        @stalled="handleReelLoading(reel, true)"
+                        @timeupdate="reel.progress = ($el.currentTime / ($el.duration || 1)) * 100"
                         @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
 
@@ -3435,8 +3540,7 @@
                         <div @click="viewingPost = post" class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-xl overflow-hidden relative group cursor-pointer">
                             <template x-if="post.media">
                                 <div class="w-full h-full">
-                                    <template x-if="post.mediaType === 'video'"><video :src="post.media" class="w-full h-full object-cover"></video></template>
-                                    <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-full object-cover"></template>
+                                    <img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-full object-cover">
                                 </div>
                             </template>
                             <template x-if="!post.media">

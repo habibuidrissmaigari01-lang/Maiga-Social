@@ -26,7 +26,7 @@
             50% { opacity: 0.1; transform: scale(1.1); }
         }
         .bg-pattern {
-            background-image: url('img/logo.png');
+            background-image: url('img/logo.png'); /* Updated dynamically for YSU via JS */
             background-size: 100px;
             opacity: 0.05;
             animation: pulse-slow 8s infinite ease-in-out;
@@ -147,6 +147,7 @@
             const iconBox = document.getElementById('icon-box');
             iconBox.classList.remove('bg-blue-100', 'dark:bg-blue-900/30', 'text-blue-600', 'dark:text-blue-400');
             iconBox.classList.add('bg-green-100', 'dark:bg-green-900/30', 'text-green-600', 'dark:text-green-400');
+            document.querySelector('.bg-pattern').style.backgroundImage = "url('img/ysu.png')";
 
             const retryBtn = document.getElementById('retry-btn');
             retryBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30');

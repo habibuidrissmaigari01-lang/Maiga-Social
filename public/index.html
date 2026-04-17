@@ -192,8 +192,11 @@
                 <p class="text-gray-500 text-sm mb-6">Your unique username will be public.</p>
                 <div class="space-y-4">
                     <div class="relative">
-                        <input type="text" name="username" id="username" placeholder="Username"
-                               @input.debounce.500ms="checkAvailability('username', $event.target.value)"
+                        <input type="text" name="username" id="username" placeholder="Username" 
+                               @input="
+                                   $event.target.value = $event.target.value.replace(/\s/g, '_');
+                                   checkAvailability('username', $event.target.value);
+                               "
                                class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 transition-colors"
                                :class="usernameStatus === 'taken' ? 'border-red-500 shadow-[0_0_10px_rgba(239,44,44,0.2)]' : (usernameStatus === 'available' ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]' : '')">
                         <div class="absolute right-3 top-1/2 -translate-y-1/2">
@@ -301,7 +304,7 @@
                 <p class="text-gray-500 text-sm mb-6">Choose a secure password to protect your account.</p>
                 <div class="space-y-4">
                     <div class="relative">
-                        <input type="password" x-model="registration.password" placeholder="Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12">
+                        <input type="password" name="reg_password" id="mainPass" x-model="registration.password" placeholder="Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12">
                         <button type="button" onclick="togglePasswordVisibility('mainPass', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -323,7 +326,7 @@
                         </div>
                     </div>
                     <div class="relative">
-                        <input type="password" x-model="registration.confirmPassword" placeholder="Confirm Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12">
+                        <input type="password" name="confirm_password" id="confirmPass" x-model="registration.confirmPassword" placeholder="Confirm Password" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 pr-12">
                         <button type="button" onclick="togglePasswordVisibility('confirmPass', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -378,7 +381,8 @@
                     </div>
                     <button type="submit" class="btn-primary">Continue</button>
                     <div class="text-center">
-                       <p class="text-xs text-gray-400">Didn't get a code? <a href="#" class="font-bold text-indigo-600 underline">Resend code</a></p>
+                       <p x-show="otpTimer > 0" class="text-xs text-gray-400">Resend code in <span class="font-bold text-indigo-500 tabular-nums" x-text="formattedTimer"></span></p>
+                       <a href="#" x-show="otpTimer <= 0" @click.prevent="sendForgotOTP($event)" class="text-xs font-bold text-indigo-600 underline">Resend code</a>
                     </div>
                 </div>
             </div>
@@ -506,18 +510,24 @@
                         window.location.replace('/home');
                         return;
                     }
+                    window.addEventListener('focus', () => this.checkClipboardForOtp());
                     this.restoreProgress();
                 },
                 async checkClipboardForOtp() {
-                    // Only trigger if we are waiting for an OTP (Step 6)
-                    if (this.currentStep !== 6) return;
+                    // Trigger if we are on registration step 6 or forgot password OTP page
+                    const isForgotOtp = document.getElementById('page-forgot-otp')?.classList.contains('active');
+                    if (this.currentStep !== 6 && !isForgotOtp) return;
+
                     try {
                         const text = await navigator.clipboard.readText();
                         const code = text.trim();
                         if (/^\d{6}$/.test(code)) {
-                            const boxes = document.querySelectorAll('#otp-inputs .otp-box');
+                            const containerId = isForgotOtp ? '#forgot-otp-inputs' : '#otp-inputs';
+                            const boxes = document.querySelectorAll(`${containerId} .otp-box`);
                             code.split('').forEach((char, i) => { if(boxes[i]) boxes[i].value = char; });
                             showMessage('Code auto-pasted from clipboard!', 'success');
+                            
+                            if (!isForgotOtp && typeof verifyOTP === 'function') verifyOTP();
                         }
                     } catch (e) { /* Permission denied */ }
                 },
@@ -597,6 +607,37 @@
                     this.currentStep = s;
                     window.currentStep = s; // Sync global variable
                     this.saveAuthProgress();
+                },
+                async sendForgotOTP(e) {
+                    const identityInput = document.querySelector('input[name="forgot_identity"]');
+                    if (!identityInput || !identityInput.value.trim()) {
+                        showMessage('Please enter email or phone number.', 'error');
+                        return;
+                    }
+                    const btn = e.target;
+                    const originalHtml = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sending...';
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/forgot-password`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ forgot_identity: identityInput.value }),
+                        });
+                        const data = await response.json();
+                        if (response.ok && data.success) {
+                            showMessage('New reset code sent!', 'success');
+                            this.startTimer(data.remaining || 180);
+                        } else {
+                            showMessage(data.message || 'Failed to send code.', 'error');
+                        }
+                    } catch (err) {
+                        showMessage('Network error.', 'error');
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                    }
                 },
                 startTimer(seconds = 180) {
                     this.otpTimer = seconds;
@@ -994,6 +1035,10 @@
             event?.preventDefault();
              document.getElementById('authType').value = "forgot_2";
             showPage('page-forgot-otp');
+            const el = document.getElementById('authCard');
+            if (el && window.Alpine) {
+                Alpine.$data(el).startTimer(180);
+            }
         }
 
         function showResetPassword(event) {
