@@ -1583,6 +1583,52 @@ const initMaiga = () => {
             this.isCameraRecording = false;
         },
 
+        async forceAppReset() {
+            if (!confirm('This will clear the app cache and force a full reload. Continue?')) return;
+            
+            this.showToast('Resetting', 'Clearing cache and reloading...', 'info');
+
+            // 1. Unregister Service Worker
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+
+            // 2. Clear all PWA Caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+
+            // 3. Reload the page from the server
+            window.location.reload();
+        },
+
+        async forceAppReset() {
+            if (!confirm('This will clear the app cache and force a full reload. Continue?')) return;
+            
+            this.showToast('Resetting', 'Clearing cache and reloading...', 'info');
+
+            // 1. Unregister Service Worker
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+
+            // 2. Clear all PWA Caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+
+            // 3. Reload the page from the server
+            window.location.reload();
+        },
+
         async shareFile() {
             if (!this.postFile) return;
             if (navigator.canShare && navigator.canShare({ files: [this.postFile] })) {
@@ -3695,13 +3741,13 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-                    this.groups.unshift({ ...data.group, id: data.group._id, lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members, role: 'admin' });
+                    this.groups.unshift({ ...data.group, id: data.group._id, avatar: data.group.avatar || '/img/default-group.png', lastMsg: 'Group created', time: 'Now', unread: false, members: this.newGroup.members, role: 'admin' });
                     this.isCreatingGroup = false;
                     this.activeChat = this.groups[0];
                     this.showToast('Success', 'Group created successfully!');
                     // Reset form
                     this.createGroupStep = 1;
-                    this.newGroup = { name: '', description: '', members: [], avatarFile: null, avatarPreview: null, permissions: { can_edit_settings: false, can_send_messages: true, can_add_members: false }, approve_members: false };
+                   this.newGroup = { name: '', description: '', members: [], avatarFile: null, avatarPreview: '/img/default-group.png', permissions: { can_edit_settings: false, can_send_messages: true, can_add_members: false }, approve_members: false };
                 } else {
                     this.showToast('Error', data.error || 'Failed to create group.', 'error');
                 }

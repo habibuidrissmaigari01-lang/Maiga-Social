@@ -226,7 +226,7 @@ self.addEventListener('fetch', (event) => {
   
   // SPEED OPTIMIZATION: Bypass SW for Video/Audio streams (R2 URLs)
   // Service Workers often throttle large media chunks. Direct browser handling is faster.
-  if (event.request.url.match(/\.(mp4|webm|ogg|mp3|wav)$/) || event.request.url.includes('r2.dev') || event.request.url.includes('public_url')) return;
+  if (event.request.url.match(/\.(mp4|webm|ogg|mp3|wav|mov|m4a|m4v)$/i) || event.request.url.includes('r2.dev') || event.request.url.includes('public_url') || event.request.url.includes('r2-core')) return;
 
   const isApi = event.request.url.includes('/api/');
   // Fix: Explicitly ignore Tailwind CDN to avoid CORS fetch errors in SW
@@ -242,16 +242,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) => {
         if (isNavigate) {
-          return Promise.all([
-            cache.match('/auth-session-active'),
-            isSessionPersistent()
-          ]).then(async ([sessionMarker, isPersistent]) => {
-            const shell = await cache.match('/maiga.html');
-            if (shell && (sessionMarker || isPersistent)) return shell;
-
-            // Fallback to network if shell isn't cached
-            return fetch(event.request).catch(() => cache.match(OFFLINE_URL));
-          }).catch(() => cache.match(OFFLINE_URL));
+          // Robust Navigation Recovery:
+          // 1. Try to serve the cached app shell (maiga.html)
+          // 2. If shell is missing, try the network
+          // 3. If network fails, serve the offline page
+          return cache.match('/maiga.html')
+            .then(shell => shell || fetch(event.request))
+            .catch(() => cache.match(OFFLINE_URL))
+            .then(response => response || new Response('Offline', { status: 503 }));
         }
 
         return cache.match(event.request).then((cachedResponse) => {
