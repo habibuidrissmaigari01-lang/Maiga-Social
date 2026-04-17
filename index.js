@@ -36,6 +36,7 @@ export default {
                 // We strip the port to ensure it hits the public edge correctly.
                 headers.set('Host', backendUrl.hostname); 
                 headers.set('X-Forwarded-Host', url.host);
+                headers.set('X-Forwarded-Proto', 'https');
                 headers.set('X-Real-IP', request.headers.get('cf-connecting-ip') || '');
                 
                 // Ensure WebSocket headers are preserved for the handshake

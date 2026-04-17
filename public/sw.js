@@ -7,6 +7,7 @@ const ASSETS_TO_CACHE = [
   '/maiga.html',
   '/maiga',
   '/home',
+  '/css/main.css',
   '/index.html',
   '/ysu.html',
   '/maiga.js',
@@ -186,7 +187,8 @@ self.addEventListener('install', (event) => {
       // Use Promise.all to ensure all assets are attempted to be cached
       return Promise.all(
         ASSETS_TO_CACHE.map(url => {
-          return cache.add(new Request(url, { cache: 'reload' })).catch(err => {
+          // Use 'reload' to bypass browser cache and get fresh versions for the SW cache
+          return cache.add(new Request(url, { cache: 'reload' })).catch(() => {
             return Promise.resolve(); // Don't fail the whole install if one asset fails
           });
         })
@@ -238,25 +240,34 @@ self.addEventListener('fetch', (event) => {
                        event.request.url.startsWith('https://fonts.gstatic.com') ||
                        event.request.url.startsWith('https://api.dicebear.com');
 
-  if (isNavigate || (isLocalAsset && !isApi)) {
+  // 1. Handle Navigation Requests (Opening the App/Refreshing)
+  if (isNavigate) {
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        // Return the custom offline page if the network is unreachable
+        return (await cache.match(OFFLINE_URL)) || (await cache.match('/maiga.html'));
+      })
+    );
+    return;
+  }
+
+  // 2. Handle Static Assets (CSS, JS, Images)
+  if (isLocalAsset && !isApi) {
     event.respondWith(
        fetch(event.request)
-        .then(async (networkResponse) => {
+        .then(async (response) => {
           // Success: Update the cache with the fresh version and return the response
-          if (networkResponse && networkResponse.status === 200) {
+          if (response && response.ok) {
             const cache = await caches.open(CACHE_NAME);
-            cache.put(event.request, networkResponse.clone());
+            cache.put(event.request, response.clone());
+            return response;
           }
-          return networkResponse;
+          throw new Error('Network response not ok');
         })
         .catch(async () => {
           // Offline/Stable Network Failure: Look in the cache
           const cache = await caches.open(CACHE_NAME);
-          if (isNavigate) {
-            // For navigation (refreshing /maiga), return the cached shell
-            const shell = await cache.match('/maiga.html');
-            return shell || cache.match(OFFLINE_URL);
-          }
           // For other local assets (CSS, JS, Fonts), return from cache
           return cache.match(event.request) || cache.match(OFFLINE_URL);
         })

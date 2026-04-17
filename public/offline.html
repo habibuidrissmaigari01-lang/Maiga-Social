@@ -6,33 +6,138 @@
     <title>Offline - Maiga Social</title>
     <link href="css/main.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        // Initial theme sync to prevent flicker
+        const savedTheme = localStorage.getItem('theme') || 'system';
+        const isDark = savedTheme === 'dark' || (savedTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+    </script>
     <style>
+        [x-cloak] { display: none !important; }
         .parallelogram {
             -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
             mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
             mask-size: 100% 100%;
         }
+        body { font-family: 'Intel One Mono', ui-monospace, monospace; }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 0.1; transform: scale(1.1); }
+        }
+        .bg-pattern {
+            background-image: url('img/logo.png');
+            background-size: 100px;
+            opacity: 0.05;
+            animation: pulse-slow 8s infinite ease-in-out;
+        }
+        /* Snake Game Styles */
+        #snake-game-container {
+            background-color: #1a202c; /* Dark background for game */
+            border-radius: 1rem;
+            padding: 1rem;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 2rem;
+        }
+        #snake-game-canvas {
+            background-color: #000;
+            border: 2px solid #4a5568;
+            border-radius: 0.5rem;
+        }
+        #snake-game-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            margin-top: 1rem;
+            width: 100%;
+            max-width: 200px;
+        }
+        #snake-game-controls button {
+            background-color: #4a5568;
+            color: white;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        #snake-game-controls button:active {
+            background-color: #2d3748;
+        }
+        #snake-game-controls .center-button {
+            grid-column: 2 / 3;
+        }
+        #snake-game-controls .left-button {
+            grid-column: 1 / 2;
+        }
+        #snake-game-controls .right-button {
+            grid-column: 3 / 4;
+        }
+        #snake-game-controls .bottom-button {
+            grid-column: 2 / 3;
+        }
     </style>
 </head>
-<body class="bg-gray-50 flex items-center justify-center min-h-screen p-6 text-center">
-    <div class="max-w-md">
-        <div id="icon-box" class="w-24 h-24 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-6 parallelogram shadow-lg transition-colors">
-            <i class="fa-solid fa-wifi-slash text-4xl"></i>
+<body class="bg-gray-50 dark:bg-black flex flex-col items-center justify-center min-h-screen p-6 text-center transition-colors duration-500 overflow-hidden">
+    <div class="fixed inset-0 bg-pattern pointer-events-none"></div>
+    
+    <div class="max-w-md w-full relative z-10 animate-fadeIn" x-data="{ showGame: false }">
+        <div id="icon-box" class="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-3xl flex items-center justify-center mx-auto mb-8 parallelogram shadow-xl transition-all duration-500 hover:rotate-3">
+            <i class="fa-solid fa-wifi-slash text-4xl animate-pulse"></i>
         </div>
-        <h1 class="text-3xl font-black text-gray-800 mb-2">You're Offline</h1>
-        <p class="text-gray-500 mb-8 font-medium">It looks like your internet connection is taking a break. Check your signal and try again.</p>
-        <button id="retry-btn" onclick="window.location.reload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-200 transition-all active:scale-95">
+        <h1 class="text-4xl font-black text-gray-900 dark:text-white mb-3 tracking-tighter uppercase">Signal Lost</h1>
+        <p class="text-gray-500 dark:text-gray-400 mb-10 font-bold text-sm leading-relaxed px-4">It looks like your connection is taking a break. We'll automatically bring you back once excellence is restored.</p>
+        
+        <button id="retry-btn" onclick="window.location.reload()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-500/30 transition-all active:scale-95 uppercase tracking-widest text-xs">
             Retry Connection
         </button>
-        <button id="share-btn" onclick="shareApp()" class="w-full mt-3 bg-white border-2 border-blue-100 text-blue-600 py-4 rounded-2xl font-black transition-all active:scale-95 flex items-center justify-center gap-2">
-            <i class="fa-solid fa-share-nodes"></i> Share with Friends
+        <button onclick="checkStatus()" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black shadow-lg transition-all active:scale-95 uppercase tracking-widest text-xs">
+            <i class="fa-solid fa-server"></i> Check System Status
         </button>
-        <p class="mt-8 text-xs text-gray-400 font-bold uppercase tracking-widest"><span id="brand-name">Maiga Social</span> &copy; 2024</p>
+        <button id="share-btn" onclick="shareApp()" class="w-full mt-4 bg-white dark:bg-gray-900 border-2 border-blue-100 dark:border-gray-800 text-blue-600 dark:text-blue-400 py-4 rounded-2xl font-black transition-all active:scale-95 flex items-center justify-center gap-3 uppercase tracking-widest text-[10px]">
+            <i class="fa-solid fa-share-nodes"></i> Invite a Friend
+        </button>
+
+        <button @click="showGame = !showGame; if(showGame) initSnakeGame()" class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-green-500/30 transition-all active:scale-95 uppercase tracking-widest text-xs">
+            <i class="fa-solid fa-gamepad"></i> <span x-text="showGame ? 'Hide Game' : 'Play Offline Game'"></span>
+        </button>
+
+        <div id="snake-game-container" x-show="showGame" x-cloak>
+            <h3 class="text-white text-xl font-bold mb-4">Snake Game</h3>
+            <canvas id="snake-game-canvas" width="300" height="300"></canvas>
+            <div id="snake-game-controls">
+                <button class="center-button" onclick="changeDirection(0, -1)"><i class="fa-solid fa-arrow-up"></i></button>
+                <button class="left-button" onclick="changeDirection(-1, 0)"><i class="fa-solid fa-arrow-left"></i></button>
+                <button onclick="startGame()"><i class="fa-solid fa-play"></i></button>
+                <button class="right-button" onclick="changeDirection(1, 0)"><i class="fa-solid fa-arrow-right"></i></button>
+                <button class="bottom-button" onclick="changeDirection(0, 1)"><i class="fa-solid fa-arrow-down"></i></button>
+            </div>
+            <div class="flex justify-between w-full px-4 mt-4 text-white text-xs font-bold uppercase tracking-wider">
+                <p>Score: <span id="snake-score" class="text-green-400">0</span></p>
+                <p>Best: <span id="snake-high-score" class="text-yellow-400">0</span></p>
+            </div>
+        </div>
+
+        <p class="mt-12 text-[10px] text-gray-400 dark:text-gray-600 font-black uppercase tracking-[0.3em]"><span id="brand-name">Maiga Social</span> &copy; 2024</p>
     </div>
 
+    <script src="/alpine.js" defer></script>
     <script>
+        let snakeCanvas, snakeCtx, snakeScoreDisplay;
+        let snake = [{ x: 10, y: 10 }];
+        let food = {};
+        let dx = 0, dy = 0;
+        let score = 0;
+        let gameInterval;
+        const gridSize = 15;
+        const cellSize = 15;
+        let highScore = localStorage.getItem('maiga_snake_high_score') || 0;
+
         // Detect the app version based on the URL
-        const isYsu = window.location.pathname.includes('ysu.html');
+        const isYsu = window.location.pathname.includes('ysu');
 
         if (isYsu) {
             // Update text
@@ -40,18 +145,44 @@
             
             // Update theme colors (Blue -> Green for YSU)
             const iconBox = document.getElementById('icon-box');
-            iconBox.classList.replace('bg-blue-100', 'bg-green-100');
-            iconBox.classList.replace('text-blue-600', 'text-green-600');
+            iconBox.classList.remove('bg-blue-100', 'dark:bg-blue-900/30', 'text-blue-600', 'dark:text-blue-400');
+            iconBox.classList.add('bg-green-100', 'dark:bg-green-900/30', 'text-green-600', 'dark:text-green-400');
 
             const retryBtn = document.getElementById('retry-btn');
-            retryBtn.classList.replace('bg-blue-600', 'bg-green-600');
-            retryBtn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
-            retryBtn.classList.replace('shadow-blue-200', 'shadow-green-200');
+            retryBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-blue-500/30');
+            retryBtn.classList.add('bg-green-600', 'hover:bg-green-700', 'shadow-green-500/30');
 
             const shareBtn = document.getElementById('share-btn');
-            shareBtn.classList.replace('border-blue-100', 'border-green-100');
-            shareBtn.classList.replace('text-blue-600', 'text-green-600');
+            shareBtn.classList.remove('border-blue-100', 'text-blue-600');
+            shareBtn.classList.add('border-green-100', 'text-green-600');
         }
+
+        async function checkStatus() {
+            const btn = event.currentTarget;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Pinging Server...';
+            
+            try {
+                const res = await fetch('/api/health', { cache: 'no-store' });
+                if (res.ok) {
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> System Online!';
+                    setTimeout(() => { window.location.href = '/home'; }, 1000);
+                } else {
+                    throw new Error();
+                }
+            } catch (e) {
+                btn.innerHTML = '<i class="fa-solid fa-xmark"></i> Server Unreachable';
+                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            }
+        }
+
+        // Auto-Recovery Logic: Take the user back as soon as they are online
+        window.addEventListener('online', () => {
+            const retryBtn = document.getElementById('retry-btn');
+            retryBtn.textContent = "Signal Restored! Reconnecting...";
+            retryBtn.classList.add('animate-bounce');
+            setTimeout(() => { window.location.href = '/home'; }, 1000);
+        });
 
         async function shareApp() {
             const brand = document.getElementById('brand-name').textContent;
@@ -70,6 +201,118 @@
                 alert('Link copied to clipboard!');
             }
         }
+
+        function initSnakeGame() {
+            snakeCanvas = document.getElementById('snake-game-canvas');
+            snakeCtx = snakeCanvas.getContext('2d');
+            snakeScoreDisplay = document.getElementById('snake-score');
+            
+            snakeCanvas.width = gridSize * cellSize;
+            snakeCanvas.height = gridSize * cellSize;
+            document.getElementById('snake-high-score').textContent = highScore;
+
+            resetGame();
+        }
+
+        function resetGame() {
+            snake = [{ x: 10, y: 10 }];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            snakeScoreDisplay.textContent = score;
+            createFood();
+            drawGame();
+            clearInterval(gameInterval);
+        }
+
+        function startGame() {
+            resetGame();
+            gameInterval = setInterval(gameTick, 100);
+        }
+
+        function drawGame() {
+            snakeCtx.clearRect(0, 0, snakeCanvas.width, snakeCanvas.height);
+            drawFood();
+            drawSnake();
+        }
+
+        function drawSnakePart(part) {
+            snakeCtx.fillStyle = '#48bb78'; // Green snake
+            snakeCtx.strokeStyle = '#2f855a';
+            snakeCtx.fillRect(part.x * cellSize, part.y * cellSize, cellSize, cellSize);
+            snakeCtx.strokeRect(part.x * cellSize, part.y * cellSize, cellSize, cellSize);
+        }
+
+        function drawSnake() {
+            snake.forEach(drawSnakePart);
+        }
+
+        function createFood() {
+            food = {
+                x: Math.floor(Math.random() * gridSize),
+                y: Math.floor(Math.random() * gridSize)
+            };
+            // Ensure food doesn't spawn on snake
+            for (let i = 0; i < snake.length; i++) {
+                if (snake[i].x === food.x && snake[i].y === food.y) {
+                    createFood();
+                    return;
+                }
+            }
+        }
+
+        function drawFood() {
+            snakeCtx.fillStyle = '#e53e3e'; // Red food
+            snakeCtx.strokeStyle = '#c53030';
+            snakeCtx.fillRect(food.x * cellSize, food.y * cellSize, cellSize, cellSize);
+            snakeCtx.strokeRect(food.x * cellSize, food.y * cellSize, cellSize, cellSize);
+        }
+
+        function gameTick() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Check for collision with walls or self
+            if (head.x < 0 || head.x >= gridSize || head.y < 0 || head.y >= gridSize ||
+                snake.some(part => part.x === head.x && part.y === head.y)) {
+                clearInterval(gameInterval);
+                alert('Game Over! Score: ' + score);
+                return;
+            }
+
+            snake.unshift(head); // Add new head
+            if (head.x === food.x && head.y === food.y) {
+                score++;
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('maiga_snake_high_score', highScore);
+                    document.getElementById('snake-high-score').textContent = highScore;
+                }
+                snakeScoreDisplay.textContent = score;
+                createFood();
+            } else {
+                snake.pop(); // Remove tail if no food eaten
+            }
+            drawGame();
+        }
+
+        function changeDirection(newDx, newDy) {
+            // Prevent reversing direction immediately
+            if ((newDx === -dx && newDy === -dy) || (dx === newDx && dy === newDy)) return;
+            dx = newDx;
+            dy = newDy;
+        }
+
+        // Keyboard controls for desktop
+        document.addEventListener('keydown', e => {
+            if (!snakeCanvas || snakeCanvas.offsetParent === null) return; // Only if game is visible
+            switch (e.key) {
+                case 'ArrowUp': changeDirection(0, -1); break;
+                case 'ArrowDown': changeDirection(0, 1); break;
+                case 'ArrowLeft': changeDirection(-1, 0); break;
+                case 'ArrowRight': changeDirection(1, 0); break;
+                case 'Enter': startGame(); break;
+            }
+        });
     </script>
 </body>
 </html>
