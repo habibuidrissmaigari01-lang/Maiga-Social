@@ -200,7 +200,6 @@
             box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
         }
 
-        .fixed-font { font-size: 16px !important; }
         body { font-family: 'Intel One Mono', 'Inter', sans-serif !important; }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
     </style>
@@ -373,7 +372,7 @@
                 <i class="fa-solid fa-screwdriver-wrench text-white text-xl"></i>
             </div>
         </div>
-        <h1 class="text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter fixed-font">UPGRADING SYSTEMS</h1>
+        <h1 class="text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter">UPGRADING SYSTEMS</h1>
         <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-10 text-sm font-medium leading-relaxed">We are currently fine-tuning our servers to ensure <strong>Innovation & Excellence</strong>. Only administrators can access the platform at this time.</p>
         
         <div x-show="maintenanceEndTime" class="mb-10 animate-pulse">
@@ -460,7 +459,7 @@
     <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0 transition-all duration-300 z-40" :class="isLeftSidebarCollapsed ? 'w-24' : 'w-72'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
             <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
-            <span x-show="!isLeftSidebarCollapsed" class="amazing-logo text-2xl fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <span x-show="!isLeftSidebarCollapsed" class="amazing-logo text-2xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
             <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
@@ -559,8 +558,8 @@
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale floating-logo shrink-0">
-                <span class="amazing-logo text-2xl fixed-font" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+                <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo shrink-0">
+                <span class="amazing-logo text-4xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
