@@ -246,12 +246,11 @@ self.addEventListener('fetch', (event) => {
             cache.match('/auth-session-active'),
             isSessionPersistent()
           ]).then(async ([sessionMarker, isPersistent]) => {
-            if (sessionMarker || isPersistent) {
-              // Custom Splash Timeout: Delay by 1s to match app boot time
-              await new Promise(r => setTimeout(r, 1000));
-              const shell = await cache.match('/maiga.html');
-              if (shell) return shell;
-            }
+            // Always attempt to serve the shell for navigation requests
+            const shell = await cache.match('/maiga.html');
+            if (shell) return shell;
+
+            // Fallback to network if shell isn't cached
             return fetch(event.request);
           }).catch(() => fetch(event.request));
         }
