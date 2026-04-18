@@ -156,6 +156,7 @@ const initMaiga = () => {
         isNetworkBlocked: false,
         confirmModal: {
             show: false,
+            isLoading: false,
             title: '',
             message: '',
             confirmAction: () => {}
@@ -323,6 +324,7 @@ const initMaiga = () => {
         followerList: [],
         blockedUsers: [],
         blockedUserDetails: [],
+        verificationHistory: [],
         callHistory: [],
         starredMessages: [],
         archivedChats: [],
@@ -355,6 +357,13 @@ const initMaiga = () => {
                 p.username.toLowerCase().includes(q) ||
                 (p.dept && p.dept.toLowerCase().includes(q))
             );
+        },
+
+        async fetchVerificationHistory() {
+            const data = await this.apiFetch('/api/admin/get_verification_history');
+            if (data) {
+                this.verificationHistory = data;
+            }
         },
 
         get sortedGroupMembers() {
@@ -586,6 +595,16 @@ const initMaiga = () => {
                             }
                         } catch (e) { }
                         return null;
+                    }
+                    if (response.status === 403) {
+                        try {
+                            const errData = await response.json();
+                            if (errData.redirect) {
+                                this.showToast('Access Denied', errData.message || 'Redirecting to correct portal...', 'error');
+                                setTimeout(() => window.location.href = errData.redirect, 1500);
+                                return null;
+                            }
+                        } catch (e) { }
                     }
                     if (response.ok) {
                         const contentType = response.headers.get('content-type');
@@ -1909,34 +1928,38 @@ const initMaiga = () => {
         isCallChatOpen: false,
         isCallMinimized: false,
         isCalling: false,
-        async logout() {
-            if (!confirm('Are you sure you want to log out?')) return;
+        logout() {
+            this.openConfirmModal(
+                'Log Out', 
+                'Are you sure you want to sign out of Maiga Social? You will need to sign in again to access your messages and feed.',
+                async () => {
+                    // Clear PWA Session Marker
+                    if ('caches' in window) {
+                        const cache = await caches.open(`${this.user.account_type || 'maiga'}-offline-v5`);
+                        await cache.delete('/auth-session-active');
+                    }
 
-            // Clear PWA Session Marker
-            if ('caches' in window) {
-                const cache = await caches.open(`${this.user.account_type || 'maiga'}-offline-v5`);
-                await cache.delete('/auth-session-active');
-            }
+                    // Clear Persistent IDB Marker
+                    if (this.crypto && this.crypto.db) {
+                        await this.crypto._set('persistent_session', false);
+                    }
 
-            // Clear Persistent IDB Marker
-            if (this.crypto && this.crypto.db) {
-                await this.crypto._set('persistent_session', false);
-            }
+                    await this.apiFetch('/api/logout');
 
-            await this.apiFetch('/api/logout');
+                    // Clear local application storage
+                    localStorage.removeItem('maiga_session_active');
+                    localStorage.clear();
 
-            // Clear local application storage
-            localStorage.removeItem('maiga_session_active');
-            localStorage.clear();
+                    // Force clear browser cache storage (Service Worker caches)
+                    if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    }
 
-            // Force clear browser cache storage (Service Worker caches)
-            if ('caches' in window) {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-            }
-
-            // Redirect to YSU login if account_type is 'ysu', otherwise to default Maiga login
-            window.location.replace(this.user.account_type === 'ysu' ? 'ysu.html' : 'index.html');
+                    // Redirect to YSU login if account_type is 'ysu', otherwise to default Maiga login
+                    window.location.replace(this.user.account_type === 'ysu' ? 'ysu.html' : 'index.html');
+                }
+            );
         },
         async checkForUpdates() {
             if (!('serviceWorker' in navigator)) return;
@@ -2273,6 +2296,7 @@ const initMaiga = () => {
         chats: [],
         chatMessages: {}, // Will populate via API
         reels: [],
+        currentlyPlayingReel: null,
         myReels: [],
         observer: null,
         viewedReels: new Set(),
@@ -2419,6 +2443,7 @@ const initMaiga = () => {
             this.confirmModal.title = title;
             this.confirmModal.message = message;
             this.confirmModal.confirmAction = action;
+            this.confirmModal.isLoading = false;
             this.confirmModal.show = true;
         },
 
@@ -5789,28 +5814,29 @@ const initMaiga = () => {
         },
         clearChat() {
             if (!this.activeChat) return;
-            if (!confirm('Are you sure you want to clear this chat? This cannot be undone.')) return;
-
-            const type = this.activeChat.type === 'group' ? 'group' : 'user';
-
-            this.apiFetch('/api/clear_chat', {
-                    method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': CSRF_TOKEN
-                },
-                body: JSON.stringify({ chat_id: this.activeChat.id, type: type })
-            })
-            .then(data => {
-                if (data && data.success) {
-                    this.chatMessages[this.activeChat.id] = [];
-                    this.activeChat.lastMsg = '';
-                    this.showChatOptions = false;
-                    this.showToast('Success', 'Chat cleared.');
-                } else {
-                    this.showToast('Error', data.error || 'Failed to clear chat.', 'error');
+            this.openConfirmModal(
+                'Clear Chat',
+                'Are you sure you want to clear this conversation? This will permanently delete all messages for you.',
+                async () => {
+                    const type = this.activeChat.type === 'group' ? 'group' : 'user';
+                    const data = await this.apiFetch('/api/clear_chat', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': CSRF_TOKEN
+                        },
+                        body: JSON.stringify({ chat_id: this.activeChat.id, type: type })
+                    });
+                    if (data && data.success) {
+                        this.chatMessages[this.activeChat.id] = [];
+                        this.activeChat.lastMsg = '';
+                        this.showChatOptions = false;
+                        this.showToast('Success', 'Chat cleared.');
+                    } else {
+                        this.showToast('Error', data?.error || 'Failed to clear chat.', 'error');
+                    }
                 }
-            });
+            );
         },
         async deleteChatHistory() {
             if (!this.activeChat || this.activeChat.type === 'group') return;
@@ -6424,33 +6450,35 @@ const initMaiga = () => {
         },
 
         deletePost(postId) {
-            if (!confirm('Are you sure you want to delete this post? This cannot be undone.')) return;
-
-            this.apiFetch('/api/delete_post', {
-                method: 'POST', // Fixed: deletePost route was missing
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ post_id: postId })
-            })
-            .then(data => {
-                if (data && data.success) {
-                    this.posts = this.posts.filter(p => p.id !== postId);
-                    this.savedPostList = this.savedPostList.filter(p => p.id !== postId);
-                    this.myPosts = this.myPosts.filter(p => p.id !== postId);
-                    this.reels = this.reels.filter(r => r.id !== postId);
-                    this.myReels = this.myReels.filter(r => r.id !== postId);
-                    if (this.viewingUser) {
-                        if (this.viewingUser.posts) this.viewingUser.posts = this.viewingUser.posts.filter(p => p.id !== postId);
-                        if (this.viewingUser.reels) this.viewingUser.reels = this.viewingUser.reels.filter(r => r.id !== postId);
+            this.openConfirmModal(
+                'Delete Post',
+                'Are you sure you want to delete this post? This action cannot be undone.',
+                async () => {
+                    const data = await this.apiFetch('/api/delete_post', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ post_id: postId })
+                    });
+                    if (data && data.success) {
+                        this.posts = this.posts.filter(p => p.id !== postId);
+                        this.savedPostList = this.savedPostList.filter(p => p.id !== postId);
+                        this.myPosts = this.myPosts.filter(p => p.id !== postId);
+                        this.reels = this.reels.filter(r => r.id !== postId);
+                        this.myReels = this.myReels.filter(r => r.id !== postId);
+                        if (this.viewingUser) {
+                            if (this.viewingUser.posts) this.viewingUser.posts = this.viewingUser.posts.filter(p => p.id !== postId);
+                            if (this.viewingUser.reels) this.viewingUser.reels = this.viewingUser.reels.filter(r => r.id !== postId);
+                        }
+                        this.user.total_posts_count = Math.max(0, this.user.total_posts_count - 1);
+                        if (this.viewingPost && this.viewingPost.id === postId) {
+                            this.viewingPost = null;
+                        }
+                        this.showToast('Success', 'Post deleted successfully.');
+                    } else {
+                        this.showToast('Error', data?.error || 'Failed to delete post.', 'error');
                     }
-                    this.user.total_posts_count = Math.max(0, this.user.total_posts_count - 1);
-                    if (this.viewingPost && this.viewingPost.id === postId) {
-                        this.viewingPost = null;
-                    }
-                    this.showToast('Success', 'Post deleted successfully.');
-                } else {
-                    this.showToast('Error', data.error || 'Failed to delete post.', 'error');
                 }
-            });
+            );
             this.showPostOptions = false;
         },
 
@@ -7873,13 +7901,15 @@ const initMaiga = () => {
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
-                        // Ensure all other videos are paused before playing this one
-                        document.querySelectorAll('video[id^="reel-video-"]').forEach(v => {
-                            if (v !== video) { v.pause(); v.muted = true; }
-                        });
+                        // OPTIMIZATION: Instead of searching the whole DOM, 
+                        // just pause the last known playing video
+                        if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {
+                            this.currentlyPlayingReel.pause();
+                            this.currentlyPlayingReel.muted = true;
+                        }
                         
                         video.muted = this.isReelsMuted;
-                        video.play().catch(error => {
+                        video.play().then(() => { this.currentlyPlayingReel = video; }).catch(error => {
                             if (error && error.name === 'AbortError') return;
                         });
 

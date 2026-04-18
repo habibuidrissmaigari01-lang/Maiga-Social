@@ -67,6 +67,10 @@
             background-repeat: repeat;
             background-position: center;
         }
+        .step-content { display: none; }
+        .step-content.active { display: block; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+        .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
     </style>
     <script src="alpine.js" defer></script>
 </head>
@@ -137,7 +141,7 @@
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" name="remember_me" class="mr-2 rounded"> Remember me
                         </label>
-                        <a href="#" onclick="showForgotPassword(event)" class="text-indigo-600 font-medium">Forgot password?</a>
+                        <a href="#" @click.prevent="view = 'forgot'" class="text-indigo-600 font-medium">Forgot password?</a>
                     </div>
                     <button type="submit" class="btn-primary mt-4">Login</button>
                     <p class="text-center text-sm text-gray-600">
@@ -343,22 +347,22 @@
             </div>
 
             <!-- FORGOT PASSWORD STEP 1: Identity -->
-            <div id="page-forgot" class="step-content">
-                <button type="button" onclick="showLogin(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="page-forgot" class="step-content" :class="{ 'active': view === 'forgot' }" x-show="view === 'forgot'">
+                <button type="button" @click="view = 'login'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Find Your Account</h2>
                 <p class="text-gray-500 text-sm mb-6">Please enter your email address or mobile number to search for your account.</p>
                 <div class="space-y-4">
                     <input type="text" name="forgot_identity" placeholder="Email or Mobile Number" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
                     <div class="flex space-x-3 pt-2">
-                        <button type="button" onclick="showLogin(event)" class="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 py-3 rounded-xl font-bold">Cancel</button>
+                        <button type="button" @click="view = 'login'" class="flex-1 bg-gray-200 dark:bg-gray-700 dark:text-white text-gray-800 py-3 rounded-xl font-bold">Cancel</button>
                         <button type="submit" class="flex-1 btn-primary">Search</button>
                     </div>
                 </div>
             </div>
 
             <!-- FORGOT PASSWORD STEP 2: OTP -->
-            <div id="page-forgot-otp" class="step-content">
-                <button type="button" onclick="showForgotPassword(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="page-forgot-otp" class="step-content" :class="{ 'active': view === 'forgot-otp' }" x-show="view === 'forgot-otp'">
+                <button type="button" @click="view = 'forgot'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Enter security code</h2>
                 <p class="text-gray-500 text-sm mb-6">Please check your email/messages for a message with your code.</p>
                 <div class="space-y-6">
@@ -372,6 +376,9 @@
                     </div>
                     <button type="submit" class="btn-primary">Continue</button>
                     <div class="text-center">
+                        <div x-show="otpTimer > 0" class="w-full bg-gray-100 dark:bg-gray-800 h-1.5 rounded-full overflow-hidden mb-3">
+                            <div class="h-full bg-indigo-500 transition-all duration-1000 ease-linear" :style="`width: ${otpProgress}%` "></div>
+                        </div>
                        <p x-show="otpTimer > 0" class="text-xs text-gray-400">Resend code in <span class="font-bold text-indigo-500 tabular-nums" x-text="formattedTimer"></span></p>
                        <a href="#" x-show="otpTimer <= 0" @click.prevent="sendForgotOTP($event)" class="text-xs font-bold text-indigo-600 underline">Resend code</a>
                     </div>
@@ -379,8 +386,8 @@
             </div>
 
             <!-- FORGOT PASSWORD STEP 3: New Password -->
-            <div id="page-reset-password" class="step-content">
-                <button type="button" onclick="showForgotOTP(event)" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <div id="page-reset-password" class="step-content" :class="{ 'active': view === 'reset-password' }" x-show="view === 'reset-password'">
+                <button type="button" @click="view = 'forgot-otp'" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Choose a new password</h2>
                 <p class="text-gray-500 text-sm mb-6">Create a new password that is at least 6 characters long. A strong password is a mix of letters, numbers, and punctuation marks.</p>
                 <div class="space-y-4">
@@ -468,6 +475,7 @@
                 phoneStatus: '',
                 emailStatus: '',
                 otpTimer: 0,
+                maxOtpTimer: 180,
                 countdownTimer: null,
                  registration: { 
                     first_name: '', surname: '', birthday: '', username: '', 
@@ -509,7 +517,7 @@
                         const text = await navigator.clipboard.readText();
                         const code = text.trim();
                         if (/^\d{6}$/.test(code)) {
-                            const containerId = isForgotOtp ? '#forgot-otp-inputs' : '#otp-inputs';
+                            const containerId = this.view === 'forgot-otp' ? '#forgot-otp-inputs' : '#otp-inputs';
                             const boxes = document.querySelectorAll(`${containerId} .otp-box`);
                             code.split('').forEach((char, i) => { if(boxes[i]) boxes[i].value = char; });
                             showMessage('Code auto-pasted from clipboard!', 'success');
@@ -552,6 +560,10 @@
                     const mins = Math.floor(this.otpTimer / 60);
                     const secs = this.otpTimer % 60;
                     return `${mins}:${secs.toString().padStart(2, '0')}`;
+                },
+                get otpProgress() {
+                    if (this.maxOtpTimer === 0) return 0;
+                    return ((this.maxOtpTimer - this.otpTimer) / this.maxOtpTimer) * 100;
                 },
                 toggleTheme() {
                     const modes = ['light', 'dark', 'system'];
@@ -702,21 +714,22 @@
 
         function showForgotPassword(event) {
             event?.preventDefault();
-            const el = document.getElementById('authCard');
+            const el = document.querySelector('[x-data]');
             if (el && window.Alpine) {
                 Alpine.$data(el).view = 'forgot';
-                showPage('page-forgot');
             }
+            document.getElementById('authType').value = "forgot_1";
         }
 
         function showLogin(event) {
             event?.preventDefault();
-            const el = document.getElementById('authCard');
+            const el = document.querySelector('[x-data]');
             if (el && window.Alpine) {
-                Alpine.$data(el).view = 'login';
-                Alpine.$data(el).currentStep = 0;
-                showPage('page-login');
+                const data = Alpine.$data(el);
+                data.view = 'login';
+                data.currentStep = 0;
             }
+            document.getElementById('authType').value = "login";
         }
         function showTerms(e) {
             e.preventDefault();
@@ -758,18 +771,24 @@
                     if (chars.length === regOtpBoxes.length) {
                         verifyOTP();
                     } else {
-                        regOtpBoxes[Math.min(chars.length, regOtpBoxes.length - 1)].focus();
+                        const nextIndex = Math.min(chars.length, regOtpBoxes.length - 1);
+                        regOtpBoxes[nextIndex].focus();
                     }
                 }
             });
         });
 
+
         // Corrected Forgot OTP Logic
         const forgotOtpBoxes = document.querySelectorAll('#forgot-otp-inputs .otp-box');
         forgotOtpBoxes.forEach((box, index) => {
             box.addEventListener('input', (e) => {
-                if (e.target.value.length === 1 && index < forgotOtpBoxes.length - 1) {
-                    forgotOtpBoxes[index + 1].focus();
+                if (e.target.value.length === 1) {
+                    if (index < forgotOtpBoxes.length - 1) {
+                        forgotOtpBoxes[index + 1].focus();
+                    } else {
+                        document.querySelector('#page-forgot-otp .btn-primary')?.click();
+                    }
                 }
             });
             box.addEventListener('keydown', (e) => {
@@ -785,10 +804,19 @@
                     chars.forEach((char, i) => {
                         forgotOtpBoxes[i].value = char;
                     });
-                    forgotOtpBoxes[Math.min(chars.length, forgotOtpBoxes.length - 1)].focus();
+                    if (chars.length === forgotOtpBoxes.length) {
+                        document.querySelector('#page-forgot-otp .btn-primary')?.click();
+                    } else {
+                        forgotOtpBoxes[Math.min(chars.length, forgotOtpBoxes.length - 1)].focus();
+                    }
                 }
             });
         });
+
+        function applyShake(btn) {
+            btn.classList.add('shake-btn');
+            setTimeout(() => btn.classList.remove('shake-btn'), 500);
+        }
 
         async function verifyOTP() {
             const btn = document.querySelector('#reg-6 .btn-primary');
@@ -825,6 +853,7 @@
                     nextStep(7); // Proceed to the next registration step (password)
                 } else {
                     showMessage(result.message || 'OTP verification failed.', 'error');
+                    applyShake(btn);
                 }
             } catch (error) {
                 showMessage('Network error during OTP verification.', 'error');
@@ -1031,19 +1060,31 @@
 
         function showForgotOTP(event) {
             event?.preventDefault();
-             document.getElementById('authType').value = "forgot_2";
-            showPage('page-forgot-otp');
-            const el = document.getElementById('authCard');
+            const el = document.querySelector('[x-data]');
             if (el && window.Alpine) {
-                Alpine.$data(el).startTimer(180);
+                const data = Alpine.$data(el);
+                data.view = 'forgot-otp';
+                data.startTimer(180);
             }
+            document.getElementById('authType').value = "forgot_2";
         }
 
         function showResetPassword(event) {
             event?.preventDefault();
-             document.getElementById('authType').value = "forgot_3";
-            showPage('page-reset-password');
+            const el = document.querySelector('[x-data]');
+            if (el && window.Alpine) {
+                Alpine.$data(el).view = 'reset-password';
+            }
+            document.getElementById('authType').value = "forgot_3";
         }
+
+        // Clean up legacy function to prevent conflicts
+        function showPage(pageId) {
+            // This function is now mostly redundant but kept for any non-migrated parts.
+            // In a pure Alpine setup, we only manage the 'view' and 'currentStep' variables.
+            console.log('Navigating to:', pageId);
+        }
+
 
         function updateProgress() {
             if (currentStep === 0) return;
@@ -1181,13 +1222,13 @@
             const activePageId = document.querySelector('.step-content.active').id;
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
-
+            const alpine = Alpine.$data(document.querySelector('[x-data]'));
             const submitBtn = document.querySelector('.step-content.active button[type="submit"]');
             let originalBtnHtml = '';
             if (submitBtn) {
                 originalBtnHtml = submitBtn.innerHTML;
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Processing...';
+                submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Processing...';
             }
 
             // Consolidate password fields
@@ -1235,12 +1276,12 @@
                 delete data.reg_password;
             } else if (activePageId === 'page-forgot') {
                 endpoint = '/api/forgot-password';
-            } else if (activePageId === 'page-forgot-otp') {
+            } else if (alpine.view === 'forgot-otp') {
                 endpoint = '/api/verify-otp';
                 // Combine OTP inputs for backend
                 const otpInputs = document.querySelectorAll('#forgot-otp-inputs input');
                 data.otp = Array.from(otpInputs).map(i => i.value).join('');
-            } else if (activePageId === 'page-reset-password') {
+            } else if (alpine.view === 'reset-password') {
                 endpoint = '/api/reset-password';
                 const otpInputs = document.querySelectorAll('#forgot-otp-inputs input');
                 data.otp = Array.from(otpInputs).map(i => i.value).join('');
@@ -1273,6 +1314,7 @@
                 }
 
                 if (!response.ok) {
+                    applyShake(submitBtn);
                     throw new Error(result.message || 'An error occurred.');
                 }
 

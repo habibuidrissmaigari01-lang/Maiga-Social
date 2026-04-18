@@ -12,7 +12,20 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
     <script src="alpine.js" defer></script>
     <audio id="admin-notif-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
+    <audio id="verify-success-sound" src="https://actions.google.com/sounds/v1/foley/success_fanfare_trumpet.ogg" preload="auto"></audio>
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        @keyframes verified-shimmer {
+            0% { background-position: -200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); }
+            100% { background-position: 200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+        }
+        .verified-badge-anim { 
+            background: linear-gradient(90deg, #f59e0b, #fbbf24, #fcd34d, #fbbf24, #f59e0b);
+            background-size: 200% 100%;
+            animation: verified-shimmer 3s infinite linear;
+        }
+    </style>
 </head>
 <body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
       :class="{ 'dark': darkMode, ['font-size-' + appFontSize]: true }"
@@ -309,6 +322,7 @@
                     <option value="blocked">Blocked</option>
                     <option value="maiga">Maiga Only</option>
                     <option value="ysu">YSU Only</option>
+                    <option value="verified">Verified Only</option>
                 </select>
             <button @click="exportUsersToCSV()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 w-full sm:w-auto">
                 <i class="fa-solid fa-file-csv"></i>
@@ -362,8 +376,13 @@
                                 <button @click="user.blocked ? toggleBlockUser(user) : openBanModal(user)" class="text-gray-400 hover:text-red-600" :class="{'text-green-500': user.blocked}">
                                     <i class="fa-solid" :class="user.blocked ? 'fa-unlock' : 'fa-gavel'"></i>
                                 </button>
-                                <button @click="toggleVerify(user)" class="text-gray-400 hover:text-blue-500" :class="{'text-blue-500': user.is_verified == 1}">
-                                    <i class="fa-solid fa-circle-check"></i>
+                                <button @click="toggleVerify(user)" class="transition-all hover:scale-110 active:scale-90">
+                                    <template x-if="user.is_verified">
+                                        <span class="verified-badge-anim inline-flex items-center justify-center w-5 h-5 rounded-full shadow-md">
+                                            <i class="fa-solid fa-crown text-[10px] text-white"></i>
+                                        </span>
+                                    </template>
+                                    <i x-show="!user.is_verified" class="fa-solid fa-circle-check text-gray-300"></i>
                                 </button>
                                 <button @click="toggleAdmin(user)" class="text-gray-400 hover:text-orange-500" :class="{'text-orange-500': user.is_admin}">
                                     <i class="fa-solid fa-shield-halved"></i>
@@ -581,6 +600,11 @@
         <div @click.away="showUserOptionsModal = false" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-80 animate-fadeIn flex flex-col space-y-3">
             <h3 class="text-lg font-black text-center mb-2" x-text="selectedUser?.name"></h3>
             
+            <button @click="toggleVerify(selectedUser); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/20 font-bold flex items-center justify-center space-x-2 border border-amber-100 dark:border-amber-900/30 transition-all active:scale-95">
+                <i class="fa-solid" :class="selectedUser?.is_verified ? 'fa-certificate' : 'fa-crown'"></i>
+                <span class="uppercase text-[10px] font-black tracking-widest" x-text="selectedUser?.is_verified ? 'Unverify User (Remove Crown)' : 'Verify Account (Assign Crown)'"></span>
+            </button>
+
             <button @click="openProfileModal(selectedUser)" class="w-full p-3 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/20 font-bold flex items-center justify-center space-x-2">
                 <i class="fa-solid fa-user"></i>
                 <span>View Profile</span>
@@ -1222,6 +1246,10 @@
                     .then(data => {
                         if (data.success) {
                             user.is_verified = user.is_verified == 1 ? 0 : 1;
+                            if (user.is_verified) {
+                                document.getElementById('verify-success-sound')?.play().catch(()=>{});
+                                if (navigator.vibrate) navigator.vibrate([50, 30, 100]);
+                            }
                             const action = user.is_verified ? 'VERIFY_USER' : 'UNVERIFY_USER';
                             this.systemLogs.unshift({ id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: action, details: `${action === 'VERIFY_USER' ? 'Verified' : 'Unverified'} user ${user.name}.` });
                         } else {

@@ -762,18 +762,24 @@
                     if (chars.length === regOtpBoxes.length) {
                         verifyOTP();
                     } else {
-                        regOtpBoxes[Math.min(chars.length, regOtpBoxes.length - 1)].focus();
+                        const nextIndex = Math.min(chars.length, regOtpBoxes.length - 1);
+                        regOtpBoxes[nextIndex].focus();
                     }
                 }
             });
         });
 
+
         // Corrected Forgot OTP Logic
         const forgotOtpBoxes = document.querySelectorAll('#forgot-otp-inputs .otp-box');
         forgotOtpBoxes.forEach((box, index) => {
             box.addEventListener('input', (e) => {
-                if (e.target.value.length === 1 && index < forgotOtpBoxes.length - 1) {
-                    forgotOtpBoxes[index + 1].focus();
+                if (e.target.value.length === 1) {
+                    if (index < forgotOtpBoxes.length - 1) {
+                        forgotOtpBoxes[index + 1].focus();
+                    } else {
+                        document.querySelector('#page-forgot-otp .btn-primary')?.click();
+                    }
                 }
             });
             box.addEventListener('keydown', (e) => {
@@ -789,10 +795,19 @@
                     chars.forEach((char, i) => {
                         forgotOtpBoxes[i].value = char;
                     });
-                    forgotOtpBoxes[Math.min(chars.length, forgotOtpBoxes.length - 1)].focus();
+                    if (chars.length === forgotOtpBoxes.length) {
+                        document.querySelector('#page-forgot-otp .btn-primary')?.click();
+                    } else {
+                        forgotOtpBoxes[Math.min(chars.length, forgotOtpBoxes.length - 1)].focus();
+                    }
                 }
             });
         });
+
+        function applyShake(btn) {
+            btn.classList.add('shake-btn');
+            setTimeout(() => btn.classList.remove('shake-btn'), 500);
+        }
 
         async function verifyOTP() {
             const btn = document.querySelector('#reg-6 .btn-primary');
@@ -829,6 +844,7 @@
                     nextStep(7); // Proceed to the next registration step (password)
                 } else {
                     showMessage(result.message || 'OTP verification failed.', 'error');
+                    applyShake(btn);
                 }
             } catch (error) {
                 showMessage(error.message || 'Network error during OTP verification.', 'error');
@@ -1275,6 +1291,7 @@
                 }
 
                 if (!response.ok) {
+                    applyShake(submitBtn);
                     throw new Error(result.message || 'An error occurred.');
                 }
 

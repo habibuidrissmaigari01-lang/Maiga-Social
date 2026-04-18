@@ -5,7 +5,7 @@ const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { exec } = require('child_process');
-const { User, Otp } = require('../../models');
+const { User, Otp, Setting } = require('../../models');
 
 // Brute-force protection for the login route
 const loginLimiter = rateLimit({
@@ -188,12 +188,18 @@ router.post('/register', [
 
 router.post('/login', loginLimiter, async (req, res) => {
     try {
-        const { login_identity, login_password, remember_me } = req.body;
+        const { login_identity, login_password, remember_me, account_type } = req.body;
         const identity = login_identity.trim().toLowerCase();
         const user = await User.findOne({ $or: [{ email: identity }, { username: identity }] }).select('+password');
         
         if (!user || !(await bcrypt.compare(login_password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        // Enforce account isolation: users can only login through their respective registration portal
+        if (account_type && user.account_type !== account_type) {
+            const portalName = user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social';
+            return res.status(403).json({ message: `Access Denied. This account is registered for ${portalName}. Please login via the correct portal.` });
         }
 
         // Regenerate the session to prevent session fixation and clear any previous user state

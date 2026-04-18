@@ -228,8 +228,8 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
-            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
-            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0, author: user.name, avatar: user.avatar })),
+            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
+            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0, author: user.name, avatar: user.avatar, verified: user.is_verified })),
             total_posts_count: postsCount,
             chats: Array.from(processedChats.values()),
             groups: groupData,
@@ -437,6 +437,7 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
             time: formatTime(p.createdAt), likes: p.likes.length,
             comments: p.comments_count || 0,
             views: p.views || 0,
+            verified: p.user?.is_verified || false,
             saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
             myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
             link_preview: p.link_preview // Include link preview
@@ -458,6 +459,7 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
             time: formatTime(post.createdAt), likes: post.likes.length,
             comments: post.comments_count || 0,
             views: post.views || 0,
+            verified: post.user?.is_verified || false,
             saved: post.saved_by.some(id => id.toString() === req.session.userId?.toString()),
             myReaction: post.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
             link_preview: post.link_preview // Include link preview
@@ -757,6 +759,7 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
                 time: formatTime(p.createdAt),
                 likes: p.likes.length,
                 comments: p.comments_count || 0,
+            verified: p.user?.is_verified,
                 saved: p.saved_by.some(id => id.toString() === req.session.userId.toString()),
                 myReaction: p.likes.some(id => id.toString() === req.session.userId.toString()) ? 'like' : null,
                 author: user.full_name, // Include link preview
@@ -792,7 +795,8 @@ router.get('/get_most_active_users', isAuthenticated, async (req, res) => {
                 name: '$user_details.name',
                 username: '$user_details.username',
                 avatar: '$user_details.avatar',
-                post_count: 1
+                post_count: 1,
+                is_verified: '$user_details.is_verified'
             }}
         ]);
         res.json(activeUsers);
@@ -1304,6 +1308,7 @@ router.get('/saved_posts', isAuthenticated, async (req, res) => {
         time: formatTime(p.createdAt), likes: p.likes.length,
         comments: p.comments_count || 0,
         views: p.views || 0,
+        verified: p.user?.is_verified || false,
         saved: true, // Always true for saved posts list
         myReaction: p.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
     })));
@@ -1587,8 +1592,8 @@ router.get('/search_posts', isAuthenticated, async (req, res) => {
         .limit(10);
         
         res.json(posts.map(p => ({ 
-            id: p._id, content: p.content, media: p.media, 
-            author: p.user?.full_name || p.user?.name, avatar: p.user?.avatar, time: formatTime(p.createdAt) 
+            id: p._id, content: p.content, media: p.media, verified: p.user?.is_verified,
+            author: p.user?.full_name || p.user?.name, avatar: p.user?.avatar, time: formatTime(p.createdAt)
         })));
     } catch (err) { res.status(500).json([]); }
 });
@@ -2010,6 +2015,7 @@ router.get('/admin/get_users', isAuthenticated, async (req, res) => {
         if (filter === 'blocked') query.blocked = true;
         if (filter === 'maiga') query.account_type = 'maiga';
         if (filter === 'ysu') query.account_type = 'ysu';
+        if (filter === 'verified') query.is_verified = true;
 
         const users = await User.find(query)
             .sort({ [sort]: dir === 'asc' ? 1 : -1 })
@@ -2026,7 +2032,7 @@ router.get('/admin/get_users', isAuthenticated, async (req, res) => {
 
 router.get('/admin/get_settings', isAuthenticated, async (req, res) => {
     const settings = await Setting.find({});
-    const config = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true };
+    const config = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true, allow_cross_portal_login: false };
     settings.forEach(s => config[s.key] = s.value);
     res.json({ success: true, settings: config });
 });
@@ -2684,6 +2690,15 @@ router.post('/admin/toggle_verify_user', isAuthenticated, isAdmin, async (req, r
         if (!user) return res.status(404).json({ error: 'User not found' });
         user.is_verified = !user.is_verified;
         await user.save();
+
+        // Log administrative action for Verification History
+        await Log.create({
+            user: req.session.userId,
+            action: 'VERIFICATION_TOGGLE',
+            details: `Admin ${user.is_verified ? 'verified' : 'unverified'} user: @${user.username} (ID: ${user._id})`,
+            timestamp: new Date()
+        });
+
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to toggle verification' });
@@ -2725,6 +2740,19 @@ router.post('/admin/delete_user', isAuthenticated, isAdmin, async (req, res) => 
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete user' });
+    }
+});
+
+router.get('/admin/get_verification_history', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const logs = await Log.find({ action: 'VERIFICATION_TOGGLE' })
+            .populate('user', 'name username avatar')
+            .sort({ timestamp: -1 })
+            .limit(100);
+        
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch verification history' });
     }
 });
 

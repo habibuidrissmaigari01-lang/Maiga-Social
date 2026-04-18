@@ -321,103 +321,61 @@
         @keyframes share-pop {
             0% { transform: translateY(0) scale(1); opacity: 1; }
             100% { transform: translateY(-40px) scale(1.5); opacity: 0; }
-        }
+             }
         .share-pop-anim {
             animation: share-pop 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
+
+        @keyframes verified-bg-shimmer {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .verified-profile-bg {
+            background: linear-gradient(-45deg, #f59e0b, #fbbf24, #d97706, #fbbf24);
+            background-size: 400% 400%;
+            animation: verified-bg-shimmer 15s ease infinite;
+        }
+
+        @keyframes verified-shimmer {
+            0% { background-position: -200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); }
+            100% { background-position: 200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
+        }
+        .verified-badge-anim { 
+            background: linear-gradient(90deg, #f59e0b, #fbbf24, #fcd34d, #fbbf24, #f59e0b);
+            background-size: 200% 100%;
+            animation: verified-shimmer 3s infinite linear;
+        }
+
+        @keyframes verified-border-glow {
+            0%, 100% { border-color: #f59e0b; filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.4)); }
+            50% { border-color: #fcd34d; filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.8)); }
+        }
+        .verified-border {
+            border-width: 2px !important;
+            border-style: solid !important;
+            animation: verified-border-glow 2s infinite ease-in-out;
+        }
+
+        .text-verified-gold {
+            background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            filter: drop-shadow(0 0 1px rgba(212, 175, 55, 0.3));
+        }
+        
+        .share-pop-anim {
+            animation: share-pop 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        
     </style>
 </head>
     <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300 font-size-container"
       :class="[{ 'dark': darkMode, 'theme-ysu': user.account_type === 'ysu' }, desktopGridCols]"
       x-effect="document.documentElement.style.fontSize = (appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px')"
       x-data="appData">
-
-    <!-- Global Loading Screen -->
-    <div x-show="isLoading" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-[10000] bg-white dark:bg-black flex flex-col items-center justify-center">
-        <div class="relative flex flex-col items-center">
-            <!-- Faded Background Logo -->
-            <img src="img/logo.png" class="w-64 h-64 opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
-            
-            <!-- Centered Main Logo -->
-            <img src="img/logo.png" class="w-24 h-24 mb-10 relative z-10 animate-pulse" alt="Maiga Social">
-            
-            <!-- Modern Spinner -->
-            <div class="relative">
-                <div class="w-12 h-12 border-4 border-blue-100 dark:border-gray-800 rounded-full"></div>
-                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
-            </div>
-            <p class="mt-8 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] animate-pulse">Initializing Excellence</p>
-            
-            <!-- Progress Percentage -->
-            <p x-text="loadProgress + '%'" class="mt-2 text-blue-600 font-black text-xs"></p>
-
-            <!-- Retry Button -->
-            <button x-show="showLoadingRetry" @click="window.location.reload()" x-cloak class="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/30 animate-fadeIn active:scale-95 transition-all">Taking too long? Retry</button>
-        </div>
-    </div>
-
-    <!-- Global Confirmation Modal -->
-    <div x-show="confirmModal.show" x-cloak class="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
-        <div @click.away="confirmModal.show = false" class="bg-white dark:bg-gray-900 w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden animate-slideUp">
-            <div class="p-6 text-center">
-                <div class="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
-                    <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
-                </div>
-                <h3 class="text-lg font-black mb-2" x-text="confirmModal.title"></h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" x-text="confirmModal.message"></p>
-            </div>
-            <div class="flex border-t dark:border-gray-800">
-                <button @click="confirmModal.show = false" class="flex-1 py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Cancel</button>
-                <div class="w-px bg-gray-100 dark:border-gray-800"></div>
-                <button @click="confirmModal.confirmAction(); confirmModal.show = false" class="flex-1 py-4 text-sm font-black text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Automated Maintenance Overlay -->
-    <div x-show="isMaintenanceMode" x-cloak class="fixed inset-0 z-[11000] bg-white dark:bg-black flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
-        <div class="absolute inset-0 opacity-5 pointer-events-none">
-            <div class="grid grid-cols-6 gap-4 p-4">
-                <template x-for="i in 24"><i class="fa-solid fa-code text-4xl"></i></template>
-            </div>
-        </div>
-        <div class="relative mb-8">
-            <img src="img/logo.png" class="w-28 h-28 grayscale opacity-20 blur-[0.5px]" alt="Maiga Logo">
-            <div class="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40 animate-bounce">
-                <i class="fa-solid fa-screwdriver-wrench text-white text-xl"></i>
-            </div>
-        </div>
-        <h1 class="text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter">UPGRADING SYSTEMS</h1>
-        <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-10 text-sm font-medium leading-relaxed">We are currently fine-tuning our servers to ensure <strong>Innovation & Excellence</strong>. Only administrators can access the platform at this time.</p>
-        
-        <div x-show="maintenanceEndTime" class="mb-10 animate-pulse">
-            <p class="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.3em] mb-2">Estimated Completion</p>
-            <p class="text-5xl font-mono font-black text-gray-900 dark:text-white tabular-nums" x-text="maintenanceCountdown"></p>
-        </div>
-
-        <div class="flex flex-col items-center gap-6 w-full max-w-xs">
-            <button @click="checkApiStatus()" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-3">
-                <i class="fa-solid fa-rotate"></i>
-                <span>Check Server Status</span>
-            </button>
-            <div class="w-20 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div class="h-full bg-blue-600 animate-progress"></div>
-            </div>
-        </div>
-
-        <a href="/" class="absolute bottom-6 text-[8px] font-bold text-gray-400 uppercase tracking-widest opacity-0 hover:opacity-40 transition-opacity">Administrative Entry</a>
-    </div>
-
-    <!-- Return to Call Banner -->
-    <div x-show="isCalling && isCallMinimized" x-cloak
-         @click="isCallMinimized = false"
-         class="fixed top-0 left-0 right-0 z-[2000] bg-blue-600 text-white py-2 px-4 flex items-center justify-center space-x-3 cursor-pointer shadow-xl border-b border-white/10 animate-slideDown">
-        <div class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-100 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-        </div>
-        <span class="text-[10px] font-black uppercase tracking-widest">Tap to Return to Call • <span x-text="activeChat?.name"></span></span>
-    </div>
 
     <!-- Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
@@ -465,6 +423,11 @@
                 <hr class="my-2 dark:border-gray-700">
                 <button @click="activeTab = 'help'; isSideMenuOpen = false" class="flex items-center space-x-3 w-full p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg text-gray-900 dark:text-gray-100">
                     <i class="fa-solid fa-circle-info text-gray-400 w-6"></i><span>Help & Support</span>
+                </button>
+                <hr class="my-2 dark:border-gray-700">
+                <button @click="logout()" class="flex items-center space-x-3 w-full p-3 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-600 transition-colors">
+                    <i class="fa-solid fa-right-from-bracket w-6 text-center"></i>
+                    <span class="font-bold">Log Out</span>
                 </button>
             </div>
         </div>
@@ -592,7 +555,7 @@
 
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
-    <div class="pb-32 lg:pb-8">
+    <div class="pb-44 lg:pb-12">
     <!-- Messaging Overlay (now also for desktop chat windows) -->
     <div x-show="isMessaging" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
         <!-- List View -->
@@ -1764,9 +1727,13 @@
             <div class="flex items-center space-x-3 mb-4">
                 <img :src="viewingPost?.avatar" class="w-10 h-10 rounded-full border border-gray-700">
                 <div>
-                    <div class="flex items-center space-x-1">
+                    <div class="flex items-center">
                         <span class="font-bold text-sm text-white" x-text="viewingPost?.author"></span>
-                        <template x-if="viewingPost?.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template>
+                        <template x-if="viewingPost?.verified">
+                            <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-md ml-1.5">
+                                <i class="fa-solid fa-crown text-[8px] text-white"></i>
+                            </span>
+                        </template>
                     </div>
                     <span class="text-[11px] text-gray-400" x-text="viewingPost?.time"></span>
                 </div>
@@ -2972,7 +2939,12 @@
                     <div @click.stop="openUserProfile(post.user_id)" class="flex items-center space-x-3 cursor-pointer">
                         <img :src="post.avatar || 'img/male.png'" @error="$el.src='img/male.png'" class="w-11 h-11 parallelogram-sm border dark:border-gray-700"> 
                         <div class="hover:underline">
-                            <div class="flex items-center space-x-1"><span class="font-bold text-sm" x-text="post.author"></span><template x-if="post.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template></div> 
+                            <div class="flex items-center space-x-1">
+                                <span class="font-bold text-sm" :class="post.verified ? 'text-verified-gold' : ''" x-text="post.author"></span>
+                                <template x-if="post.verified">
+                                    <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
+                                </template>
+                            </div> 
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
                         </div>
                     </div>
@@ -3045,9 +3017,9 @@
              @scroll.passive="handleReelsScroll($event.target)"
              @wheel.prevent="handleReelWheel($event)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
-                <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden" :data-reel-id="reel.id">
+                <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden transform-gpu" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
-                        class="w-full h-full object-cover" 
+                        class="w-full h-full object-cover will-change-transform" 
                         playsinline muted loop preload="auto"
                         :src="reel.media" 
                         @ended="scrollToNextReel(index)" 
@@ -3319,9 +3291,14 @@
             <div @click="viewingPost = post" class="bg-white dark:bg-gray-900 mt-2 p-4 post-card border-b dark:border-gray-800 shadow-sm cursor-pointer">
                 <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center space-x-3">
-                        <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700">
+                        <img :src="post.avatar" class="w-11 h-11 parallelogram-sm border dark:border-gray-700" :class="{'verified-border': post.verified}">
                         <div>
-                            <div class="flex items-center space-x-1"><span class="font-bold text-sm" x-text="post.author"></span><template x-if="post.verified"><i class="fa-solid fa-circle-check text-blue-500 text-[12px]"></i></template></div>
+                            <div class="flex items-center space-x-1">
+                                <span class="font-bold text-sm" :class="post.verified ? 'text-verified-gold' : ''" x-text="post.author"></span>
+                                <template x-if="post.verified">
+                                    <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full shadow-sm ml-0.5"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
+                                </template>
+                            </div>
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
                         </div>
                     </div>
@@ -3576,13 +3553,15 @@
 
     <!-- MAIN VIEW: PROFILE -->
     <main x-show="activeTab === 'profile'" class="animate-fadeIn pb-10">
-        <div class="relative h-44 bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800 overflow-hidden">
+        <div class="relative h-44 overflow-hidden transition-all duration-700" 
+             :class="user.is_verified ? 'verified-profile-bg' : 'bg-gradient-to-br from-blue-600 via-indigo-700 to-purple-800'">
             <div class="absolute inset-0 opacity-20"><i class="fa-solid fa-graduation-cap text-9xl absolute -right-6 -bottom-6 text-white rotate-12"></i></div>
             <button @click="activeTab = 'home'" class="absolute top-4 left-4 bg-black/20 backdrop-blur-md p-2 parallelogram-sm text-white"><i class="fa-solid fa-arrow-left"></i></button>
         </div>
         <div class="px-4 -mt-14 relative">
             <div @click="viewingPost = { avatar: user.avatar, media: user.avatar, author: user.name, content: 'Profile Picture', time: 'Now', mediaType: 'image', isOwnProfilePic: true }" class="relative inline-block cursor-pointer">
-                <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover">
+                <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" 
+                     class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover" :class="{'verified-border': user.is_verified}">
                 <div class="absolute -bottom-2 -right-2 border-4 border-white dark:border-gray-900 w-8 h-8 parallelogram-sm flex items-center justify-center transition-colors duration-500"
                      :class="isOffline ? 'bg-gray-500' : 'bg-green-500'">
                      <i x-show="isOffline" class="fa-solid fa-wifi-slash text-white text-[10px]"></i>
@@ -3593,7 +3572,9 @@
                     <div>
                         <div class="flex items-center space-x-1">
                             <h2 class="text-2xl font-black" x-text="user.name"></h2>
-                            <i class="fa-solid fa-circle-check text-blue-500 text-sm"></i>
+                            <span x-show="user.is_verified" class="verified-badge-anim inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2" title="Verified Account">
+                                <i class="fa-solid fa-crown text-[10px] text-white"></i>
+                            </span>
                         </div>
                     <p class="text-gray-500 text-sm font-bold" x-text="'@' + user.username"></p>
                         <div class="flex items-center mt-1 space-x-2">
@@ -3696,7 +3677,7 @@
     </main>
 
     <!-- MAIN VIEW: SETTINGS -->
-    <main x-show="activeTab === 'settings'" class="animate-fadeIn">
+    <main x-show="activeTab === 'settings'" class="animate-fadeIn pb-20">
         <div class="p-4 space-y-4">
             <!-- Account Section -->
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
@@ -3723,6 +3704,22 @@
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
             </div>
+
+            <!-- Administrative Controls (Admin Only) -->
+            <template x-if="user.is_admin">
+                <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-red-100 dark:border-red-900/30 overflow-hidden">
+                    <div class="p-4 border-b dark:border-gray-800 font-bold text-red-500 text-xs uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-shield-halved"></i> Admin Controls</div>
+                    <div class="w-full flex items-center justify-between p-4">
+                        <div class="flex flex-col text-left">
+                            <span class="font-bold text-sm">Cross-Portal Login</span>
+                            <p class="text-[10px] text-gray-500 font-medium">Allow users to login via any portal regardless of registration type.</p>
+                        </div>
+                        <div @click="settings.allow_cross_portal_login = !settings.allow_cross_portal_login; $nextTick(() => apiFetch('/api/admin/save_settings', { method: 'POST', body: JSON.stringify({ allow_cross_portal_login: settings.allow_cross_portal_login }) }))" class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors cursor-pointer" :class="settings.allow_cross_portal_login ? 'bg-blue-600' : ''">
+                            <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="settings.allow_cross_portal_login ? 'left-6' : 'left-1'"></div>
+                        </div>
+                    </div>
+                </div>
+            </template>
 
             <!-- Preferences Section -->
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border dark:border-gray-700 overflow-hidden">
@@ -3800,7 +3797,7 @@
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
             </div>
-         <button @click="logout()" class="w-full p-4 mb-24 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-sm flex items-center justify-center space-x-2 shadow-sm border border-red-100 dark:border-red-900/30">
+         <button @click="logout()" class="w-full p-4 mb-32 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 font-black text-sm flex items-center justify-center space-x-2 shadow-sm border border-red-100 dark:border-red-900/30 transition-all active:scale-95">
                 <i class="fa-solid fa-right-from-bracket"></i>
                 <span>Log Out</span>
             </button>
@@ -4453,10 +4450,13 @@
             </template>
             <template x-if="viewingUser">
                 <div class="flex flex-col h-full">
-                    <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
+                    <div class="p-4 flex items-center justify-between border-b dark:border-gray-800 transition-all duration-700"
+                         :class="viewingUser?.is_verified ? 'verified-profile-bg text-white' : 'bg-white dark:bg-gray-900'">
                         <button @click="showUserProfile = false" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
                         <h3 class="text-lg font-black flex-1 text-center" x-text="viewingUser?.name"></h3>
-                        <div class="w-8"></div>
+                        <span x-show="viewingUser?.is_verified" class="verified-badge-anim inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-md mr-2">
+                            <i class="fa-solid fa-crown text-[11px] text-white"></i>
+                        </span>
                     </div>
                     <div class="flex-1 overflow-y-auto">
                         <div class="p-6 flex flex-col items-center">
@@ -4466,7 +4466,10 @@
                                     <div class="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-900 rounded-full"></div>
                                 </template>
                             </div>
-                            <h2 class="text-2xl font-black mt-4" x-text="viewingUser?.name"></h2>
+                            <div class="flex items-center mt-4">
+                                <h2 class="text-2xl font-black" x-text="viewingUser?.name"></h2>
+                                <span x-show="viewingUser?.is_verified" class="verified-badge-anim inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2"><i class="fa-solid fa-crown text-[10px] text-white"></i></span>
+                            </div>
                             <p class="text-gray-500 font-bold text-sm" x-text="viewingUser?.dept"></p>
                             <p class="text-gray-500 text-sm mt-2 text-center break-words whitespace-pre-wrap" x-text="viewingUser?.bio"></p>
 
@@ -4847,5 +4850,88 @@
                 Got it! Let's explore
             </button>
         </div>
+    </div>
+
+    <!-- Modals & Overlays (Moved to end of body to prevent grid layout breakage) -->
+    <!-- Global Loading Screen -->
+    <div x-show="isLoading" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-[10000] bg-white dark:bg-black flex flex-col items-center justify-center">
+        <div class="relative flex flex-col items-center">
+            <img src="img/logo.png" class="w-64 h-64 opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
+            <img src="img/logo.png" class="w-24 h-24 mb-10 relative z-10 animate-pulse" alt="Maiga Social">
+            <div class="relative">
+                <div class="w-12 h-12 border-4 border-blue-100 dark:border-gray-800 rounded-full"></div>
+                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
+            <p class="mt-8 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] animate-pulse">Initializing Excellence</p>
+            <p x-text="loadProgress + '%'" class="mt-2 text-blue-600 font-black text-xs"></p>
+            <button x-show="showLoadingRetry" @click="window.location.reload()" x-cloak class="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/30 animate-fadeIn active:scale-95 transition-all">Taking too long? Retry</button>
+        </div>
+    </div>
+
+    <!-- Global Confirmation Modal -->
+    <div x-show="confirmModal.show" x-cloak class="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+        <div @click.away="confirmModal.show = false" class="bg-white dark:bg-gray-900 w-full max-w-xs rounded-3xl shadow-2xl overflow-hidden animate-slideUp">
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 bg-red-50 dark:bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-black mb-2" x-text="confirmModal.title"></h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 leading-relaxed" x-text="confirmModal.message"></p>
+            </div>
+            <div class="flex border-t dark:border-gray-800">
+                <button @click="confirmModal.show = false" :disabled="confirmModal.isLoading" class="flex-1 py-4 text-sm font-bold text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50">Cancel</button>
+                <div class="w-px bg-gray-100 dark:border-gray-800"></div>
+                <button @click="async () => { confirmModal.isLoading = true; await confirmModal.confirmAction(); confirmModal.isLoading = false; confirmModal.show = false; }" 
+                        :disabled="confirmModal.isLoading"
+                        class="flex-1 py-4 text-sm font-black text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                    <i x-show="confirmModal.isLoading" class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                    <span x-text="confirmModal.isLoading ? 'Processing...' : 'Confirm'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Automated Maintenance Overlay -->
+    <div x-show="isMaintenanceMode" x-cloak class="fixed inset-0 z-[11000] bg-white dark:bg-black flex flex-col items-center justify-center p-8 text-center animate-fadeIn">
+        <div class="absolute inset-0 opacity-5 pointer-events-none">
+            <div class="grid grid-cols-6 gap-4 p-4">
+                <template x-for="i in 24"><i class="fa-solid fa-code text-4xl"></i></template>
+            </div>
+        </div>
+        <div class="relative mb-8">
+            <img src="img/logo.png" class="w-28 h-28 grayscale opacity-20 blur-[0.5px]" alt="Maiga Logo">
+            <div class="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40 animate-bounce">
+                <i class="fa-solid fa-screwdriver-wrench text-white text-xl"></i>
+            </div>
+        </div>
+        <h1 class="text-4xl font-black text-gray-900 dark:text-white mb-4 tracking-tighter">UPGRADING SYSTEMS</h1>
+        <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-10 text-sm font-medium leading-relaxed">We are currently fine-tuning our servers to ensure <strong>Innovation & Excellence</strong>. Only administrators can access the platform at this time.</p>
+        
+        <div x-show="maintenanceEndTime" class="mb-10 animate-pulse">
+            <p class="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.3em] mb-2">Estimated Completion</p>
+            <p class="text-5xl font-mono font-black text-gray-900 dark:text-white tabular-nums" x-text="maintenanceCountdown"></p>
+        </div>
+
+        <div class="flex flex-col items-center gap-6 w-full max-w-xs">
+            <button @click="checkApiStatus()" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-3">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Check Server Status</span>
+            </button>
+            <div class="w-20 h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-600 animate-progress"></div>
+            </div>
+        </div>
+        <a href="/" class="absolute bottom-6 text-[8px] font-bold text-gray-400 uppercase tracking-widest opacity-0 hover:opacity-40 transition-opacity">Administrative Entry</a>
+    </div>
+
+    <!-- Return to Call Banner -->
+    <div x-show="isCalling && isCallMinimized" x-cloak
+         @click="isCallMinimized = false"
+         class="fixed top-0 left-0 right-0 z-[2000] bg-blue-600 text-white py-2 px-4 flex items-center justify-center space-x-3 cursor-pointer shadow-xl border-b border-white/10 animate-slideDown">
+        <div class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-100 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+        </div>
+        <span class="text-[10px] font-black uppercase tracking-widest">Tap to Return to Call • <span x-text="activeChat?.name"></span></span>
     </div>
 </div>
