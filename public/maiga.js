@@ -96,8 +96,19 @@ const initMaiga = () => {
                     }
                 });
             }
-            this.$watch('appFontSize', (value) => localStorage.setItem('maiga_app_font_size', value));
+            this.$watch('appFontSize', (value) => {
+                localStorage.setItem('maiga_app_font_size', value);
+                // Direct DOM manipulation ensures the root font-size updates for REM units
+                const size = value === 'small' ? '14px' : value === 'medium' ? '16px' : '18px';
+                document.documentElement.style.fontSize = size;
+            });
             this.$watch('showChatShadows', (value) => localStorage.setItem('maiga_chat_shadows', value));
+            this.$watch('wallpaperBlur', (value) => localStorage.setItem('maiga_chat_wallpaper_blur', value));
+            this.$watch('selectedBubbleColor', (value) => localStorage.setItem('maiga_chat_bubble_color', value));
+            this.$watch('selectedChatFont', (value) => localStorage.setItem('maiga_chat_font', value));
+            this.$watch('selectedWallpaper', (value) => localStorage.setItem('maiga_chat_wallpaper', value));
+            this.$watch('wallpaperBrightness', (value) => localStorage.setItem('maiga_chat_wallpaper_brightness', value));
+            this.$watch('wallpaperContrast', (value) => localStorage.setItem('maiga_chat_wallpaper_contrast', value));
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.loadSavedWallpaper();
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
@@ -323,15 +334,15 @@ const initMaiga = () => {
         mostActiveUsers: [],
         wallpaperTemplates: [
             'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png', // Default Maiga
-            'https://i.pinimg.com/originals/85/3c/69/853c696e174a169b50877a064082269a.jpg', // Dark geometric
-            'https://i.pinimg.com/originals/0b/4e/7a/0b4e7a7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Light abstract
-            'https://i.pinimg.com/originals/a8/1c/7e/a81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Minimalist white
-            'https://i.pinimg.com/originals/b8/1c/7e/b81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Blue gradient
-            'https://i.pinimg.com/originals/c8/1c/7e/c81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Green leaves
-            'https://i.pinimg.com/originals/d8/1c/7e/d81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Pink floral
-            'https://i.pinimg.com/originals/e8/1c/7e/e81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Purple nebula
-            'https://i.pinimg.com/originals/f8/1c/7e/f81c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg', // Yellow dots
-            'https://i.pinimg.com/originals/18/1c/7e/181c7e7e7e7e7e7e7e7e7e7e7e7e7e7e.jpg'  // Grey texture
+            'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1080', // Dark Minimal
+            'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1080', // Deep Blue
+            'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1080', // Abstract Gradient
+            'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1080', // Mountains
+            'https://images.unsplash.com/photo-1477346611705-65d1883cee1e?q=80&w=1080', // Forest Night
+            'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?q=80&w=1080', // Galaxy
+            'https://images.unsplash.com/photo-1444703686981-a3abbc4d4fe3?q=80&w=1080', // Stars
+            'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1080', // Waterfall
+            'https://images.unsplash.com/photo-1469474099711-429a2039785c?q=80&w=1080'  // Nature Path
         ],
         loginSessions: [],
 
@@ -344,6 +355,19 @@ const initMaiga = () => {
                 p.username.toLowerCase().includes(q) ||
                 (p.dept && p.dept.toLowerCase().includes(q))
             );
+        },
+
+        get sortedGroupMembers() {
+            if (!this.activeChat || !this.activeChat.members) return [];
+            return [...this.activeChat.members].sort((a, b) => {
+                // 1. Me first
+                if (a.id == this.user.id) return -1;
+                if (b.id == this.user.id) return 1;
+                // 2. Admins next
+                if (a.role === 'admin' && b.role !== 'admin') return -1;
+                if (a.role !== 'admin' && b.role === 'admin') return 1;
+                return 0;
+            });
         },
 
         // UI Controls
@@ -528,7 +552,8 @@ const initMaiga = () => {
             if (this.selectedWallpaper) {
                 style += `background-image: url('${this.selectedWallpaper}');`;
             }
-            style += `filter: brightness(${this.wallpaperBrightness}%);`;
+            style += `filter: brightness(${this.wallpaperBrightness}%) contrast(${this.wallpaperContrast}%) blur(${this.wallpaperBlur}px) !important;`;
+            if (this.wallpaperBlur > 0) style += `transform: scale(1.1);`;
             return style;
         },
 
@@ -809,8 +834,9 @@ const initMaiga = () => {
             }
         },
         highlight(text, query) {
-            if (!query || !text) return text || '';
+            if (!text) return '';
             let sanitized = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            if (!query || !query.trim()) return sanitized;
             const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
             return sanitized.replace(regex, '<span class="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-0.5 rounded-sm font-bold">$1</span>');
 
@@ -1846,9 +1872,23 @@ const initMaiga = () => {
         postRecordingTimer: null,
         isProcessingMetadata: false,
         showWallpaperPicker: false,
-        wallpaperTemplates: [],
         selectedWallpaper: null,
         wallpaperBrightness: 100,
+        wallpaperContrast: 100,
+        wallpaperBlur: 0,
+        selectedBubbleColor: '#dcf8c6',
+        selectedChatFont: localStorage.getItem('maiga_chat_font') || 'Intel One Mono',
+        bubbleColors: ['#dcf8c6', '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#6366f1', '#111827'],
+        isDarkColor(color) {
+            if (!color) return false;
+            const hex = color.replace('#', '');
+            const r = parseInt(hex.substr(0, 2), 16);
+            const g = parseInt(hex.substr(2, 2), 16);
+            const b = parseInt(hex.substr(4, 2), 16);
+            const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+            return brightness < 155;
+        },
+ 
         storyReplyAudioChunks: [],
         storyReplyRecordingTimer: null,
         hasInteractedWithVolume: false,
@@ -2620,7 +2660,7 @@ const initMaiga = () => {
                     this.pendingIceCandidates.push(candidate);
                     return;
                 }
-                this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => {
+                this.peerConnection.addIceCandidate(candidate).catch(e => {
                     console.warn('Failed to add ICE candidate immediately:', e);
                 });
             });
@@ -3997,18 +4037,23 @@ const initMaiga = () => {
             reader.readAsDataURL(file);
             event.target.value = ''; // Clear input
         },
-        applyWallpaper() {
-            // Fixed: applyWallpaper was missing
-            // This function applies the selected wallpaper and brightness
-            // It saves the settings to local storage and updates the chat wallpaper
-            localStorage.setItem('maiga_chat_wallpaper', this.selectedWallpaper);
-            localStorage.setItem('maiga_chat_wallpaper_brightness', this.wallpaperBrightness);
-            this.showWallpaperPicker = false;
-            this.showToast('Success', 'Chat wallpaper applied!', 'success');
-        },
         loadSavedWallpaper() {
             this.selectedWallpaper = localStorage.getItem('maiga_chat_wallpaper') || 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png';
             this.wallpaperBrightness = parseInt(localStorage.getItem('maiga_chat_wallpaper_brightness') || '100', 10);
+            this.wallpaperContrast = parseInt(localStorage.getItem('maiga_chat_wallpaper_contrast') || '100', 10);
+            this.wallpaperBlur = parseInt(localStorage.getItem('maiga_chat_wallpaper_blur') || '0', 10);
+            this.selectedBubbleColor = localStorage.getItem('maiga_chat_bubble_color') || '#dcf8c6';
+            this.selectedChatFont = localStorage.getItem('maiga_chat_font') || 'Intel One Mono';
+        },
+        resetThemeToDefault() {
+            this.selectedWallpaper = 'https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png';
+            this.wallpaperBrightness = 100;
+            this.wallpaperContrast = 100;
+            this.wallpaperBlur = 0;
+            this.selectedBubbleColor = '#dcf8c6';
+            this.selectedChatFont = 'Intel One Mono';
+            this.customWallpaperFile = null;
+            this.showToast('Reset', 'Theme settings restored to default.', 'success');
         },
         closeMediaPreview() {
             this.mediaPreviewUrl = null;
@@ -7414,15 +7459,18 @@ const initMaiga = () => {
                 console.warn("WebRTC: Using STUN only. Calls may fail across different networks.");
             }
 
-            const servers = { 
-                iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] 
+            const rtcConfig = { 
+                // Bulletproof check: use the array directly, or look for it inside a wrapped object
+                iceServers: Array.isArray(iceServers) ? iceServers : (iceServers?.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }]),
+                iceCandidatePoolSize: 10, // Pre-fetch candidates to speed up connection
+                bundlePolicy: 'max-bundle'
             };
             
             // Start 15-second timeout timer for ICE negotiation
             clearTimeout(this.iceTimeoutTimer);
             this.iceTimeoutTimer = setTimeout(() => this.handleCallTimeout(), 15000);
 
-            this.peerConnection = new RTCPeerConnection(servers);
+            this.peerConnection = new RTCPeerConnection(rtcConfig);
             this.pendingIceCandidates = this.pendingIceCandidates || [];
 
             this.peerConnection.onicecandidate = event => {
@@ -7516,7 +7564,7 @@ const initMaiga = () => {
                 const queuedCandidates = [...this.pendingIceCandidates];
                 this.pendingIceCandidates = [];
                 for (const candidate of queuedCandidates) {
-                    await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(error => {
+                    await this.peerConnection.addIceCandidate(candidate).catch(error => {
                         console.warn('Failed to add queued ICE candidate:', error);
                     });
                 }
@@ -8101,7 +8149,9 @@ const initMaiga = () => {
                 targetType: type,
                 priority: 'low',
                 targetId: target.id.toString(),
-                targetUserId: type === 'user' ? target.id.toString() : (target.user_id?.toString() || (target.user ? (target.user.id || target.user._id).toString() : null))
+                targetUserId: type === 'user' ? target.id.toString() : 
+                              (type === 'group' ? (target.members?.find(m => m.role === 'admin')?.id?.toString() || null) : 
+                              (target.user_id?.toString() || (target.user ? (target.user.id || target.user._id).toString() : null)))
             };
             this.showPostOptions = false;
             this.showReelOptions = false;

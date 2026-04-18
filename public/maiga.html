@@ -92,11 +92,7 @@
             font-weight: bold;
             font-style: italic;
         }
-
-        html {
-            font-size: var(--app-base-font-size, 16px); /* Default to 16px if not set by Alpine */
-        }
-
+        
         /* Theme Variables */
         :root {
             --logo-primary: #2563eb; /* Professional Blue */
@@ -202,6 +198,25 @@
 
         body { font-family: 'Intel One Mono', 'Inter', sans-serif !important; }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
+
+        /* Layout Locking: Prevent structural elements from scaling with font-size */
+        @media (min-width: 1024px) {
+            aside.shrink-0 { 
+                width: 288px !important; /* Fixed 18rem @ 16px */
+                transition: width 0.3s ease;
+            }
+            aside.shrink-0.w-24 { 
+                width: 96px !important; /* Fixed 6rem @ 16px */
+            }
+            aside.border-l {
+                width: 400px !important;
+            }
+            aside.border-l.w-24, aside.border-l.justify-center {
+                width: 80px !important;
+            }
+        }
+        header.sticky { height: 64px !important; }
+        nav.fixed { height: 65px !important; }
     </style>
     <script src="/db-helper.js"></script>
     <script src="/maiga.js" defer></script>
@@ -312,9 +327,9 @@
         }
     </style>
 </head>
-    <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300"
+    <body class="select-none lg:grid bg-gray-50 dark:bg-gray-900 transition-all duration-300 font-size-container"
       :class="[{ 'dark': darkMode, 'theme-ysu': user.account_type === 'ysu' }, desktopGridCols]"
-      :style="`--app-base-font-size: ${appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px'};`"
+      x-effect="document.documentElement.style.fontSize = (appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px')"
       x-data="appData">
 
     <!-- Global Loading Screen -->
@@ -558,8 +573,8 @@
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale floating-logo shrink-0">
-                <span class="amazing-logo text-3xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga'"></span>
+                <img src="img/logo.png" class="w-7 h-7 sm:w-10 sm:h-10 mr-2 logo-grayscale floating-logo shrink-0">
+                <span class="amazing-logo text-xl sm:text-4xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
@@ -656,7 +671,7 @@
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center">
-                                        <span class="font-bold" x-text="chat.name"></span>
+                                        <span class="font-bold truncate max-w-[150px]" x-text="chat.name"></span>
                                         <template x-if="chat.callInProgress">
                                             <span class="ml-2 flex h-2 w-2">
                                                 <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
@@ -722,7 +737,7 @@
                              <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 rounded-full border dark:border-gray-700 object-cover">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
-                                    <span class="font-bold" x-text="group.name || 'Unnamed Group'"></span>
+                                    <span class="font-bold truncate max-w-[150px]" x-text="group.name || 'Unnamed Group'"></span>
                                     <span class="text-[10px] text-gray-400 font-bold" x-text="group.time"></span>
                                 </div>
                                 <div class="flex justify-between items-center mt-1">
@@ -866,12 +881,18 @@
                 <!-- Step 1: Basic Info -->
                 <div x-show="createGroupStep === 1" class="p-6 space-y-6 animate-fadeIn">
                     <div>
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Group Name</label>
-                        <input type="text" x-model="newGroup.name" maxlength="25" placeholder="Enter group name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-lg font-bold mt-1 focus:ring-2 focus:ring-blue-500">
+                        <div class="flex justify-between items-center px-1">
+                            <label class="text-[10px] font-black text-gray-400 uppercase">Group Name</label>
+                            <span class="text-[10px] font-bold" :class="newGroup.name.length > 45 ? 'text-red-500' : 'text-gray-400'" x-text="newGroup.name.length + ' / 50'"></span>
+                        </div>
+                        <input type="text" x-model="newGroup.name" maxlength="50" placeholder="Enter group name..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-lg font-bold mt-1 focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div>
-                        <label class="text-[10px] font-black text-gray-400 uppercase ml-1">Description (Optional)</label>
-                        <textarea x-model="newGroup.description" rows="4" placeholder="What is this group about?" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-sm mt-1 focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                        <div class="flex justify-between items-center px-1">
+                            <label class="text-[10px] font-black text-gray-400 uppercase">Description (Optional)</label>
+                            <span class="text-[10px] font-bold" :class="newGroup.description.length > 180 ? 'text-red-500' : 'text-gray-400'" x-text="newGroup.description.length + ' / 200'"></span>
+                        </div>
+                        <textarea x-model="newGroup.description" maxlength="200" rows="4" placeholder="What is this group about?" class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-4 px-5 text-sm mt-1 focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
                     </div>
                 </div>
 
@@ -955,7 +976,7 @@
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
                 <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
-                    <p class="font-bold text-sm" x-text="activeChat?.name"></p>
+                    <p class="font-bold text-sm truncate" x-text="activeChat?.name"></p>
                     <p class="text-xs text-gray-500"> 
                         <span x-show="(typingUsers[activeChat?.id] || []).length > 0" x-transition class="text-green-600 font-medium">
                             <template x-if="(typingUsers[activeChat?.id] || []).length >= 1">
@@ -977,13 +998,27 @@
                             <span x-show="activeChat?.pending_requests_count > 0" class="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse"></span>
                         </div>
                     </template>
-                    <button @click="togglePin(activeChat)" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-thumbtack text-sm" :class="isPinned(activeChat?.id, activeChat?.type === 'group' ? 'group' : 'user') ? 'text-yellow-500' : ''"></i></button>
-                    <button @click="isSearchingChat = !isSearchingChat; if(!isSearchingChat) { chatSearchQuery = ''; fetchMessages(activeChat); }" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-magnifying-glass text-sm"></i></button>
+                    <!-- Close Search Button (Appears only during search) -->
+                    <button x-show="isSearchingChat" @click="clearChatSearch()" class="p-2 text-rose-500 animate-fadeIn" title="Close Search">
+                        <i class="fa-solid fa-circle-xmark text-sm"></i>
+                    </button>
                     <button @click="startCall('voice')" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-phone text-sm"></i></button>
                     <button @click="startCall('video')" class="p-2 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-video text-sm"></i></button>
                     <div class="relative">
                         <button @click="showChatMenu = !showChatMenu" class="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><i class="fa-solid fa-ellipsis-vertical text-sm"></i></button>
                         <div x-show="showChatMenu" @click.away="showChatMenu = false" x-transition.opacity.duration.200ms class="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border dark:border-gray-700 overflow-hidden z-[1000]">
+                            <button @click="togglePin(activeChat); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors">
+                                <i class="fa-solid fa-thumbtack text-sm w-5" :class="isPinned(activeChat?.id, activeChat?.type === 'group' ? 'group' : 'user') ? 'text-yellow-500' : 'text-gray-400'"></i>
+                                <span class="text-sm font-bold" x-text="isPinned(activeChat?.id, activeChat?.type === 'group' ? 'group' : 'user') ? 'Unpin Chat' : 'Pin Chat'"></span>
+                            </button>
+                            <button @click="isSearchingChat = !isSearchingChat; if(!isSearchingChat) { chatSearchQuery = ''; fetchMessages(activeChat); }; showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors border-b dark:border-gray-700">
+                                <i class="fa-solid fa-magnifying-glass text-sm w-5 text-gray-400"></i>
+                                <span class="text-sm font-bold">Search Chat</span>
+                            </button>
+                            <button @click="showWallpaperPicker = true; showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700 text-left transition-colors border-b dark:border-gray-700">
+                                <i class="fa-solid fa-palette text-sm w-5 text-gray-400"></i>
+                                <span class="text-sm font-bold">Chat Theme</span>
+                            </button>
                             <button @click="toggleBlockUser(); showChatMenu = false" class="flex items-center space-x-3 w-full px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 text-left transition-colors text-red-600 dark:text-red-400">
                                 <i class="fa-solid fa-ban text-sm w-5"></i>
                                 <span class="text-sm font-bold" x-text="isBlocked(activeChat?.id) ? 'Unblock User' : 'Block User'"></span>
@@ -1062,7 +1097,7 @@
                                 <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center shadow-sm"><i class="fa-solid fa-reply text-blue-500"></i></div>
                             </div>
                             
-                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="w-fit max-w-[90%] md:max-w-[85%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me min-w-[3.5rem]' : 'chat-bubble-them min-w-[3.5rem]'), (showChatShadows && msg.type !== 'sticker') ? 'shadow-md dark:shadow-xl dark:shadow-black/50' : 'shadow-none', msg.type === 'text' || !msg.type ? 'px-3 py-2 md:px-4 md:py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']">
+                            <div @touchstart="handleSwipeStart($event, msg.id)" @touchmove="handleSwipeMove($event)" @touchend="handleSwipeEnd()" @mousedown="touchStart($event, msg)" @mouseup="touchEnd()" @contextmenu.prevent="openMessageOptions(msg)" class="w-fit max-w-[90%] md:max-w-[85%] flex-shrink-0 overflow-hidden cursor-pointer relative select-none z-10" :class="[msg.type === 'sticker' ? 'bg-transparent !shadow-none p-0' : (msg.sender === 'me' ? 'chat-bubble-me min-w-[3.5rem]' : 'chat-bubble-them min-w-[3.5rem]'), (showChatShadows && msg.type !== 'sticker') ? '!shadow-md dark:!shadow-[0_10px_20px_-5px_rgba(0,0,0,0.5)]' : '!shadow-none', msg.type === 'text' || !msg.type ? 'px-3 py-2 md:px-4 md:py-2.5' : (msg.type === 'sticker' ? '' : 'p-1'), swipingMsgId === msg.id ? 'bg-blue-100 dark:bg-blue-900/20' : '']" :style="msg.sender === 'me' && msg.type !== 'sticker' ? `background-color: ${selectedBubbleColor}; color: ${isDarkColor(selectedBubbleColor) ? 'white' : 'black'}` : ''">
                                 <!-- Reply Quote -->
                                 <template x-if="msg.replyTo">
                                     <div class="mb-1 rounded-lg p-2 text-xs bg-black/10 dark:bg-white/10 border-l-4 border-white/50 w-full" :class="msg.type === 'sticker' ? 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200' : ''">
@@ -1075,7 +1110,7 @@
                                     <p class="text-xs font-bold mb-1" :class="getUserColor(msg.sender_id)" x-text="msg.author"></p>
                                 </template>
                                 
-                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-sm leading-normal break-words whitespace-pre-wrap w-full" x-text="msg.content"></p></template>
+                                <template x-if="!msg.type || msg.type === 'text'"><p class="text-sm leading-normal break-words whitespace-pre-wrap w-full" x-html="highlight(msg.content, chatSearchQuery)" :style="`font-family: ${selectedChatFont}`"></p></template>
                                 <template x-if="msg.type === 'image'"><img :src="msg.content" class="rounded-lg max-h-60 w-full object-cover"></template>
                                 <template x-if="msg.type === 'video'"><video :src="msg.content" controls class="rounded-lg max-h-60 w-full"></video></template>
                                 <template x-if="msg.type === 'audio'"><div class="flex items-center space-x-3 p-3 min-w-[200px]"><button class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors" @click="toggleAudio('msg-audio-' + msg.id)"><i class="fa-solid" :class="activeAudioId === 'msg-audio-' + msg.id ? 'fa-pause' : 'fa-play'"></i></button><div class="flex items-center space-x-1 h-8 flex-1 opacity-80"><template x-for="i in 12"><div class="w-1 bg-current rounded-full" :class="activeAudioId === 'msg-audio-' + msg.id ? 'animate-waveform' : ''" :style="`height: ${30 + Math.random() * 70}%; animation-duration: ${0.4 + Math.random() * 0.5}s`"></div></template></div><audio :id="'msg-audio-' + msg.id" :src="msg.content" class="hidden" @play="handleAudioPlay('msg-audio-' + msg.id)" @pause="handleAudioPause('msg-audio-' + msg.id)" @ended="handleAudioPause('msg-audio-' + msg.id)"></audio></div></template>
@@ -1180,11 +1215,14 @@
 
             <!-- Wallpaper Picker Modal -->
             <div x-show="showWallpaperPicker" x-cloak class="fixed inset-0 z-[950] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                <div @click.away="showWallpaperPicker = false" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-md animate-fadeIn flex flex-col max-h-[80vh]">
-                    <h3 class="font-bold text-lg mb-4">Choose Chat Wallpaper</h3>
-                    <div class="grid grid-cols-3 gap-3 mb-4 overflow-y-auto">
+                <div @click.away="showWallpaperPicker = false" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-slideUp flex flex-col max-h-[95vh]">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="font-black text-xl">Chat Theme</h3>
+                        <button @click="showWallpaperPicker = false" class="p-2 bg-gray-100 dark:bg-gray-700 rounded-full"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 overflow-y-auto pr-1">
                         <template x-for="(template, index) in wallpaperTemplates" :key="index">
-                            <div @click="selectWallpaper(template)" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2" :class="selectedWallpaper === template ? 'border-blue-500' : 'border-transparent'">
+                            <div @click="selectWallpaper(template)" class="relative aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer border-4 transition-all" :class="selectedWallpaper === template ? 'border-blue-500 scale-[0.98]' : 'border-transparent'">
                                 <img :src="template" class="w-full h-full object-cover">
                                 <div x-show="selectedWallpaper === template" class="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
                                     <i class="fa-solid fa-check-circle text-2xl"></i>
@@ -1192,27 +1230,63 @@
                             </div>
                         </template>
                         <!-- Custom Upload -->
-                        <div @click="$refs.wallpaperUploadInput.click()" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <i class="fa-solid fa-plus text-gray-400 text-2xl"></i>
+                        <div @click="$refs.wallpaperUploadInput.click()" class="relative aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer border-4 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                            <i class="fa-solid fa-cloud-arrow-up text-gray-400 text-3xl mb-2"></i>
+                            <span class="text-[10px] font-black uppercase text-gray-500">Custom</span>
                             <input type="file" x-ref="wallpaperUploadInput" class="hidden" accept="image/*" @change="handleCustomWallpaperUpload($event)">
                             <img x-show="customWallpaperFile" :src="selectedWallpaper" class="absolute inset-0 w-full h-full object-cover">
                         </div>
                     </div>
                     
-                    <!-- Brightness Control -->
-                    <div class="mb-4">
-                        <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Brightness</label>
-                        <div class="flex items-center space-x-3">
-                            <i class="fa-solid fa-sun text-gray-400"></i>
-                            <input type="range" min="0" max="200" x-model="wallpaperBrightness" class="w-full accent-blue-500">
-                            <i class="fa-solid fa-sun text-yellow-500"></i>
+                    <div class="space-y-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl mb-4">
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center px-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Background Blur</label>
+                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBlur + 'px'"></span>
+                            </div>
+                            <input type="range" min="0" max="10" x-model="wallpaperBlur" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center px-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Brightness</label>
+                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBrightness + '%'"></span>
+                            </div>
+                            <input type="range" min="20" max="180" x-model="wallpaperBrightness" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center px-1">
+                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contrast</label>
+                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperContrast + '%'"></span>
+                            </div>
+                            <input type="range" min="50" max="150" x-model="wallpaperContrast" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
                         </div>
                     </div>
 
-                    <div class="flex space-x-3">
-                        <button @click="showWallpaperPicker = false" class="flex-1 py-2 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
-                        <button @click="applyWallpaper()" class="flex-1 py-2 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700">Apply</button>
+                    <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl mb-4">
+                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Chat Font Style</label>
+                        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                            <template x-for="font in editorFonts" :key="font">
+                                <button @click="selectedChatFont = font" 
+                                        class="px-4 py-2 rounded-xl border-2 whitespace-nowrap text-sm transition-all"
+                                        :style="`font-family: ${font}`"
+                                        :class="selectedChatFont === font ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-200 dark:border-gray-700 text-gray-500'"
+                                        x-text="font"></button>
+                            </template>
+                        </div>
                     </div>
+
+                    <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl overflow-y-auto mb-4">
+                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Message Bubble Color</label>
+                        <div class="grid grid-cols-5 gap-2">
+                            <template x-for="color in bubbleColors" :key="color">
+                                <button @click="selectedBubbleColor = color" class="w-full aspect-square rounded-xl border-4 transition-all" :style="`background-color: ${color}`" :class="selectedBubbleColor === color ? 'border-blue-500 scale-110 shadow-lg' : 'border-transparent'"></button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <button @click="resetThemeToDefault()" class="w-full py-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 font-black text-[10px] uppercase tracking-[0.2em] border border-rose-100 dark:border-rose-900/30 active:scale-95 transition-all">
+                        Reset to Default
+                    </button>
                 </div>
             </div>
 
@@ -1227,10 +1301,17 @@
             <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
                 <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
-                    <textarea x-model="newMessage" @keyup.ctrl.enter="sendMessage()" rows="1" placeholder="Message..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 6rem;"></textarea>
-                    <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
+                    <textarea x-model="newMessage" 
+                              @input="$el.style.height = ''; $el.style.height = Math.min($el.scrollHeight, 150) + 'px'; sendTypingSignal()" 
+                              @keyup.ctrl.enter="sendMessage()" 
+                              maxlength="1000"
+                              rows="1" placeholder="Message..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none overflow-y-auto" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 150px;"></textarea>
+                    <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-2.5 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
                         <i class="fa-solid fa-face-smile text-xl"></i>
                     </button>
+                    <div x-show="newMessage.length > 0" class="absolute right-3 bottom-1.5 pointer-events-none">
+                        <span class="text-[8px] font-bold" :class="newMessage.length > 950 ? 'text-red-500' : 'text-gray-400'" x-text="newMessage.length + '/1000'"></span>
+                    </div>
                     <div x-show="isRecording" x-cloak class="absolute inset-0 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-between px-4 pointer-events-none">
                         <canvas id="chat-record-waveform" class="w-20 h-6"></canvas>
                         <div class="flex items-center space-x-2 animate-pulse">
@@ -1340,6 +1421,9 @@
                 </template>
                 <img :src="activeChat?.avatar" class="w-24 h-24 rounded-full mb-3">
                 <h2 class="text-xl font-black" x-text="activeChat?.name"></h2>
+                <button @click="navigator.clipboard.writeText(activeChat?.name); showToast('Copied', 'Group name copied to clipboard', 'success')" class="text-xs text-blue-600 font-bold hover:underline mb-1 flex items-center gap-1 transition-all active:scale-95">
+                    <i class="fa-regular fa-copy"></i> Copy Name
+                </button>
                 <p class="text-gray-500 text-sm" x-text="activeChat?.members?.length + ' members'"></p>
                 <div class="flex items-center space-x-3 mt-4">
                     <span class="text-xs font-bold text-gray-400 uppercase">Mute Notifications</span>
@@ -1371,7 +1455,7 @@
 
                 <h4 class="text-xs font-bold text-gray-400 uppercase mb-3" x-text="(activeChat?.members?.length || 0) + ' Members'"></h4>
                 <div class="space-y-1">
-                    <template x-for="member in activeChat?.members" :key="member.id">
+                    <template x-for="member in sortedGroupMembers" :key="member.id">
                         <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <div @click.stop="handleMemberClick(member)" class="flex items-center space-x-3 flex-1 cursor-pointer">
                                 <img @click.stop="openUserProfile(member.id)" :src="member.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + member.first_name" class="w-10 h-10 rounded-full cursor-pointer object-cover">
@@ -1390,6 +1474,10 @@
                 <!-- Action Buttons -->
                 <div class="mt-6 pt-4 border-t dark:border-gray-800 space-y-2">
                     <button @click="leaveGroup(activeChat.id)" class="w-full bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 py-3 rounded-xl font-bold text-sm transition-colors">Leave Group</button>
+                    <!-- Report Group button -->
+                    <button @click="openReportModal('group', activeChat)" class="w-full bg-gray-50 dark:bg-gray-800/50 text-gray-500 hover:text-red-500 py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-flag text-xs"></i> Report Group
+                    </button>
                     <button x-show="activeChat?.role === 'admin'" @click="deleteGroup(activeChat.id)" class="w-full bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold text-sm transition-colors">Delete Group</button>
                 </div>
             </div>
@@ -3689,6 +3777,13 @@
                     <div class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors" :class="darkMode ? 'bg-blue-600' : ''">
                         <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="darkMode ? 'left-6' : 'left-1'"></div>
                     </div>
+                </button>
+                <button @click="showWallpaperPicker = true" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center text-teal-600"><i class="fa-solid fa-palette"></i></div>
+                        <span class="font-bold text-sm">Chat Wallpaper & Theme</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
                 <button @click="shareApp()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">

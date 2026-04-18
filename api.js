@@ -244,8 +244,9 @@ app.get('/api/get_ice_credentials', async (req, res) => {
         }
 
         const response = await fetch(`https://api.turnix.io/v1/turn/credentials?apiKey=${apiKey}`, { timeout: 5000 });
-        const iceServers = await response.json();
-        res.json(iceServers);
+        const iceServersData = await response.json();
+        // Ensure we return the actual array. Turnix usually wraps it in an 'iceServers' key.
+        res.json(iceServersData.iceServers || iceServersData);
     } catch (error) {
         res.json(fallbackStun);
     }
