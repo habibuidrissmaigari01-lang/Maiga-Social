@@ -1433,45 +1433,38 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
+        
         const query = { media_type: 'video' };
-        if (req.query.user_id && mongoose.Types.ObjectId.isValid(req.query.user_id)) {
-            query.user = new mongoose.Types.ObjectId(req.query.user_id);
-        } else if (req.query.user_id) {
-            // Return empty if an invalid user_id was requested
-            return res.json([]);
+        if (req.query.user_id) {
+            if (mongoose.Types.ObjectId.isValid(req.query.user_id)) {
+                query.user = req.query.user_id;
+            } else {
+                return res.json([]);
+            }
         }
 
-        let reels;
-        if (req.query.user_id) {
-            // For specific profiles, show most recent first
-            reels = await Post.find(query).populate('user', 'name avatar dept').sort({ createdAt: -1 }).skip(skip).limit(limit);
-        } else {
-            // Stable Seeded Shuffling for the main feed to prevent duplicates across pages
-            // We convert the userId into a large integer to act as our stable mixing factor
-            const seed = (req.session.userId && /^[0-9a-fA-F]+$/.test(req.session.userId.toString()) ? parseInt(req.session.userId.toString().slice(-8), 16) : 54321) || 1;
-            
-            reels = await Post.aggregate([
-                { $match: query },
-                // A robust way to shuffle without modulo:
-                // We multiply the ID bit-representation by the seed and take the absolute value.
-                // This creates a stable, pseudo-random sort key for every unique ID + Seed pair.
-                { $addFields: { 
-                    seeded_rand: { $abs: { $subtract: [{ $toLong: "$_id" }, seed] } } 
-                }},
-                { $sort: { seeded_rand: 1, createdAt: -1 } },
-                { $skip: skip },
-                { $limit: limit },
-                { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'user' } },
-                { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
-                { $project: { 'user.password': 0, 'user.email': 0, 'user.phone': 0 } }
-            ]);
-        }
+        // Fetch reels using find() with population.
+        // The previous aggregation pipeline used $toLong on ObjectId, 
+        // which often causes 500 errors in various MongoDB environments.
+        const reels = await Post.find(query)
+            .populate('user', 'name avatar dept is_verified')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
 
         const userId = req.session.userId;
+        
+        // Return mapped data ensuring media is a string and IDs are handled safely
         res.json(reels.map(r => ({
-            id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
+            id: r._id,
+            user_id: r.user?._id,
+            author: r.user?.name || 'User',
+            avatar: r.user?.avatar || (r.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'),
             dept: r.user?.dept,
-            media: r.media, caption: r.content, likes: (r.likes || []).length, views: r.views || 0,
+            media: Array.isArray(r.media) ? r.media[0] : r.media,
+            caption: r.content,
+            likes: (r.likes || []).length,
+            views: r.views || 0,
             comments: r.comments_count || 0,
             liked: (r.likes || []).some(id => id && id.toString() === userId?.toString()),
             saved: (r.saved_by || []).some(id => id && id.toString() === userId?.toString()),
@@ -1479,7 +1472,8 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             seen: (r.viewed_by || []).some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        console.error('Reels Fetch Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -1501,16 +1495,18 @@ router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
             id: r._id,
             user_id: r.user?._id, // Ensure comments count is included
             author: r.user?.name || 'User',
-            avatar: r.user?.avatar,
+            avatar: r.user?.avatar || (r.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'),
             dept: r.user?.dept,
-            media: r.media,
+            media: Array.isArray(r.media) ? r.media[0] : r.media,
             caption: r.content,
             likes: (r.likes || []).length,
             views: r.views || 0,
+            liked: (r.likes || []).some(id => id && id.toString() === userId?.toString()),
             seen: (r.viewed_by || []).some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch trending reels' });
+        console.error('Reels Fetch Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -1639,7 +1635,7 @@ router.get('/search_reels', isAuthenticated, async (req, res) => {
         .limit(10);
         
         res.json(reels.map(r => ({ 
-            id: r._id, content: r.content, media: r.media, 
+            id: r._id, content: r.content, media: Array.isArray(r.media) ? r.media[0] : r.media, 
             author: r.user?.full_name || r.user?.name, avatar: r.user?.avatar 
         })));
     } catch (err) { res.status(500).json([]); }

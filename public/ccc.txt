@@ -1,1 +1,1 @@
-Can we add a "Verification History" log in the admin panel to see which admin verified which user? and How can I add a special gold-themed font color for the names of verified users in the feed?
+Check the Google Cloud Console redirect URI settings to ensure they exactly match the new proxied URL. and in my login page i want you to restore my grid logo for each login page logo.png for index.html and ysu.png for ysu.png

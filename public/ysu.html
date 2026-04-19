@@ -85,10 +85,26 @@
             background: rgba(15, 23, 42, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        .ysu-bg { background-color: #f0fdf4; }
         .step-content { display: none; }
         .step-content.active { display: block; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
         .shake-btn { animation: shake 0.4s ease-in-out; border-color: #ef4444 !important; }
+        @keyframes logo-float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            33% { transform: translateY(-4px) rotate(-2deg); }
+            66% { transform: translateY(-2px) rotate(2deg); }
+        }
+        .floating-logo {
+            animation: logo-float 4s ease-in-out infinite;
+            filter: drop-shadow(0 4px 6px rgba(16, 185, 129, 0.2));
+        }
+        .parallelogram {
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
+            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
+            -webkit-mask-size: 100% 100%;
+            mask-size: 100% 100%;
+        }
     </style>
     <script src="alpine.js" defer></script>
 </head>
@@ -103,8 +119,8 @@
         </button>
 
         <div class="flex flex-col items-center justify-center mb-6">
-            <img src="img/ysu.png" width="64" height="64" class="w-16 h-16 mb-2 logo-pulse" alt="YSU Social Logo">
-            <h1 class="text-2xl sm:text-4xl font-black text-gray-800 italic text-center">YSU Social</h1>
+            <img src="img/ysu.png" width="80" height="80" class="w-20 h-20 mb-2 floating-logo parallelogram shadow-xl" alt="YSU Social Logo">
+            <h1 class="amazing-logo text-2xl sm:text-4xl italic text-center">YSU Social</h1>
         </div>
         <div id="message-banner" class="hidden mb-4 p-3 rounded-xl text-center text-sm font-bold"></div>
         <!-- Main Form wrapper -->

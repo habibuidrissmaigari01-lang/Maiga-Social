@@ -68,6 +68,22 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// --- Content Security Policy Middleware ---
+app.use((req, res, next) => {
+    res.setHeader(
+        "Content-Security-Policy",
+        "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
+        "img-src 'self' data: blob: https:; " +
+        "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
+        "connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io wss:; " +
+        "frame-src 'self' https://accounts.google.com https://www.facebook.com https://www.google.com; " +
+        "base-uri 'self' https://accounts.google.com;"
+    );
+    next();
+});
+
 // --- Maintenance Middleware ---
 const checkMaintenance = async (req, res, next) => {
     try {

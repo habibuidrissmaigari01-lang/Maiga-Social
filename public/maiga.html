@@ -36,7 +36,6 @@
     <meta name="twitter:title" content="Maiga Social">
     <meta name="twitter:description" content="Connect, share, and discover on the platform built for innovation and excellence.">
     <meta name="twitter:image" content="https://maigasocial.com/img/logo.png">
-    <meta name="google-signin-client_id" content="YOUR_GOOGLE_CLIENT_ID"> <!-- Replace with your actual Google Client ID -->
 
 
     <!-- Search Bar Structured Data -->
@@ -4919,7 +4918,7 @@
     </div>
 
     <!-- Bottom Nav -->
-    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-4 left-4 right-4 bg-blue-600/90 backdrop-blur-xl squircle flex justify-around items-center pt-2 pb-2 z-[350] shadow-2xl lg:hidden">
+    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-blue-600/90 backdrop-blur-xl border-t border-white/10 flex justify-around items-center pt-2 pb-6 z-[350] shadow-2xl lg:hidden">
         <!-- Fluid Indicator Bar -->
         <div class="absolute top-0 h-1 bg-white rounded-full z-10"
              :style="getIndicatorStyle()"
