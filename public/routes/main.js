@@ -1415,7 +1415,12 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
         const query = { media_type: 'video' };
-        if (req.query.user_id) query.user = new mongoose.Types.ObjectId(req.query.user_id);
+        if (req.query.user_id && mongoose.Types.ObjectId.isValid(req.query.user_id)) {
+            query.user = new mongoose.Types.ObjectId(req.query.user_id);
+        } else if (req.query.user_id) {
+            // Return empty if an invalid user_id was requested
+            return res.json([]);
+        }
 
         let reels;
         if (req.query.user_id) {
@@ -1424,7 +1429,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         } else {
             // Stable Seeded Shuffling for the main feed to prevent duplicates across pages
             // We convert the userId into a large integer to act as our stable mixing factor
-            const seed = (req.session.userId ? parseInt(req.session.userId.toString().slice(-8), 16) : 54321) || 1;
+            const seed = (req.session.userId && /^[0-9a-fA-F]+$/.test(req.session.userId.toString()) ? parseInt(req.session.userId.toString().slice(-8), 16) : 54321) || 1;
             
             reels = await Post.aggregate([
                 { $match: query },
@@ -1432,9 +1437,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
                 // We multiply the ID bit-representation by the seed and take the absolute value.
                 // This creates a stable, pseudo-random sort key for every unique ID + Seed pair.
                 { $addFields: { 
-                    seeded_rand: { 
-                        $abs: { $subtract: [{ $toLong: "$_id" }, seed] }
-                    } 
+                    seeded_rand: { $abs: { $subtract: [{ $toLong: "$_id" }, seed] } } 
                 }},
                 { $sort: { seeded_rand: 1, createdAt: -1 } },
                 { $skip: skip },
@@ -1449,11 +1452,11 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         res.json(reels.map(r => ({
             id: r._id, user_id: r.user?._id, author: r.user?.name || 'User', avatar: r.user?.avatar,
             dept: r.user?.dept,
-            media: r.media, caption: r.content, likes: r.likes.length, views: r.views || 0, // Ensure comments count is included
-            comments: r.comments_count || 0, // Ensure comments count is included
-            liked: r.likes.some(id => id && id.toString() === userId?.toString()),
-            saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
-            myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
+            media: r.media, caption: r.content, likes: (r.likes || []).length, views: r.views || 0,
+            comments: r.comments_count || 0,
+            liked: (r.likes || []).some(id => id && id.toString() === userId?.toString()),
+            saved: (r.saved_by || []).some(id => id && id.toString() === userId?.toString()),
+            myReaction: (r.likes || []).some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
             seen: (r.viewed_by || []).some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {

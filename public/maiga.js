@@ -4864,6 +4864,16 @@ const initMaiga = () => {
                     }
                 }, 300);
             }
+
+             // Data Saver Logic: If video isn't loaded/playing, load it now
+            if (this.dataSaverMode && !reel.userExplicitlyStarted) {
+                reel.userExplicitlyStarted = true;
+                this.$nextTick(() => {
+                    const video = document.getElementById('reel-video-' + reel.id);
+                    if (video) video.play();
+                });
+            }
+
             this.lastReelClick = now;
         },
 
@@ -7909,6 +7919,11 @@ const initMaiga = () => {
                         if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {
                             this.currentlyPlayingReel.pause();
                             this.currentlyPlayingReel.muted = true;
+                        }
+
+                         // Respect Data Saver: Don't auto-play if mode is on unless user previously tapped it
+                        if (this.dataSaverMode && !reel.userExplicitlyStarted) {
+                            return;
                         }
                         
                         video.muted = this.isReelsMuted;
