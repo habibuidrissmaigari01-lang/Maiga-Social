@@ -24,7 +24,7 @@
 
     <link rel="manifest" id="app-manifest" href="manifest-maiga.json">
     <link rel="service-worker" href="sw.js">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/vendor/font-awesome.css">
     <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
     <!-- Open Graph / Social Media Tags -->
     <meta property="og:title" content="Maiga Social - Connect & Discover">
@@ -50,9 +50,9 @@
       }
     }
     </script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
+    <link href="/css/cropper.min.css" rel="stylesheet">
+    <script src="/cropper.min.js" defer onerror="const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';s.defer=true;document.head.appendChild(s);"></script>
+    <script src="/vendor/alpine-collapse.js" defer></script>
     <script>
         // Initial theme sync to prevent flicker (before Alpine loads)
         const savedTheme = localStorage.getItem('theme') || 'system';
@@ -60,7 +60,7 @@
         if (isDark) document.documentElement.classList.add('dark');
         else document.documentElement.classList.remove('dark');
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <script src="/vendor/jsqr.js"></script>
     <style> /* Fixed: Removed duplicate style tag */
         @font-face {
             font-family: 'Inter';
@@ -124,6 +124,7 @@
         .theme-ysu .text-blue-600, .theme-ysu .text-blue-500, .theme-ysu .dark .text-blue-400 { color: #10b981 !important; }
         .theme-ysu .bg-blue-600, .theme-ysu .bg-blue-500, .theme-ysu .dark .bg-blue-600 { background-color: #10b981 !important; }
         .theme-ysu .border-blue-600, .theme-ysu .border-blue-500, .theme-ysu .dark .border-blue-500 { border-color: #10b981 !important; }
+        .theme-ysu .dark .bg-blue-900\/20 { background-color: rgba(16, 185, 129, 0.15) !important; }
         .theme-ysu .bg-blue-50, .theme-ysu .bg-blue-100 { background-color: #ecfdf5 !important; }
         .theme-ysu .text-blue-800 { color: #064e3b !important; }
         .theme-ysu .shadow-blue-500\/30, .theme-ysu .shadow-blue-600\/30, .theme-ysu .shadow-blue-200 { box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3) !important; }
@@ -358,6 +359,52 @@
             animation: verified-border-glow 2s infinite ease-in-out;
         }
 
+         /* Premium Range Input Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+        .dark input[type=range]::-webkit-slider-runnable-track {
+            background: #1e293b;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -7px; 
+            background-color: #2563eb;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            transition: transform 0.1s ease-in-out;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
+        .theme-ysu input[type=range]::-webkit-slider-thumb {
+            background-color: #10b981;
+        }
+        /* Firefox Support */
+        input[type=range]::-moz-range-track { height: 6px; background: #e2e8f0; border-radius: 10px; }
+        .dark input[type=range]::-moz-range-track { background: #1e293b; }
+        input[type=range]::-moz-range-thumb { height: 16px; width: 16px; background-color: #2563eb; border-radius: 50%; border: 3px solid white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .theme-ysu input[type=range]::-moz-range-thumb { background-color: #10b981; }
+
+        @keyframes welcome-pulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.05); filter: brightness(1.2); }
+        }
+        .animate-welcome-pulse { animation: welcome-pulse 2.5s infinite ease-in-out; }
+
         .text-verified-gold {
             background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
             -webkit-background-clip: text;
@@ -392,7 +439,7 @@
                     <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-16 h-16 parallelogram-sm object-cover">
                     <div class="absolute bottom-0 right-0 bg-green-500 w-4 h-4 parallelogram-sm border-2 border-white dark:border-gray-900"></div>
                 </div>
-                <h3 class="font-bold text-lg text-gray-900 dark:text-white" x-text="user.name"></h3>
+                <h3 class="font-bold text-lg text-gray-900 dark:text-white" :class="user.is_verified ? 'text-verified-gold' : ''" x-text="user.name"></h3>
                 <p class="text-gray-500 text-sm" x-text="'@' + user.username"></p>
             </div>
             <div class="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -442,7 +489,7 @@
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
             <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
             <div x-show="!isLeftSidebarCollapsed">
-                <h3 class="font-bold text-md text-gray-900 dark:text-white">
+                <h3 class="font-bold text-md text-gray-900 dark:text-white" :class="user.is_verified ? 'text-verified-gold' : ''">
                     <span x-text="user.nickname || user.name"></span>
                     <template x-if="user.nickname"><span class="text-[10px] opacity-50 ml-1 font-normal" x-text="'(' + user.name + ')'"></span></template>
                 </h3>
@@ -634,7 +681,7 @@
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <div class="flex items-center">
-                                        <span class="font-bold truncate max-w-[150px]" x-text="chat.name"></span>
+                                        <span class="font-bold truncate max-w-[150px]" :class="(chat.type !== 'group' && chat.verified) ? 'text-verified-gold' : ''" x-text="chat.name"></span>
                                         <template x-if="chat.callInProgress">
                                             <span class="ml-2 flex h-2 w-2">
                                                 <span class="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75"></span>
@@ -939,7 +986,12 @@
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
                 <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
-                    <p class="font-bold text-sm truncate" x-text="activeChat?.name"></p>
+                    <div class="flex items-center space-x-1.5">
+                        <p class="font-bold text-sm truncate" :class="activeChat?.verified ? 'text-verified-gold' : ''" x-text="activeChat?.name"></p>
+                        <template x-if="activeChat?.verified">
+                            <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3.5 h-3.5 rounded-full shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
+                        </template>
+                    </div>
                     <p class="text-xs text-gray-500"> 
                         <span x-show="(typingUsers[activeChat?.id] || []).length > 0" x-transition class="text-green-600 font-medium">
                             <template x-if="(typingUsers[activeChat?.id] || []).length >= 1">
@@ -1121,26 +1173,6 @@
                 </template>
                <button @click="sendLocation()" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-location-dot text-orange-500 text-xl"></i></div><span class="text-[10px] font-bold">Location</span></button>
                 <button @click="showWallpaperPicker = true; showChatOptions = false" class="flex flex-col items-center space-y-2 group"><div class="w-12 h-12 bg-teal-100 dark:bg-teal-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-image text-teal-500 text-xl"></i></div><span class="text-[10px] font-bold">Wallpaper</span></button>
-    <main x-show="activeTab === 'blockedUsers'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
-            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
-            <h3 class="font-black text-xl">Blocked Users</h3>
-        </div>
-        <div class="p-4 space-y-2">
-            <template x-for="bUser in blockedUserDetails" :key="bUser.id">
-                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
-                    <div class="flex items-center space-x-3">
-                        <img :src="bUser.avatar" class="w-10 h-10 rounded-full">
-                        <div>
-                            <p class="font-bold text-sm" x-text="bUser.name"></p>
-                            <p class="text-xs text-gray-500" x-text="'@' + bUser.username"></p>
-                        </div>
-                    </div>
-                    <button @click="viewingUser = bUser; toggleBlock(); blockedUserDetails = blockedUserDetails.filter(u => u.id !== bUser.id)" class="text-xs font-bold text-blue-600 border border-blue-600 px-4 py-1.5 rounded-lg">Unblock</button>
-                </div>
-            </template>
-        </div>
-    </main>
                 <button @click="toggleDisappearingMode()" class="flex flex-col items-center space-y-2 group">
                     <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid fa-hourglass-half text-indigo-500 text-xl"></i></div>
                     <span class="text-[10px] font-bold">24h Timer</span>
@@ -1178,78 +1210,72 @@
 
             <!-- Wallpaper Picker Modal -->
             <div x-show="showWallpaperPicker" x-cloak class="fixed inset-0 z-[950] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                <div @click.away="showWallpaperPicker = false" class="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-2xl w-full max-w-md animate-slideUp flex flex-col max-h-[95vh]">
-                    <div class="flex justify-between items-center mb-6">
+               <div @click.away="showWallpaperPicker = false" class="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md animate-slideUp flex flex-col max-h-[85vh] overflow-hidden">
+                    <div class="p-6 border-b dark:border-gray-800 flex justify-between items-center bg-white/80 dark:bg-gray-900/80 backdrop-blur-md">
                         <h3 class="font-black text-xl">Chat Theme</h3>
-                        <button @click="showWallpaperPicker = false" class="p-2 bg-gray-100 dark:bg-gray-700 rounded-full"><i class="fa-solid fa-xmark"></i></button>
+                        <button @click="showWallpaperPicker = false" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><i class="fa-solid fa-xmark"></i></button>
                     </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 overflow-y-auto pr-1">
-                        <template x-for="(template, index) in wallpaperTemplates" :key="index">
-                            <div @click="selectWallpaper(template)" class="relative aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer border-4 transition-all" :class="selectedWallpaper === template ? 'border-blue-500 scale-[0.98]' : 'border-transparent'">
-                                <img :src="template" class="w-full h-full object-cover">
-                                <div x-show="selectedWallpaper === template" class="absolute inset-0 flex items-center justify-center bg-black/30 text-white">
-                                    <i class="fa-solid fa-check-circle text-2xl"></i>
+                     
+                    <div class="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar">
+                        <!-- Wallpaper Selection -->
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block">Wallpapers</label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <template x-for="(template, index) in wallpaperTemplates" :key="index">
+                                    <div @click="selectWallpaper(template)" class="relative aspect-[9/16] rounded-xl overflow-hidden cursor-pointer border-4 transition-all hover:scale-[1.02]" :class="selectedWallpaper === template ? 'border-blue-600 shadow-lg' : 'border-transparent opacity-80'">
+                                        <img :src="template" class="w-full h-full object-cover">
+                                        <div x-show="selectedWallpaper === template" class="absolute inset-0 flex items-center justify-center bg-blue-600/20 text-white">
+                                            <i class="fa-solid fa-circle-check text-xl drop-shadow-md"></i>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Custom Upload -->
+                                <div @click="$refs.wallpaperUploadInput.click()" class="relative aspect-[9/16] rounded-xl overflow-hidden cursor-pointer border-4 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors opacity-80">
+                                    <i class="fa-solid fa-cloud-arrow-up text-gray-400 text-2xl mb-2"></i>
+                                    <span class="text-[8px] font-black uppercase text-gray-500">Custom</span>
+                                    <input type="file" x-ref="wallpaperUploadInput" class="hidden" accept="image/*" @change="handleCustomWallpaperUpload($event)">
+                                    <img x-show="customWallpaperFile" :src="selectedWallpaper" class="absolute inset-0 w-full h-full object-cover">
                                 </div>
                             </div>
-                        </template>
-                        <!-- Custom Upload -->
-                        <div @click="$refs.wallpaperUploadInput.click()" class="relative aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer border-4 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                            <i class="fa-solid fa-cloud-arrow-up text-gray-400 text-3xl mb-2"></i>
-                            <span class="text-[10px] font-black uppercase text-gray-500">Custom</span>
-                            <input type="file" x-ref="wallpaperUploadInput" class="hidden" accept="image/*" @change="handleCustomWallpaperUpload($event)">
-                            <img x-show="customWallpaperFile" :src="selectedWallpaper" class="absolute inset-0 w-full h-full object-cover">
                         </div>
-                    </div>
-                    
-                    <div class="space-y-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl mb-4">
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center px-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Background Blur</label>
-                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBlur + 'px'"></span>
+                    <!-- Sliders -->
+                        <div class="space-y-6 bg-gray-50 dark:bg-gray-800/50 p-5 rounded-3xl border dark:border-gray-700/50 shadow-inner">
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center"><label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Wallpaper Blur</label><span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBlur + 'px'"></span></div>
+                                <input type="range" min="0" max="10" x-model="wallpaperBlur" class="w-full cursor-pointer accent-blue-600">
                             </div>
-                            <input type="range" min="0" max="10" x-model="wallpaperBlur" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center"><label class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Brightness</label><span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBrightness + '%'"></span></div>
+                                <input type="range" min="20" max="180" x-model="wallpaperBrightness" class="w-full cursor-pointer accent-blue-600">
+                            </div>
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center px-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Brightness</label>
-                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperBrightness + '%'"></span>
+                        <!-- Font Styles -->
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block">Chat Font</label>
+                            <div class="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                                <template x-for="font in editorFonts" :key="font">
+                                    <button @click="selectedChatFont = font" class="px-5 py-2.5 rounded-xl border-2 whitespace-nowrap text-sm font-bold transition-all shadow-sm" :style="`font-family: ${font}`" :class="selectedChatFont === font ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/30 text-blue-600 scale-105' : 'border-gray-100 dark:border-gray-800 text-gray-500'" x-text="font"></button>
+                                </template>
                             </div>
-                            <input type="range" min="20" max="180" x-model="wallpaperBrightness" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                            </div>
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center px-1">
-                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Contrast</label>
-                                <span class="text-[10px] font-mono font-bold text-blue-600" x-text="wallpaperContrast + '%'"></span>
+                       <!-- Bubble Colors -->
+                        <div>
+                            <label class="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block">Bubble Color</label>
+                            <div class="grid grid-cols-5 gap-3">
+                                <template x-for="color in bubbleColors" :key="color">
+                                    <button @click="selectedBubbleColor = color" class="w-full aspect-square rounded-xl border-4 transition-all hover:scale-110 shadow-sm" :style="`background-color: ${color}`" :class="selectedBubbleColor === color ? 'border-blue-600 shadow-md ring-4 ring-blue-600/10' : 'border-white dark:border-gray-800'"></button>
+                                </template>
                             </div>
-                            <input type="range" min="50" max="150" x-model="wallpaperContrast" class="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600">
                         </div>
                     </div>
 
-                    <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl mb-4">
-                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Chat Font Style</label>
-                        <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                            <template x-for="font in editorFonts" :key="font">
-                                <button @click="selectedChatFont = font" 
-                                        class="px-4 py-2 rounded-xl border-2 whitespace-nowrap text-sm transition-all"
-                                        :style="`font-family: ${font}`"
-                                        :class="selectedChatFont === font ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600' : 'border-gray-200 dark:border-gray-700 text-gray-500'"
-                                        x-text="font"></button>
-                            </template>
-                        </div>
+                      
+                    <div class="p-6 border-t dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                        <button @click="resetThemeToDefault()" class="w-full py-4 rounded-2xl bg-white dark:bg-gray-800 text-rose-600 font-black text-[10px] uppercase tracking-[0.2em] border border-rose-100 dark:border-red-900/30 active:scale-95 transition-all shadow-sm">
+                            Reset Theme to Default
+                        </button>
                     </div>
-
-                    <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl overflow-y-auto mb-4">
-                        <label class="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3 ml-1">Message Bubble Color</label>
-                        <div class="grid grid-cols-5 gap-2">
-                            <template x-for="color in bubbleColors" :key="color">
-                                <button @click="selectedBubbleColor = color" class="w-full aspect-square rounded-xl border-4 transition-all" :style="`background-color: ${color}`" :class="selectedBubbleColor === color ? 'border-blue-500 scale-110 shadow-lg' : 'border-transparent'"></button>
-                            </template>
-                        </div>
-                    </div>
-
-                    <button @click="resetThemeToDefault()" class="w-full py-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 text-rose-600 font-black text-[10px] uppercase tracking-[0.2em] border border-rose-100 dark:border-rose-900/30 active:scale-95 transition-all">
-                        Reset to Default
-                    </button>
                 </div>
             </div>
 
@@ -2942,7 +2968,7 @@
                             <div class="flex items-center space-x-1">
                                 <span class="font-bold text-sm" :class="post.verified ? 'text-verified-gold' : ''" x-text="post.author"></span>
                                 <template x-if="post.verified">
-                                    <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
+                                    <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5 cursor-pointer"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
                                 </template>
                             </div> 
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
@@ -2999,6 +3025,23 @@
                 </div>
             </div>
         </template>
+
+        <!-- Load More Button (Appears when not currently loading and more posts exist) -->
+        <div x-show="!isLoadingMore && hasMorePosts && posts.length > 0" x-cloak class="p-8 flex justify-center">
+            <button @click="loadMorePosts()" class="bg-white dark:bg-gray-800 border-2 border-blue-600 text-blue-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-lg active:scale-95">
+                Load More Post
+            </button>
+        </div>
+
+        <!-- All Caught Up Message -->
+        <div x-show="!hasMorePosts && posts.length > 0" x-cloak class="p-12 text-center animate-fadeIn">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 mb-4 shadow-sm border border-blue-100 dark:border-blue-800/30">
+                <i class="fa-solid fa-check text-xl"></i>
+            </div>
+            <h4 class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">You're all caught up!</h4>
+            <p class="text-[10px] text-gray-500 font-bold mt-1 uppercase tracking-widest">You've seen all the latest updates</p>
+            <button @click="$refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="mt-6 text-blue-600 text-xs font-black uppercase hover:underline tracking-widest">Back to top</button>
+        </div>
 
         <!-- Loading Spinner for Load More Posts -->
         <div x-show="isLoadingMore" x-cloak class="flex justify-center items-center py-4">
@@ -3296,7 +3339,7 @@
                             <div class="flex items-center space-x-1">
                                 <span class="font-bold text-sm" :class="post.verified ? 'text-verified-gold' : ''" x-text="post.author"></span>
                                 <template x-if="post.verified">
-                                    <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full shadow-sm ml-0.5"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
+                                    <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full shadow-sm ml-0.5 cursor-pointer"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
                                 </template>
                             </div>
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
@@ -3450,7 +3493,7 @@
         </div>
 
         <!-- Suggestions List -->
-        <div x-show="activeTab === 'friends' && friendsTab === 'suggestions'" class="space-y-3" x-cloak>
+        <div x-show="activeTab === 'friends' && friendsTab === 'suggestions'" class="space-y-3 pb-32" x-cloak>
             <div class="flex items-center justify-between">
                 <h3 class="font-black text-lg">People you may know</h3>
             </div>
@@ -3571,8 +3614,8 @@
                 <div class="flex justify-between items-start">
                     <div>
                         <div class="flex items-center space-x-1">
-                            <h2 class="text-2xl font-black" x-text="user.name"></h2>
-                            <span x-show="user.is_verified" class="verified-badge-anim inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2" title="Verified Account">
+                            <h2 class="text-2xl font-black" :class="user.is_verified ? 'text-verified-gold' : ''" x-text="user.name"></h2>
+                            <span x-show="user.is_verified" @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-6 h-6 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2 cursor-pointer" title="Verified Account">
                                 <i class="fa-solid fa-crown text-[10px] text-white"></i>
                             </span>
                         </div>
@@ -3972,6 +4015,31 @@
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
             </div>
+        </div>
+    </main>
+
+    <!-- MAIN VIEW: BLOCKED USERS (Moved from misplaced location) -->
+    <main x-show="activeTab === 'blockedUsers'" class="animate-fadeIn">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
+            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3 class="font-black text-xl">Blocked Users</h3>
+        </div>
+        <div class="p-4 border-b dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 sticky top-[64px] z-40">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                <input type="text" x-model="blockedUsersSearchQuery" placeholder="Search blocked users..." class="w-full bg-white dark:bg-gray-800 border-none rounded-xl py-2.5 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500">
+            </div>
+        </div>
+        <div class="p-4 space-y-2 pb-32">
+            <template x-for="bUser in filteredBlockedUsers" :key="bUser.id">
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <img :src="bUser.avatar" class="w-10 h-10 rounded-full object-cover">
+                        <div><p class="font-bold text-sm" x-text="bUser.name"></p><p class="text-xs text-gray-500" x-text="'@' + bUser.username"></p></div>
+                    </div>
+                    <button @click="viewingUser = bUser; toggleBlock(); blockedUserDetails = blockedUserDetails.filter(u => u.id !== bUser.id)" class="text-xs font-bold text-blue-600 border border-blue-600 px-4 py-1.5 rounded-lg">Unblock</button>
+                </div>
+            </template>
         </div>
     </main>
 
@@ -4467,8 +4535,8 @@
                                 </template>
                             </div>
                             <div class="flex items-center mt-4">
-                                <h2 class="text-2xl font-black" x-text="viewingUser?.name"></h2>
-                                <span x-show="viewingUser?.is_verified" class="verified-badge-anim inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2"><i class="fa-solid fa-crown text-[10px] text-white"></i></span>
+                                <h2 class="text-2xl font-black" :class="viewingUser?.is_verified ? 'text-verified-gold' : ''" x-text="viewingUser?.name"></h2>
+                                <span x-show="viewingUser?.is_verified" @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-5 h-5 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-lg ml-2 cursor-pointer"><i class="fa-solid fa-crown text-[10px] text-white"></i></span>
                             </div>
                             <p class="text-gray-500 font-bold text-sm" x-text="viewingUser?.dept"></p>
                             <p class="text-gray-500 text-sm mt-2 text-center break-words whitespace-pre-wrap" x-text="viewingUser?.bio"></p>
@@ -4659,7 +4727,7 @@
                     <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed" @click="activeChat = chat; isMessaging = true">
                         <div class="flex justify-between items-center">
                             <div class="flex items-center min-w-0">
-                                <span class="font-bold text-sm truncate" x-text="chat.name"></span>
+                                <span class="font-bold text-sm truncate" :class="chat.verified ? 'text-verified-gold' : ''" x-text="chat.name"></span>
                                 <template x-if="chat.callInProgress">
                                     <span class="ml-1.5 flex h-1.5 w-1.5 shrink-0">
                                         <span class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-green-400 opacity-75"></span>
@@ -4856,15 +4924,33 @@
     <!-- Global Loading Screen -->
     <div x-show="isLoading" x-transition:leave="transition ease-in duration-500" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-[10000] bg-white dark:bg-black flex flex-col items-center justify-center">
         <div class="relative flex flex-col items-center">
-            <img src="img/logo.png" class="w-64 h-64 opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
-            <img src="img/logo.png" class="w-24 h-24 mb-10 relative z-10 animate-pulse" alt="Maiga Social">
-            <div class="relative">
-                <div class="w-12 h-12 border-4 border-blue-100 dark:border-gray-800 rounded-full"></div>
-                <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+            <!-- Pulsing Background Logo (Smooth Fade) -->
+            <div class="relative w-64 h-64 flex items-center justify-center">
+                <img x-show="user.account_type !== 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/logo.png" class="w-full h-full opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
+                <img x-show="user.account_type === 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/ysu.png" class="w-full h-full opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
             </div>
-            <p class="mt-8 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] animate-pulse">Initializing Excellence</p>
-            <p x-text="loadProgress + '%'" class="mt-2 text-blue-600 font-black text-xs"></p>
-            <button x-show="showLoadingRetry" @click="window.location.reload()" x-cloak class="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/30 animate-fadeIn active:scale-95 transition-all">Taking too long? Retry</button>
+            <!-- Foreground Pulse Logo (Smooth Fade) -->
+            <div class="relative w-24 h-24 mb-10 z-10 flex items-center justify-center">
+                <img x-show="user.account_type !== 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/logo.png" class="w-full h-full absolute animate-pulse" alt="Maiga Logo">
+                <img x-show="user.account_type === 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/ysu.png" class="w-full h-full absolute animate-pulse" alt="YSU Logo">
+            </div>
+            <div class="relative">
+                <!-- Dynamic Loading Spinner Colors -->
+                <div class="w-12 h-12 border-4 rounded-full transition-colors duration-700" 
+                     :class="user.account_type === 'ysu' ? 'border-green-100 dark:border-gray-800' : 'border-blue-100 dark:border-gray-800'"></div>
+                <div class="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin absolute top-0 left-0 transition-colors duration-700" 
+                     :class="user.account_type === 'ysu' ? 'border-green-600' : 'border-blue-600'"></div>
+            </div>
+
+            <!-- Personalized Welcome Message (Fades in when name is available) -->
+            <div x-show="user.name" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" class="mt-6 text-center">
+                <p class="text-sm font-black tracking-tight dark:text-white animate-welcome-pulse">Welcome back, <span :class="user.account_type === 'ysu' ? 'text-green-600' : 'text-blue-600'" x-text="user.nickname || user.name.split(' ')[0]"></span></p>
+            </div>
+
+            <p class="mt-8 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em] animate-pulse" 
+               x-text="user.account_type === 'ysu' ? 'Advancing Academic Excellence' : 'Empowering Digital Connection'"></p>
+            <p x-text="loadProgress + '%'" class="mt-2 font-black text-xs transition-colors duration-700" :class="user.account_type === 'ysu' ? 'text-green-600' : 'text-blue-600'"></p>
+            <button x-show="showLoadingRetry" @click="window.location.reload()" x-cloak class="mt-8 px-6 py-2.5 text-white rounded-full font-black text-[10px] uppercase tracking-widest shadow-lg animate-fadeIn active:scale-95 transition-all" :class="user.account_type === 'ysu' ? 'bg-green-600 shadow-green-500/30' : 'bg-blue-600 shadow-blue-500/30'">Taking too long? Retry</button>
         </div>
     </div>
 

@@ -304,7 +304,7 @@ messageSchema.post('save', async function(doc) {
     if (!ioInstance) return;
 
     const populatedMsg = await doc.populate([
-        { path: 'sender', select: 'name first_name surname avatar' }, // Sender for notification icon/name
+        { path: 'sender', select: 'name first_name surname avatar is_verified' }, // Sender for notification icon/name
         { path: 'receiver', select: 'name first_name surname avatar push_subscription' }, // Receiver for direct message
         { path: 'group', select: 'name avatar members' } // Group for group messages
     ]);
@@ -318,6 +318,7 @@ messageSchema.post('save', async function(doc) {
         media_type: doc.media_type,
         author: populatedMsg.sender?.full_name || 'Deleted User',
         avatar: populatedMsg.sender.avatar,
+        verified: populatedMsg.sender?.is_verified,
         created_at: doc.createdAt
     };
 

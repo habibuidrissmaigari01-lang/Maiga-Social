@@ -139,7 +139,7 @@ const initMaiga = () => {
         },
         installPrompt: null,
         // Core App State
-        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
+        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         theme: localStorage.getItem('theme') || 'system',
         darkMode: false,
@@ -326,6 +326,16 @@ const initMaiga = () => {
         blockedUserDetails: [],
         verificationHistory: [],
         callHistory: [],
+        blockedUsersSearchQuery: '',
+
+        get filteredBlockedUsers() {
+            if (!this.blockedUsersSearchQuery.trim()) return this.blockedUserDetails;
+            const q = this.blockedUsersSearchQuery.toLowerCase();
+            return this.blockedUserDetails.filter(u => 
+                u.name.toLowerCase().includes(q) || 
+                u.username.toLowerCase().includes(q)
+            );
+        },
         starredMessages: [],
         archivedChats: [],
         mutedChats: [],
@@ -378,70 +388,6 @@ const initMaiga = () => {
                 return 0;
             });
         },
-
-        // UI Controls
-        chatListSearchQuery: '',
-        showOnlyUnread: false,
-        isAutoExpanding: false,
-        isChangingPassword: false,
-        isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
-        isSavingProfile: false,
-        avatarFileToUpload: null,
-        avatarOriginalFile: null,
-        bannerFile: null,
-        isSubmittingGroup: false,
-        isSubmittingReport: false,
-        showReactionsModal: false,
-        messageReactions: [],
-        hasMorePosts: true,
-        isSideMenuOpen: false,
-        isFlashOn: false,
-        hasFlashlight: false,
-        isConfirmingCapture: false,
-        showCameraFlash: false,
-        reelForwardSearchQuery: '',
-        hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
-        showReelMenu: false,
-        focusRing: { show: false, x: 0, y: 0 },
-        isReporting: false,
-        isCreatingPost: false,
-        isCreatingStory: false,
-        isCreatingGroup: false,
-        isEditingProfile: false,
-        isEditingGroupInfo: false,
-        isUpdatingGroupInfo: false,
-        isAddingGroupMembers: false,
-        isMediaEditorOpen: false,
-        isCalling: false,
-        isCallMinimized: false,
-        isCallChatOpen: false,
-        showStoryStickerPicker: false,
-        showAllStoryColors: false,
-        showMusicPicker: false,
-        showStickerPicker: false,
-        showCommentStickers: false,
-        showLikesModal: false,
-        showShareModal: false,
-        showReelOptions: false,
-        showPostOptions: false,
-        showChatOptions: false,
-        showChatMenu: false,
-        showScrollTop: false,
-        showGroupInfo: false,
-        showMsgInfo: false,
-        showFollowerList: null,
-        showShareProfileModal: false,
-
-        // Search & Filter State
-        homeSearchQuery: '',
-        homeSearchTab: 'users',
-        friendsSearchQuery: '',
-        friendsTab: 'suggestions',
-        groupSearchQuery: '',
-        connectionSearchQuery: '',
-        chatSearchQuery: '',
-        chatStarFilter: false,
-        addMemberSearchQuery: '',
 
         // Form & Content State
         newPostContent: '',
@@ -1048,9 +994,9 @@ const initMaiga = () => {
         async initFaceMesh() {
             if (this.faceMesh) return;
             // Dynamically load MediaPipe from CDN
-            await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+            await this.loadScript('/vendor/face_mesh.js');
             this.faceMesh = new FaceMesh({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+                locateFile: (file) => `/vendor/${file}`
             });
             this.faceMesh.setOptions({
                 maxNumFaces: 1,
@@ -1073,9 +1019,9 @@ const initMaiga = () => {
 
         async initSelfieSegmentation() {
             if (this.selfieSegmentation) return;
-            await this.loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js');
+            await this.loadScript('/vendor/selfie_segmentation.js');
             this.selfieSegmentation = new SelfieSegmentation({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+                locateFile: (file) => `/vendor/${file}`
             });
             this.selfieSegmentation.setOptions({ modelSelection: 1 });
             this.selfieSegmentation.onResults((results) => {
@@ -2240,17 +2186,6 @@ const initMaiga = () => {
         loadProgress: 0,
         showLoadingRetry: false,
         showSkeletons: true,
-        user: {
-            id: 0,
-            name: '',
-            username: '',
-            nickname: '',
-            avatar: '',
-            account_type: 'maiga',
-            followerIds: [],
-            followingIds: [],
-            total_posts_count: 0
-        },
         following: [],
         followingList: [],
         selectedLanguage: 'English',
@@ -2566,6 +2501,7 @@ const initMaiga = () => {
                         lastMsgIsRead: false,
                         time: 'Just now',
                         lastMsgTimestamp: Date.now(),
+                    verified: data.verified,
                         unread: !isCurrentChat,
                         unreadCount: !isCurrentChat ? (chatInList.unreadCount || 0) + 1 : 0,
                         justReceived: true,
@@ -2606,6 +2542,7 @@ const initMaiga = () => {
                         lastMsgIsRead: false,
                         lastMsgTimestamp: Date.now(),
                         time: 'Just now',
+                        verified: data.verified,
                         unread: true,
                         unreadCount: 1,
                         status: 'online',
@@ -7388,6 +7325,7 @@ const initMaiga = () => {
                     time: 'Now',
                     unread: false,
                     is_admin: userToChat.is_admin,
+                    verified: userToChat.verified || userToChat.is_verified,
                     status: userToChat.online ? 'online' : 'offline'
                 };
                 if (!this.chats.some(c => c.id == chat.id)) {
@@ -8016,8 +7954,10 @@ const initMaiga = () => {
             return this.apiFetch(url)
                 .then(data => {
                     if (data && data.length > 0) {
-                        this.posts = [...this.posts, ...data];
-                        if (data.length < 20) this.hasMorePosts = false; // If we got fewer than 20 posts, no more available
+                        // Filter out duplicates that might occur due to server-side randomization
+                        const newPosts = data.filter(newP => !this.posts.some(existingP => existingP.id === newP.id));
+                        this.posts = [...this.posts, ...newPosts];
+                        this.hasMorePosts = data.length === 20; // limit is 20 in main.js
                     } else {
                         this.hasMorePosts = false;
                     }
@@ -8035,8 +7975,11 @@ const initMaiga = () => {
             return this.apiFetch(`/api/get_reels?page=${this.reelPage}&limit=5`)
                 .then(data => {
                     if (data && data.length > 0) {
-                        const mapped = data.filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                        const newReels = data.filter(newR => !this.reels.some(existingR => existingR.id === newR.id));
+                        const mapped = newReels.filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
                         this.reels = [...this.reels, ...mapped];
+                        // If we received fewer than requested, we've hit the end of the database
+                        if (data.length < 5) this.observer?.disconnect();
                     }
                 }).catch(() => {
                     this.reelPage = Math.max(1, this.reelPage - 1);

@@ -1304,6 +1304,7 @@
                 } else if (endpoint === '/api/login') {
                     // On successful login, redirect to a new page
                     localStorage.setItem('maiga_session_active', 'true');
+                    localStorage.setItem('maiga_last_account_type', 'maiga');
                     showMessage('Redirecting to your Maiga...', 'success');
                     setTimeout(() => {
                         // In a real app, you would redirect to the main application page

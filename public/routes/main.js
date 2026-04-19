@@ -174,7 +174,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
         const [user, posts, chats, groups, connections, followersData, trending, notifications, postsCount, myPosts] = await Promise.all([
             User.findById(userId),
             Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
-            Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender'),
+            Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender is_verified'),
             Group.find({ 'members.user': userId }),
             User.findById(userId).populate('following', 'name avatar username online dept gender'),
             User.find({ following: userId }).select('name first_name surname avatar username online dept gender'),
@@ -214,6 +214,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                     id: other._id, name: other.name, avatar: other.avatar,
                     status: other.online ? 'online' : 'offline',
                     gender: other.gender,
+                    verified: other.is_verified,
                     lastMsg: (m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`),
                     time: formatTime(m.createdAt),
                     lastMsgTimestamp: m.createdAt
@@ -640,7 +641,7 @@ router.post('/delete_chat_history', isAuthenticated, async (req, res) => {
 router.get('/get_chats', isAuthenticated, async (req, res) => {
     const userId = req.session.userId;
     const messages = await Message.find({ $or: [{ sender: userId }, { receiver: userId }] })
-        .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender');
+        .sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender is_verified');
     
     // Get unread counts per sender
     const unreadAggregate = await Message.aggregate([
@@ -667,6 +668,7 @@ router.get('/get_chats', isAuthenticated, async (req, res) => {
                 id: other._id, name: other.name, avatar: other.avatar,
                 status: other.online ? 'online' : 'offline',
                 gender: other.gender,
+                verified: other.is_verified,
                 last_seen: other.last_seen,
                 lastMsg: prefix + (m.media_type === 'text' ? m.content : `<i>Sent a ${m.media_type}</i>`), 
                 lastMsgId: m._id,
@@ -1413,29 +1415,28 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
         const query = { media_type: 'video' };
-        if (req.query.user_id) query.user = req.query.user_id;
+        if (req.query.user_id) query.user = new mongoose.Types.ObjectId(req.query.user_id);
 
-        // Fetching reels
-        let reels = await Post.find(query).populate('user', 'name avatar dept').sort({ createdAt: -1 }).skip(skip).limit(limit);
-        
-        // Randomize and interleave reels to avoid author clustering
-        if (!req.query.user_id && reels.length > 2) {
-            reels.sort(() => Math.random() - 0.5);
-
-            const interleaved = [];
-            const pools = new Map();
-            for (const r of reels) {
-                const uid = r.user ? r.user._id.toString() : r._id.toString();
-                if (!pools.has(uid)) pools.set(uid, []);
-                pools.get(uid).push(r);
-            }
-            const sortedPools = Array.from(pools.values()).sort((a, b) => b.length - a.length);
-            while (interleaved.length < reels.length) {
-                for (const pool of sortedPools) {
-                    if (pool.length > 0) interleaved.push(pool.shift());
-                }
-            }
-            reels = interleaved;
+        let reels;
+        if (req.query.user_id) {
+            // For specific profiles, show most recent first
+            reels = await Post.find(query).populate('user', 'name avatar dept').sort({ createdAt: -1 }).skip(skip).limit(limit);
+        } else {
+            // Stable Seeded Shuffling for the main feed to prevent duplicates across pages
+            const seed = req.session.userId ? parseInt(req.session.userId.toString().slice(-6), 16) : 12345;
+            
+            reels = await Post.aggregate([
+                { $match: query },
+                { $addFields: { 
+                    seeded_rand: { $mod: [{ $toLong: "$_id" }, seed] } 
+                }},
+                { $sort: { seeded_rand: 1, createdAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+                { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'user' } },
+                { $unwind: '$user' },
+                { $project: { 'user.password': 0, 'user.email': 0, 'user.phone': 0 } }
+            ]);
         }
 
         const userId = req.session.userId;
