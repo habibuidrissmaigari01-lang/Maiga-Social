@@ -86,6 +86,10 @@ const initMaiga = () => {
         init() {
             this.mainInit(); 
             // Keyboard visibility listener for mobile
+            // Initialize Google Sign-In client
+            if (window.google && window.google.accounts && window.google.accounts.id) {
+                window.google.accounts.id.initialize({ client_id: this.googleClientId, callback: this.handleGoogleLoginCallback.bind(this) });
+            }
             if (window.visualViewport) {
                 window.visualViewport.addEventListener('resize', () => {
                     // Threshold: if viewport height shrinks by more than 15%, keyboard is likely open
@@ -451,7 +455,8 @@ const initMaiga = () => {
          // Resource Virtualization Helper
         // Returns true if the reel is the active one, or directly adjacent
         isReelVisible(reelId) {
-            if (!this.activeReelId || this.activeTab !== 'reels') return false;
+            if (this.activeTab !== 'reels' || !this.reels.length) return false;
+            if (!this.activeReelId) return String(this.reels[0].id) === String(reelId);
             const index = this.reels.findIndex(r => String(r.id) === String(reelId));
             const activeIndex = this.reels.findIndex(r => String(r.id) === String(this.activeReelId));
             return Math.abs(index - activeIndex) <= 1;
@@ -1978,6 +1983,7 @@ const initMaiga = () => {
         isSearchFocused: false,
         recentSearches: ['Exam Timetable', 'Library', 'Sports'],
         isCallChatOpen: false,
+        showSocialLinkModal: false,
         isCallMinimized: false,
         isCalling: false,
         logout() {
@@ -2012,6 +2018,11 @@ const initMaiga = () => {
                     window.location.replace(this.user.account_type === 'ysu' ? 'ysu.html' : 'index.html');
                 }
             );
+        },
+        async fetchGoogleClientId() {
+            // This should ideally come from your backend /api/config
+            // For now, hardcode or load from meta tag
+            this.googleClientId = document.querySelector('meta[name="google-client-id"]')?.getAttribute('content') || 'YOUR_GOOGLE_CLIENT_ID';
         },
         async checkForUpdates() {
             if (!('serviceWorker' in navigator)) return;
@@ -2114,6 +2125,8 @@ const initMaiga = () => {
         isPoorConnection: false,
         isReconnecting: false,
         connectionInterval: null,
+        googleClientId: 'YOUR_GOOGLE_CLIENT_ID', // Replace with your actual Google Client ID
+        facebookAppId: 'YOUR_FACEBOOK_APP_ID', // Replace with your actual Facebook App ID
         callType: null,
         isScreenSharing: false,
         localStream: null,
@@ -2123,6 +2136,7 @@ const initMaiga = () => {
         isCameraOff: false,
         isSpeakerOn: false,
         callDuration: 0,
+        isLinkingSocial: false,
         callTimer: null,
         dragInfo: { startX: 0, startY: 0, initialX: 0, initialY: 0 },
         minimizedCallTransform: { x: 0, y: 0 },
@@ -3193,8 +3207,9 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_muted_chats').then(d => { if (Array.isArray(d)) this.mutedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_pinned_chats').then(d => { if (Array.isArray(d)) this.pinnedChats = d; incrementProgress(); });
                 this.apiFetch('/api/get_reels?page=1&limit=10').then(async d => { 
-                    // Fixed: reels were not being mapped with initial properties
-                    this.reels = (Array.isArray(d) ? d : []).filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                    const mapped = (Array.isArray(d) ? d : []).filter(r => !this.hiddenReelDepts.includes(r.dept)).map(r => ({...r, showHeart: false, liked: !!r.liked, isExpanded: false, isLoading: true, progress: 0, showStatusIcon: false, lastAction: '', hasError: false}));
+                    this.reels = mapped;
+                    if (mapped.length > 0 && !this.activeReelId) this.activeReelId = mapped[0].id;
                     this.$nextTick(() => this.setupReelsObserver());
                     incrementProgress();
                     await this.restoreScrollState();
@@ -7948,30 +7963,27 @@ const initMaiga = () => {
 
             this.observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
-                    const video = entry.target.querySelector('video');
-                    if (!video) return;
-
                     const reelId = entry.target.dataset.reelId; // Ensure reel.id is string
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
                         this.activeReelId = reelId;
 
-                        // OPTIMIZATION: Instead of searching the whole DOM, 
-                        // just pause the last known playing video
-                        if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {
-                            this.currentlyPlayingReel.pause();
-                            this.currentlyPlayingReel.muted = true;
-                        }
+                        this.$nextTick(() => {
+                            const video = entry.target.querySelector('video');
+                            if (!video) return;
 
-                         // Respect Data Saver: Don't auto-play if mode is on unless user previously tapped it
-                        if (this.dataSaverMode && !reel.userExplicitlyStarted) {
-                            return;
-                        }
-                        
-                        video.muted = this.isReelsMuted;
-                        video.play().then(() => { this.currentlyPlayingReel = video; }).catch(error => {
-                            if (error && error.name === 'AbortError') return;
+                            if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {
+                                this.currentlyPlayingReel.pause();
+                                this.currentlyPlayingReel.muted = true;
+                            }
+
+                            if (this.dataSaverMode && !reel.userExplicitlyStarted) return;
+                            
+                            video.muted = this.isReelsMuted;
+                            video.play().then(() => { this.currentlyPlayingReel = video; }).catch(error => {
+                                if (error && error.name === 'AbortError') return;
+                            });
                         });
 
                         // PREFETCH LOGIC: Fetch the next 2 reels to ensure instant playback on swipe
@@ -8296,6 +8308,122 @@ const initMaiga = () => {
             });
         },
          isCallMenuOpen: false,
+
+        // --- Social Linking Methods ---
+        async linkGoogleAccount() {
+            this.isLinkingSocial = true;
+            try {
+                // Trigger Google One Tap or Popup
+                window.google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                        // Handle cases where the prompt is not displayed or skipped
+                        this.showToast('Info', 'Google sign-in prompt was not displayed or skipped.', 'info');
+                        this.isLinkingSocial = false;
+                        return;
+                    }
+                    if (notification.isCanceledMoment()) {
+                        this.showToast('Info', 'Google sign-in was cancelled.', 'info');
+                        this.isLinkingSocial = false;
+                        return;
+                    }
+                    // If successful, handleGoogleLoginCallback will be called
+                });
+            } catch (error) {
+                this.showToast('Error', 'Failed to initiate Google linking.', 'error');
+                this.isLinkingSocial = false;
+            }
+        },
+        async handleGoogleLoginCallback(response) {
+            if (!response.credential) {
+                this.showToast('Error', 'Google credential not received.', 'error');
+                this.isLinkingSocial = false;
+                return;
+            }
+            
+            const data = await this.apiFetch('/api/link_google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_token: response.credential })
+            });
+
+            if (data?.success) {
+                this.user.googleId = data.googleId;
+                this.showToast('Success', 'Google account linked successfully!', 'success');
+            } else {
+                this.showToast('Error', data?.message || 'Failed to link Google account.', 'error');
+            }
+            this.isLinkingSocial = false;
+        },
+        async unlinkGoogleAccount() {
+            if (!confirm('Are you sure you want to unlink your Google account?')) return;
+            this.isLinkingSocial = true;
+            const data = await this.apiFetch('/api/unlink_google', { method: 'POST' });
+            if (data?.success) {
+                this.user.googleId = undefined;
+                this.showToast('Success', 'Google account unlinked.', 'success');
+            } else {
+                this.showToast('Error', data?.message || 'Failed to unlink Google account.', 'error');
+            }
+            this.isLinkingSocial = false;
+        },
+
+        async linkFacebookAccount() {
+            this.isLinkingSocial = true;
+            try {
+                // Load Facebook SDK if not already loaded
+                if (typeof FB === 'undefined') {
+                    await new Promise(resolve => {
+                        window.fbAsyncInit = function() {
+                            FB.init({
+                                appId: 'YOUR_FACEBOOK_APP_ID', // Use your actual Facebook App ID
+                                cookie: true,
+                                xfbml: true,
+                                version: 'v18.0'
+                            });
+                            resolve();
+                        };
+                        (function(d, s, id){
+                            var js, fjs = d.getElementsByTagName(s)[0];
+                            if (d.getElementById(id)) {return;}
+                            js = d.createElement(s); js.id = id;
+                            js.src = "https://connect.facebook.net/en_US/sdk.js";
+                            fjs.parentNode.insertBefore(js, fjs);
+                        }(document, 'script', 'facebook-jssdk'));
+                    });
+                }
+
+                FB.login(async (response) => {
+                    if (response.authResponse) {
+                        const access_token = response.authResponse.accessToken;
+                        const data = await this.apiFetch('/api/link_facebook', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ access_token })
+                        });
+                        if (data?.success) {
+                            this.user.facebookId = data.facebookId;
+                            this.showToast('Success', 'Facebook account linked successfully!', 'success');
+                        } else {
+                            this.showToast('Error', data?.message || 'Failed to link Facebook account.', 'error');
+                        }
+                    } else {
+                        this.showToast('Info', 'Facebook login cancelled.', 'info');
+                    }
+                    this.isLinkingSocial = false;
+                }, { scope: 'email' });
+            } catch (error) {
+                this.showToast('Error', 'Failed to initiate Facebook linking.', 'error');
+                this.isLinkingSocial = false;
+            }
+        },
+        async unlinkFacebookAccount() {
+            if (!confirm('Are you sure you want to unlink your Facebook account?')) return;
+            this.isLinkingSocial = true;
+            const data = await this.apiFetch('/api/unlink_facebook', { method: 'POST' });
+            if (data?.success) { this.user.facebookId = undefined; this.showToast('Success', 'Facebook account unlinked.', 'success'); }
+            else { this.showToast('Error', data?.message || 'Failed to unlink Facebook account.', 'error'); }
+            this.isLinkingSocial = false;
+        },
         startVoiceSearch() {
             if (!('webkitSpeechRecognition' in window)) {
                 this.showToast('Error', 'Voice search not supported in your browser.', 'error');

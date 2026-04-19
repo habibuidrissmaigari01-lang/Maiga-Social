@@ -25,11 +25,36 @@
             background-size: 200% 100%;
             animation: verified-shimmer 3s infinite linear;
         }
+
+        .bg-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background-color: #f1f5f9;
+            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
+        }
+        .dark .bg-mesh {
+            background-color: #020617;
+            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .dark .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .squircle { border-radius: 2rem !important; }
     </style>
 </head>
 <body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
       :class="{ 'dark': darkMode, ['font-size-' + appFontSize]: true }"
       x-data="adminData">
+
+    <div class="bg-mesh"></div>
 
     <!-- Mobile Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>

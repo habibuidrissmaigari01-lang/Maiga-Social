@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const webpush = require('web-push');
 const { exec } = require('child_process');
-const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
 
@@ -15,6 +15,10 @@ const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
 if (publicVapidKey && privateVapidKey) {
     const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social';
     webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
+}
+
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.FACEBOOK_CLIENT_ID || !process.env.FACEBOOK_CLIENT_SECRET) {
+    console.warn('Social OAuth environment variables are not fully set. Social linking/login might not work.');
 }
 
 // Robust URL handling: ensure the base URL has no trailing slash
@@ -229,7 +233,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
-            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: (p.likes || []).length })),
+            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: (p.likes || []).length, link_preview: p.link_preview })),
             myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: (p.likes || []).length, views: p.views || 0, author: user.name, avatar: user.avatar, verified: user.is_verified })),
             total_posts_count: postsCount,
             chats: Array.from(processedChats.values()),
@@ -251,7 +255,8 @@ router.get('/get_user', isAuthenticated, async (req, res) => {
         id: user._id, name: user.name, nickname: user.nickname, username: user.username, account_type: user.account_type,
         avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
         dept: user.dept, bio: user.bio,
-        email: user.email, is_admin: user.is_admin,gender: user.gender,
+        email: user.email, is_admin: user.is_admin, gender: user.gender,
+        googleId: user.googleId, facebookId: user.facebookId, // Include social IDs
         followerIds: user.followers, followingIds: user.following,
         total_posts_count: postsCount
     });
@@ -1443,7 +1448,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
                 { $skip: skip },
                 { $limit: limit },
                 { $lookup: { from: 'users', localField: 'user', foreignField: '_id', as: 'user' } },
-                { $unwind: '$user' },
+                { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
                 { $project: { 'user.password': 0, 'user.email': 0, 'user.phone': 0 } }
             ]);
         }
@@ -2779,19 +2784,140 @@ router.post('/admin/unblock_user', isAuthenticated, isAdmin, async (req, res) =>
     }
 });
 
-router.post('/report_bug', isAuthenticated, async (req, res) => {
+// --- Social Account Linking Routes ---
+router.post('/link_google', isAuthenticated, async (req, res) => {
     try {
-        const { logs, userAgent } = req.body;
-        const report = new Report({
-            reporter: req.session.userId,
-            reason: 'Bug Report: Diagnostic Logs',
-            details: `User Agent: ${userAgent}\n\n--- CONSOLE LOGS ---\n${logs}`,
-            priority: 'medium',
-            status: 'open'
+        const { id_token } = req.body;
+        if (!id_token) return res.status(400).json({ success: false, message: 'Google ID token is required.' });
+
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+        const ticket = await client.verifyIdToken({
+            idToken: id_token,
+            audience: process.env.GOOGLE_CLIENT_ID,
         });
-        await report.save();
-        res.json({ success: true });
-    } catch (error) { res.status(500).json({ success: false }); }
+        const payload = ticket.getPayload();
+        const googleId = payload.sub;
+        const email = payload.email.toLowerCase();
+
+        // Check if this Google ID is already linked to another user
+        const existingUserWithGoogleId = await User.findOne({ googleId });
+        if (existingUserWithGoogleId && existingUserWithGoogleId._id.toString() !== req.session.userId.toString()) {
+            return res.status(409).json({ success: false, message: 'This Google account is already linked to another user.' });
+        }
+
+        // Check if the email is already linked to another user (if not the current user)
+        const existingUserWithEmail = await User.findOne({ email });
+        if (existingUserWithEmail && existingUserWithEmail._id.toString() !== req.session.userId.toString()) {
+            return res.status(409).json({ success: false, message: 'This email is already associated with another account.' });
+        }
+
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        user.googleId = googleId;
+        if (!user.email) user.email = email; // Set email if not already present
+        await user.save();
+
+        await Log.create({
+            user: req.session.userId,
+            action: 'LINK_GOOGLE',
+            details: `User linked Google account (ID: ${googleId}).`,
+            ip: req.ip
+        });
+
+        res.json({ success: true, message: 'Google account linked successfully.', googleId: user.googleId });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to link Google account.', error: error.message });
+    }
+});
+
+router.post('/unlink_google', isAuthenticated, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        user.googleId = undefined; // Unset the Google ID
+        await user.save();
+
+        await Log.create({
+            user: req.session.userId,
+            action: 'UNLINK_GOOGLE',
+            details: 'User unlinked Google account.',
+            ip: req.ip
+        });
+
+        res.json({ success: true, message: 'Google account unlinked successfully.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to unlink Google account.', error: error.message });
+    }
+});
+
+router.post('/link_facebook', isAuthenticated, async (req, res) => {
+    try {
+        const { access_token } = req.body;
+        if (!access_token) return res.status(400).json({ success: false, message: 'Facebook access token is required.' });
+
+        // Verify Facebook token with Facebook Graph API
+        const fbResponse = await fetch(`https://graph.facebook.com/me?fields=id,email&access_token=${access_token}`);
+        const fbData = await fbResponse.json();
+
+        if (fbData.error) {
+            return res.status(400).json({ success: false, message: fbData.error.message });
+        }
+
+        const facebookId = fbData.id;
+        const email = fbData.email?.toLowerCase();
+
+        const existingUserWithFacebookId = await User.findOne({ facebookId });
+        if (existingUserWithFacebookId && existingUserWithFacebookId._id.toString() !== req.session.userId.toString()) {
+            return res.status(409).json({ success: false, message: 'This Facebook account is already linked to another user.' });
+        }
+
+        const existingUserWithEmail = await User.findOne({ email });
+        if (email && existingUserWithEmail && existingUserWithEmail._id.toString() !== req.session.userId.toString()) {
+            return res.status(409).json({ success: false, message: 'This email is already associated with another account.' });
+        }
+
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        user.facebookId = facebookId;
+        if (email && !user.email) user.email = email;
+        await user.save();
+
+        await Log.create({
+            user: req.session.userId,
+            action: 'LINK_FACEBOOK',
+            details: `User linked Facebook account (ID: ${facebookId}).`,
+            ip: req.ip
+        });
+
+        res.json({ success: true, message: 'Facebook account linked successfully.', facebookId: user.facebookId });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to link Facebook account.', error: error.message });
+    }
+});
+
+router.post('/unlink_facebook', isAuthenticated, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found.' });
+
+        user.facebookId = undefined;
+        await user.save();
+
+        await Log.create({
+            user: req.session.userId,
+            action: 'UNLINK_FACEBOOK',
+            details: 'User unlinked Facebook account.',
+            ip: req.ip
+        });
+
+        res.json({ success: true, message: 'Facebook account unlinked successfully.' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to unlink Facebook account.', error: error.message });
+    }
 });
 
 router.get('/get_trending', isAuthenticated, async (req, res) => {

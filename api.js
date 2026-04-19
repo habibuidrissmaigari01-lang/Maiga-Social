@@ -7,6 +7,7 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
+const passport = require('passport');
 const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 // Updated paths because routes were moved into the public folder
@@ -117,6 +118,17 @@ app.use(session({
         maxAge: 1000 * 60 * 60 * 24 * 7 // Persist for 1 week
     }
 }));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await User.findById(id);
+        done(null, user);
+    } catch (err) { done(err, null); }
+});
 
 // --- Background Tasks ---
 const cleanupExpiredStories = async () => {

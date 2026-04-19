@@ -109,7 +109,9 @@ const userSchema = new mongoose.Schema({
     gender: String,
     birthday: Date,
     phone: String,
-    push_subscription: Object
+    push_subscription: Object,
+    googleId: { type: String, unique: true, sparse: true },
+    facebookId: { type: String, unique: true, sparse: true }
 }, schemaOptions);
 
 // --- Password Hashing Hook ---

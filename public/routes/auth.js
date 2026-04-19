@@ -2,10 +2,90 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { exec } = require('child_process');
-const { User, Otp, Setting } = require('../../models');
+const { User, Otp, Setting, Log } = require('../../models');
+
+// --- Passport Google Strategy ---
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    passport.use(new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: "/api/auth/google/callback"
+    }, async (accessToken, refreshToken, profile, done) => {
+        try {
+            let user = await User.findOne({ $or: [{ googleId: profile.id }, { email: profile.emails[0].value.toLowerCase() }] });
+            if (user) {
+                if (!user.googleId) { user.googleId = profile.id; await user.save(); }
+                await Log.create({
+                    user: user._id,
+                    action: 'LOGIN_GOOGLE',
+                    details: `User ${user.username} logged in via Google.`,
+                    ip: req.ip // Assuming req.ip is available from express
+                });
+                return done(null, user);
+            }
+            user = await User.create({
+                googleId: profile.id,
+                name: profile.displayName,
+                email: profile.emails[0].value.toLowerCase(),
+                avatar: profile.photos?.[0]?.value,
+                username: profile.emails[0].value.split('@')[0] + Math.floor(Math.random() * 1000),
+                await Log.create({
+                    user: user._id,
+                    action: 'REGISTER_GOOGLE',
+                    details: `New user ${user.username} registered via Google.`,
+                    ip: req.ip
+                });
+                account_type: 'maiga'
+            });
+            done(null, user);
+        } catch (err) { done(err, null); }
+    }));
+}
+
+// --- Passport Facebook Strategy ---
+if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
+    passport.use(new FacebookStrategy({
+        clientID: process.env.FACEBOOK_CLIENT_ID,
+        clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+        callbackURL: "/api/auth/facebook/callback",
+        profileFields: ['id', 'displayName', 'photos', 'email']
+    }, async (accessToken, refreshToken, profile, done) => {
+        try {
+            let user = await User.findOne({ $or: [{ facebookId: profile.id }, { email: profile.emails?.[0]?.value?.toLowerCase() }] });
+            if (user) {
+                if (!user.facebookId) { user.facebookId = profile.id; await user.save(); }
+                await Log.create({
+                    user: user._id,
+                    action: 'LOGIN_FACEBOOK',
+                    details: `User ${user.username} logged in via Facebook.`,
+                    ip: req.ip
+                });
+                return done(null, user);
+            }
+            user = await User.create({
+                facebookId: profile.id,
+                name: profile.displayName,
+                email: profile.emails?.[0]?.value?.toLowerCase(),
+                avatar: profile.photos?.[0]?.value, // Facebook profile photos might be an array
+                username: profile.displayName.replace(/\s+/g, '_').toLowerCase() + Math.floor(Math.random() * 1000),
+                await Log.create({
+                    user: user._id,
+                    action: 'REGISTER_FACEBOOK',
+                    details: `New user ${user.username} registered via Facebook.`,
+                    ip: req.ip
+                });
+                account_type: 'maiga'
+            });
+            done(null, user);
+        } catch (err) { done(err, null); }
+    }));
+}
 
 // Brute-force protection for the login route
 const loginLimiter = rateLimit({
@@ -85,6 +165,19 @@ async function sendEmail(to, subject, text) {
         if (!response.ok) { }
     } catch (err) { }
 }
+
+// --- OAuth Routes ---
+router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => {
+    req.session.userId = req.user._id.toString(); // Ensure session is set
+    req.session.save(() => res.redirect('/home'));
+});
+
+router.get('/auth/facebook', passport.authenticate('facebook', { scope: ['email'] }));
+router.get('/auth/facebook/callback', passport.authenticate('facebook', { failureRedirect: '/' }), (req, res) => {
+    req.session.userId = req.user._id.toString(); // Ensure session is set
+    req.session.save(() => res.redirect('/home'));
+});
 
 router.post('/send-reg-otp', otpRequestLimiter, async (req, res) => {
     const { identity } = req.body;
@@ -188,12 +281,25 @@ router.post('/register', [
 
 router.post('/login', loginLimiter, async (req, res) => {
     try {
-        const { login_identity, login_password, remember_me, account_type } = req.body;
+      const { login_identity, login_password, remember_me, account_type } = req.body;
         const identity = login_identity.trim().toLowerCase();
         const user = await User.findOne({ $or: [{ email: identity }, { username: identity }] }).select('+password');
         
         if (!user || !(await bcrypt.compare(login_password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+         // Fetch cross-portal login preference
+        const crossPortalSetting = await Setting.findOne({ key: 'allow_cross_portal_login' });
+        const allowCrossPortal = crossPortalSetting ? crossPortalSetting.value : false;
+
+        // Enforce account isolation if not permitted (Admins are always allowed)
+        if (!allowCrossPortal && !user.is_admin && account_type && user.account_type !== account_type) {
+            const correctUrl = user.account_type === 'ysu' ? 'ysu.html' : 'index.html';
+            return res.status(403).json({ 
+                message: `Access Denied. This account is registered for ${user.account_type === 'ysu' ? 'YSU' : 'Maiga'} Social.`,
+                redirect: correctUrl 
+            });
         }
 
         // Enforce account isolation: users can only login through their respective registration portal
