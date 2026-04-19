@@ -15,8 +15,9 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     passport.use(new GoogleStrategy({
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: "/api/auth/google/callback"
-    }, async (accessToken, refreshToken, profile, done) => {
+        callbackURL: "/api/auth/google/callback",
+        passReqToCallback: true
+    }, async (req, accessToken, refreshToken, profile, done) => {
         try {
             let user = await User.findOne({ $or: [{ googleId: profile.id }, { email: profile.emails[0].value.toLowerCase() }] });
             if (user) {
@@ -25,7 +26,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                     user: user._id,
                     action: 'LOGIN_GOOGLE',
                     details: `User ${user.username} logged in via Google.`,
-                    ip: req.ip // Assuming req.ip is available from express
+                    ip: req.ip
                 });
                 return done(null, user);
             }
@@ -35,13 +36,13 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                 email: profile.emails[0].value.toLowerCase(),
                 avatar: profile.photos?.[0]?.value,
                 username: profile.emails[0].value.split('@')[0] + Math.floor(Math.random() * 1000),
-                await Log.create({
-                    user: user._id,
-                    action: 'REGISTER_GOOGLE',
-                    details: `New user ${user.username} registered via Google.`,
-                    ip: req.ip
-                });
                 account_type: 'maiga'
+            });
+            await Log.create({
+                user: user._id,
+                action: 'REGISTER_GOOGLE',
+                details: `New user ${user.username} registered via Google.`,
+                ip: req.ip
             });
             done(null, user);
         } catch (err) { done(err, null); }
@@ -54,8 +55,9 @@ if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
         clientID: process.env.FACEBOOK_CLIENT_ID,
         clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
         callbackURL: "/api/auth/facebook/callback",
-        profileFields: ['id', 'displayName', 'photos', 'email']
-    }, async (accessToken, refreshToken, profile, done) => {
+        profileFields: ['id', 'displayName', 'photos', 'email'],
+        passReqToCallback: true
+    }, async (req, accessToken, refreshToken, profile, done) => {
         try {
             let user = await User.findOne({ $or: [{ facebookId: profile.id }, { email: profile.emails?.[0]?.value?.toLowerCase() }] });
             if (user) {
@@ -74,13 +76,13 @@ if (process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET) {
                 email: profile.emails?.[0]?.value?.toLowerCase(),
                 avatar: profile.photos?.[0]?.value, // Facebook profile photos might be an array
                 username: profile.displayName.replace(/\s+/g, '_').toLowerCase() + Math.floor(Math.random() * 1000),
-                await Log.create({
-                    user: user._id,
-                    action: 'REGISTER_FACEBOOK',
-                    details: `New user ${user.username} registered via Facebook.`,
-                    ip: req.ip
-                });
                 account_type: 'maiga'
+            });
+            await Log.create({
+                user: user._id,
+                action: 'REGISTER_FACEBOOK',
+                details: `New user ${user.username} registered via Facebook.`,
+                ip: req.ip
             });
             done(null, user);
         } catch (err) { done(err, null); }
