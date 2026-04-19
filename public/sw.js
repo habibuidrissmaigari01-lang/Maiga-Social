@@ -8,8 +8,8 @@ const ASSETS_TO_CACHE = [
   '/maiga',
   '/home',
   '/css/main.css',
-  '/css/cropper.min.css',
-  '/cropper.min.js',
+  '/css/cropper.min.css', // Matches public/css/cropper.min.css
+  '/cropper.min.js',      // Matches public/cropper.min.js
   '/index.html',
   '/ysu.html',
   '/maiga.js',

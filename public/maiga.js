@@ -62,7 +62,7 @@ const initMaiga = () => {
     isMaigaInitialized = true;
     // Global Error Boundary to prevent app crashes
     Alpine.setErrorHandler((e, el, expression) => {
-        console.error('Alpine Logic Error:', e, 'at element:', el, 'expression:', expression);
+        console.warn('Alpine caught an error in expression:', expression, 'at element:', el, '\nError:', e.message);
     });
 
     Alpine.data('appData', () => ({
@@ -113,7 +113,7 @@ const initMaiga = () => {
             this.loadSavedWallpaper();
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
-            this.$watch('isMessageSoundEnabled', (val) => localStorage.setItem('maiga_msg_sound', val));
+            this.$watch('isMessageSoundEnabled', (val) => val !== undefined && localStorage.setItem('maiga_msg_sound', val));
             const savedRecents = localStorage.getItem('recent_stickers');
             if (savedRecents) {
                 this.recentlyUsedStickers = JSON.parse(savedRecents);
@@ -136,11 +136,64 @@ const initMaiga = () => {
                 this.showToast('App Updated', 'A new version is available. Reloading...', 'info');
                 setTimeout(() => window.location.reload(), 2000);
             });
+
+            // --- PROXY SAFETY WRAPPER ---
+            // This wraps the initialized component in a Proxy to prevent ReferenceErrors 
+            // if the HTML calls a variable that hasn't been defined in the object yet.
+            return new Proxy(this, {
+                get(target, prop, receiver) {
+                    if (prop in target || typeof prop === 'symbol') {
+                        return Reflect.get(target, prop, receiver);
+                    }
+                    // Log the missing property so you can fix it later, but return undefined
+                    // so the UI doesn't crash.
+                    console.error(`[Reference Protection] Property "${String(prop)}" is used in HTML but missing in appData.`);
+                    return undefined;
+                }
+            });
         },
         installPrompt: null,
         // Core App State
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
+        chatStarFilter: false,
+        isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
+        groupSearchQuery: '',
+        showChatMenu: false,
+        showReactionsModal: false,
+        messageReactions: [],
+        connectionSearchQuery: '',
+        showShareProfileModal: false,
+        isReporting: false,
+        homeSearchTab: 'users',
+        hasMorePosts: true,
+        showReelMenu: false,
+        reelForwardSearchQuery: '',
+        friendsSearchQuery: '',
+        friendsTab: 'suggestions',
+        isSavingProfile: false,
+        isCreatingStory: false,
+        isCreatingPost: false,
+        showStoryStickerPicker: false,
+        showAllStoryColors: false,
+        isSubmittingReport: false,
+        isSubmittingGroup: false,
+        isUpdatingGroupInfo: false,
+        isChangingPassword: false,
+        showOnlyUnread: false,
+        chatListSearchQuery: '',
+        showCameraFlash: false,
+        focusRing: { show: false, x: 0, y: 0 },
+        hasFlashlight: false,
+        isFlashOn: false,
+        isAutoExpanding: false,
+        hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
+        avatarFileToUpload: null,
+        avatarOriginalFile: null,
+        bannerFile: null,
+        showMsgInfo: false,
+        messageInfoData: { delivered_at: null, read_details: [] },
+        groupActivityData: [],
         theme: localStorage.getItem('theme') || 'system',
         darkMode: false,
         appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
@@ -151,6 +204,7 @@ const initMaiga = () => {
         customWallpaperFile: null,
         pendingPosts: [],
         pendingMessages: [],
+        activeReelId: null,
         syncState: { active: false, current: 0, total: 0 },
         iceTimeoutTimer: null,
         isNetworkBlocked: false,
@@ -360,13 +414,22 @@ const initMaiga = () => {
 
         get filteredForwardList() {
             const combined = [...new Map([...this.followingList, ...this.followerList].map(item => [item.id, item])).values()];
-            if (!this.reelForwardSearchQuery.trim()) return combined;
+            if (!this.reelForwardSearchQuery || !this.reelForwardSearchQuery.trim()) return combined;
             const q = this.reelForwardSearchQuery.toLowerCase();
             return combined.filter(p => 
                 p.name.toLowerCase().includes(q) || 
                 p.username.toLowerCase().includes(q) ||
                 (p.dept && p.dept.toLowerCase().includes(q))
             );
+        },
+
+         // Resource Virtualization Helper
+        // Returns true if the reel is the active one, or directly adjacent
+        isReelVisible(reelId) {
+            if (!this.activeReelId || this.activeTab !== 'reels') return false;
+            const index = this.reels.findIndex(r => String(r.id) === String(reelId));
+            const activeIndex = this.reels.findIndex(r => String(r.id) === String(this.activeReelId));
+            return Math.abs(index - activeIndex) <= 1;
         },
 
         async fetchVerificationHistory() {
@@ -7839,6 +7902,8 @@ const initMaiga = () => {
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
+                        this.activeReelId = reelId;
+
                         // OPTIMIZATION: Instead of searching the whole DOM, 
                         // just pause the last known playing video
                         if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {

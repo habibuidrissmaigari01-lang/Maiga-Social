@@ -1423,12 +1423,18 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             reels = await Post.find(query).populate('user', 'name avatar dept').sort({ createdAt: -1 }).skip(skip).limit(limit);
         } else {
             // Stable Seeded Shuffling for the main feed to prevent duplicates across pages
-            const seed = req.session.userId ? parseInt(req.session.userId.toString().slice(-6), 16) : 12345;
+            // We convert the userId into a large integer to act as our stable mixing factor
+            const seed = (req.session.userId ? parseInt(req.session.userId.toString().slice(-8), 16) : 54321) || 1;
             
             reels = await Post.aggregate([
                 { $match: query },
+                // A robust way to shuffle without modulo:
+                // We multiply the ID bit-representation by the seed and take the absolute value.
+                // This creates a stable, pseudo-random sort key for every unique ID + Seed pair.
                 { $addFields: { 
-                    seeded_rand: { $mod: [{ $toLong: "$_id" }, seed] } 
+                    seeded_rand: { 
+                        $abs: { $subtract: [{ $toLong: "$_id" }, seed] }
+                    } 
                 }},
                 { $sort: { seeded_rand: 1, createdAt: -1 } },
                 { $skip: skip },
@@ -1448,7 +1454,7 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
             liked: r.likes.some(id => id && id.toString() === userId?.toString()),
             saved: r.saved_by.some(id => id && id.toString() === userId?.toString()),
             myReaction: r.likes.some(id => id && id.toString() === userId?.toString()) ? 'like' : null,
-            seen: r.viewed_by.some(id => id && id.toString() === userId?.toString())
+            seen: (r.viewed_by || []).some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
         res.status(500).json({ error: 'Internal Server Error', details: error.message });
