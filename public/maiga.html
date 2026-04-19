@@ -2960,8 +2960,8 @@
                 <div @click="viewStory(myStories)" class="flex-shrink-0 cursor-pointer group">
                     <div class="p-1 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram rounded-2xl">
                         <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-800">
-                            <template x-if="myStories[0].type === 'image'"><img :src="myStories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
-                            <template x-if="myStories[0].type === 'video'"><video :src="myStories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted></video></template>
+                            <template x-if="myStories[0].type === 'image'"><img :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
+                            <template x-if="myStories[0].type === 'video'"><video :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline></video></template>
                             
                             <div x-show="loading" class="absolute inset-0 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-500"></i></div>
 
@@ -2984,7 +2984,12 @@
                     <div class="p-1 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram rounded-2xl">
                         <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-800">
                             <template x-if="friend.stories && friend.stories.length > 0">
-                                <img :src="friend.stories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'">
+                                <template x-if="friend.stories[0].type === 'image'">
+                                    <img :src="Array.isArray(friend.stories[0].media) ? friend.stories[0].media[0] : friend.stories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'">
+                                </template>
+                                <template x-if="friend.stories[0].type === 'video'">
+                                    <video :src="Array.isArray(friend.stories[0].media) ? friend.stories[0].media[0] : friend.stories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline></video>
+                                </template>
                             </template>
                             
                             <div x-show="loading" class="absolute inset-0 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-500"></i></div>

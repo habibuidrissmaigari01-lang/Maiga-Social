@@ -7963,6 +7963,7 @@ const initMaiga = () => {
 
             this.observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
+                    const video = entry.target.querySelector('video');
                     const reelId = entry.target.dataset.reelId; // Ensure reel.id is string
                     const reel = this.reels.find(r => r.id == reelId);
 
@@ -7970,7 +7971,6 @@ const initMaiga = () => {
                         this.activeReelId = reelId;
 
                         this.$nextTick(() => {
-                            const video = entry.target.querySelector('video');
                             if (!video) return;
 
                             if (this.currentlyPlayingReel && this.currentlyPlayingReel !== video) {
@@ -8027,6 +8027,7 @@ const initMaiga = () => {
                         }
                         if (reel) reel.seen = true;
                     } else {
+                        if (!video) return;
                         video.pause();
                         video.muted = true;
                         video.currentTime = 0;
