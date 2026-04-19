@@ -226,6 +226,20 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             }
         });
 
+        // Process Trending Hashtags from the aggregated posts
+        const counts = {};
+        trending.forEach(p => {
+            const tags = p.content.match(/#\w+/g);
+            if (tags) {
+                tags.forEach(t => {
+                    counts[t] = (counts[t] || 0) + 1;
+                });
+            }
+        });
+        const processedTrending = Object.entries(counts)
+            .map(([tag, count], index) => ({ id: index + 1, tag: tag.replace('#', ''), count, category: 'Trending' }))
+            .sort((a, b) => b.count - a.count).slice(0, 10);
+
         res.json({
             user: {
                 id: user._id, name: user.name, username: user.username, nickname: user.nickname, account_type: user.account_type,
@@ -240,7 +254,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             groups: groupData,
             following: connections.following.map(f => ({ id: f._id, name: f.name, avatar: f.avatar })),
             followers: followersData.map(f => ({ id: f._id, name: f.full_name || f.name, avatar: f.avatar, username: f.username, dept: f.dept, online: f.online })),
-            trending: [], // Map trending logic here
+            trending: processedTrending,
             notifications: notifications
         });
     } catch (err) {
