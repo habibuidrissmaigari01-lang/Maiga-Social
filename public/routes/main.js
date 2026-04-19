@@ -50,7 +50,7 @@ const uploadToR2 = async (file, folder) => {
         if (file.mimetype.startsWith('video')) {
             try {
                 const duration = await getVideoDuration(file.filepath);
-                if (duration !== null && duration > 180) { // Only throw if duration was actually retrieved
+                if (duration !== null && duration > 60) { // Only throw if duration was actually retrieved
                     throw new Error('Video duration exceeds the 3-minute limit.');
                 }
             } catch (err) {
@@ -244,7 +244,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             user: {
                 id: user._id, name: user.name, username: user.username, nickname: user.nickname, account_type: user.account_type,
                 avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
-                dept: user.dept, bio: user.bio,
+                dept: user.dept, bio: user.bio, is_verified: user.is_verified,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
             posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: (p.likes || []).length, link_preview: p.link_preview })),

@@ -182,7 +182,7 @@ const initMaiga = () => {
         },
         installPrompt: null,
         // Core App State
-        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
+        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', is_verified: false, account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
         isKeyboardOpen: false,
         chatStarFilter: false,
@@ -6094,9 +6094,9 @@ const initMaiga = () => {
                 video.preload = 'metadata';
                 video.onloadedmetadata = () => {
                     window.URL.revokeObjectURL(video.src);
-                    /* Requirement: Max Duration 3 Minutes (180s) */
-                    if (video.duration > 180) {
-                        this.showToast('Too Long', 'Stories cannot exceed 3 minutes.', 'error');
+                    /* Requirement: Max Duration 60s */
+                    if (video.duration > 60) {
+                        this.showToast('Too Long', 'Stories cannot exceed 60 seconds.', 'error');
                         event.target.value = '';
                         return;
                     }

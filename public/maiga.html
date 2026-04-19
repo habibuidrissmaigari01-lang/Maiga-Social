@@ -186,19 +186,82 @@
             filter: drop-shadow(0 8px 12px rgba(59, 130, 246, 0.3));
         }
 
-        /* Enhanced Glassmorphism for Header */
+        /* --- MODERN GLASSMORPHISM & SQUIRCLE THEME --- */
         .glass-header-scrolled {
-            background: rgba(255, 255, 255, 0.6) !important;
-            backdrop-filter: blur(16px) saturate(180%) !important;
-            -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05) !important;
+            background: rgba(255, 255, 255, 0.7) !important;
+            backdrop-filter: blur(20px) saturate(190%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.04) !important;
         }
         .dark .glass-header-scrolled {
-            background: rgba(0, 0, 0, 0.5) !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3) !important;
+             background: rgba(10, 10, 10, 0.7) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
         }
+
+        /* Modern Mesh Gradient Background */
+        .bg-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background-color: #f8fafc;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.06) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.06) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, rgba(245, 158, 11, 0.06) 0px, transparent 50%);
+        }
+        .dark .bg-mesh {
+            background-color: #020202;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.12) 0px, transparent 50%);
+        }
+
+        /* Universal Glass Utility */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(14px) saturate(180%);
+            -webkit-backdrop-filter: blur(14px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+        }
+        .dark .glass-panel {
+            background: rgba(25, 25, 25, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Squircle Corners - Smooth High Radius */
+        .squircle { border-radius: 2.25rem !important; }
+        .squircle-lg { border-radius: 3rem !important; }
+        .squircle-sm { border-radius: 1.5rem !important; }
+
+        /* Refined Post Cards */
+        .post-card {
+            background: rgba(255, 255, 255, 0.55) !important;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+            border-radius: 2.25rem !important;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 30px -15px rgba(0,0,0,0.05);
+        }
+        .dark .post-card {
+            background: rgba(30, 30, 30, 0.4) !important;
+            border: 1px solid rgba(255, 255, 255, 0.04) !important;
+            box-shadow: 0 20px 40px -20px rgba(0,0,0,0.4);
+        }
+        .post-card:hover {
+            transform: translateY(-4px) scale(1.005);
+            background: rgba(255, 255, 255, 0.8) !important;
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1);
+        }
+        .dark .post-card:hover { background: rgba(40, 40, 40, 0.5) !important; }
+
+        /* --- END GLASSMORPHISM --- */
 
         body { font-family: 'Intel One Mono', 'Inter', sans-serif !important; }
         .dark .logo-grayscale { filter: grayscale(100%) invert(1); }
@@ -431,7 +494,7 @@
 
     <!-- Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
-        <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+        <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"></div>
         <div class="fixed inset-y-0 left-0 max-w-xs w-full glass-panel lg:squircle flex flex-col transition-transform duration-300 transform"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="-translate-x-full"
@@ -1828,8 +1891,8 @@
             </div>
         </div>
         <div class="flex-1 flex items-center justify-center relative bg-black" @click="handleStoryTap($event)">
-            <template x-if="viewingStory?.list[viewingStory.index].type === 'image'"><img :src="viewingStory?.list[viewingStory.index].media" class="w-full h-full object-contain" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
-            <template x-if="viewingStory?.list[viewingStory.index].type === 'video'"><video :src="viewingStory?.list[viewingStory.index].media" autoplay class="w-full h-full object-contain story-video"></video></template>
+            <template x-if="viewingStory?.list[viewingStory.index].type === 'image'"><img :src="Array.isArray(viewingStory?.list[viewingStory.index].media) ? viewingStory.list[viewingStory.index].media[0] : viewingStory?.list[viewingStory.index].media" class="w-full h-full object-contain" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
+            <template x-if="viewingStory?.list[viewingStory.index].type === 'video'"><video :src="Array.isArray(viewingStory?.list[viewingStory.index].media) ? viewingStory.list[viewingStory.index].media[0] : viewingStory?.list[viewingStory.index].media" autoplay playsinline muted class="w-full h-full object-contain story-video"></video></template>
             <div x-show="viewingStory?.list[viewingStory.index].hasMusic" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl flex items-center space-x-2 shadow-lg animate-pulse z-10 pointer-events-none">
                  <i class="fa-solid fa-music text-blue-600"></i>
                  <span class="text-xs font-bold text-black">Music Playing...</span>
@@ -4185,7 +4248,7 @@
                     <!-- Media Preview -->
                     <template x-if="storyMediaPreview">
                         <template x-if="storyMediaType === 'image'"><img :src="storyMediaPreview" class="w-full h-full object-cover"></template>
-                        <template x-if="storyMediaType === 'video'"><video :src="storyMediaPreview" class="w-full h-full object-cover" autoplay muted loop></video></template>
+                        <template x-if="storyMediaType === 'video'"><video :src="storyMediaPreview" class="w-full h-full object-cover" autoplay playsinline muted loop></video></template>
                     </template>
                     <!-- Centered Text Input Overlay (Direct writing on background) -->
                     <div class="absolute inset-0 flex items-center justify-center p-8 z-30 pointer-events-none"> 
@@ -4856,30 +4919,30 @@
     </div>
 
     <!-- Bottom Nav -->
-    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-4 left-4 right-4 glass-panel squircle flex justify-around items-center pt-2 pb-2 z-[350] shadow-2xl lg:hidden">
+    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-4 left-4 right-4 bg-blue-600/90 backdrop-blur-xl squircle flex justify-around items-center pt-2 pb-2 z-[350] shadow-2xl lg:hidden">
         <!-- Fluid Indicator Bar -->
-        <div class="absolute top-0 h-1 bg-blue-600 rounded-full z-10"
+        <div class="absolute top-0 h-1 bg-white rounded-full z-10"
              :style="getIndicatorStyle()"
              style="transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);"></div>
 
-        <button @click="activeTab = 'home'; $refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'home'; $refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-white' : 'text-white/50'">
             <i class="fa-solid fa-house-chimney text-xl"></i>
             <span class="text-[10px] font-bold mt-1">Home</span>
         </button>
-        <button @click="activeTab = 'friends'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'friends' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'friends'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'friends' ? 'text-white' : 'text-white/50'">
             <i class="fa-solid fa-users text-xl"></i>
             <span class="text-[10px] font-bold mt-1">Friends</span>
         </button>
         <div class="flex-1 flex justify-center -mt-8 relative z-30">
-            <button @click="isCreatingPost = true" class="bg-blue-600 text-white w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-4 border-white dark:border-gray-900 active:scale-90 transition-all hover:rotate-12">
+            <button @click="isCreatingPost = true" class="bg-white text-blue-600 w-14 h-14 rounded-2xl shadow-xl flex items-center justify-center border-4 border-blue-600 active:scale-90 transition-all hover:rotate-12">
                 <i class="fa-solid fa-plus text-2xl"></i>
             </button>
         </div>
-        <button @click="activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-white' : 'text-white/50'">
             <i class="fa-solid fa-video text-xl"></i>
             <span class="text-[10px] font-bold mt-1">Reels</span>
         </button>
-        <button @click="activeTab = 'profile'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'">
+        <button @click="activeTab = 'profile'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'profile' ? 'text-white' : 'text-white/50'">
             <i class="fa-solid fa-circle-user text-xl"></i>
             <span class="text-[10px] font-bold mt-1">Profile</span>
         </button>
