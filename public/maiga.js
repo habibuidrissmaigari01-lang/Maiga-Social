@@ -1,6 +1,23 @@
 // Define CSRF_TOKEN globally to prevent ReferenceErrors
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+// --- GLOBAL CONSOLE CAPTURE FOR BUG REPORTING ---
+const consoleBuffer = [];
+const MAX_LOGS = 500;
+const captureLog = (type, args) => {
+    const entry = `[${new Date().toLocaleTimeString()}] [${type.toUpperCase()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`;
+    consoleBuffer.push(entry);
+    if (consoleBuffer.length > MAX_LOGS) consoleBuffer.shift();
+};
+
+['log', 'warn', 'error', 'info'].forEach(type => {
+    const original = console[type];
+    console[type] = (...args) => {
+        captureLog(type, args);
+        original.apply(console, args);
+    };
+});
+
 // Function to extract a URL from text
 function extractUrl(text) {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -68,6 +85,13 @@ const initMaiga = () => {
     Alpine.data('appData', () => ({
         init() {
             this.mainInit(); 
+            // Keyboard visibility listener for mobile
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', () => {
+                    // Threshold: if viewport height shrinks by more than 15%, keyboard is likely open
+                    this.isKeyboardOpen = window.visualViewport.height < window.innerHeight * 0.85;
+                });
+            }
             // Listen for ringtone triggers from Service Worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.addEventListener('message', (event) => {
@@ -156,6 +180,7 @@ const initMaiga = () => {
         // Core App State
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
+        isKeyboardOpen: false,
         chatStarFilter: false,
         isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
         groupSearchQuery: '',
@@ -669,6 +694,24 @@ const initMaiga = () => {
                 setTimeout(() => window.location.reload(), 1500);
             } else {
                 this.showToast('Still Offline', 'Maintenance is still in progress.', 'error');
+            }
+        },
+
+        async reportBug() {
+            if (consoleBuffer.length === 0) return this.showToast('Info', 'No logs to report.', 'info');
+            this.showToast('Reporting', 'Uploading diagnostic logs...', 'info');
+            
+            const res = await this.apiFetch('/api/report_bug', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    logs: consoleBuffer.join('\n'),
+                    userAgent: navigator.userAgent
+                })
+            });
+
+            if (res?.success) {
+                this.showToast('Success', 'Bug report sent to administrators.', 'success');
             }
         },
 

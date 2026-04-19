@@ -420,5 +420,17 @@ app.get('/', (req, res) => {
 
 // --- Generic Error Handling ---
 app.use((err, req, res, next) => {
+    // Server-side Log File Writer
+    const timestamp = new Date().toISOString();
+    const logEntry = `[${timestamp}] ${req.method} ${req.url}\n` +
+                     `User: ${req.session?.userId || 'Guest'}\n` +
+                     `Error: ${err.message}\n` +
+                     `${err.stack}\n` +
+                     `${'-'.repeat(50)}\n`;
+
+    fs.appendFile(path.join(__dirname, 'server_errors.log'), logEntry, (fsErr) => {
+        if (fsErr) console.error('Failed to write to error log file:', fsErr);
+    });
+
     res.status(err.status || 500).json({ message: err.message || 'Internal Server Error' });
 });

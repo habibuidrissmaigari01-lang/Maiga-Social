@@ -229,8 +229,8 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 dept: user.dept, bio: user.bio,
                 is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
             },
-            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: p.likes.length })),
-            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: p.likes.length, views: p.views || 0, author: user.name, avatar: user.avatar, verified: user.is_verified })),
+            posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: (p.likes || []).length })),
+            myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: (p.likes || []).length, views: p.views || 0, author: user.name, avatar: user.avatar, verified: user.is_verified })),
             total_posts_count: postsCount,
             chats: Array.from(processedChats.values()),
             groups: groupData,
@@ -435,12 +435,12 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         res.json(postsToReturn.map(p => ({
             id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
             content: p.content, media: p.media, media_type: p.media_type,
-            time: formatTime(p.createdAt), likes: p.likes.length,
+            time: formatTime(p.createdAt), likes: (p.likes || []).length,
             comments: p.comments_count || 0,
             views: p.views || 0,
             verified: p.user?.is_verified || false,
-            saved: p.saved_by.some(id => id.toString() === req.session.userId?.toString()),
-            myReaction: p.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
+            saved: (p.saved_by || []).some(id => id.toString() === req.session.userId?.toString()),
+            myReaction: (p.likes || []).some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
             link_preview: p.link_preview // Include link preview
         })));
     } catch (err) {
@@ -457,12 +457,12 @@ router.get('/get_post', isAuthenticated, async (req, res) => {
         res.json({
             id: post._id, user_id: post.user?._id, author: post.user?.full_name || 'Deleted User', avatar: post.user?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=default',
             content: post.content, media: post.media, media_type: post.media_type,
-            time: formatTime(post.createdAt), likes: post.likes.length,
+            time: formatTime(post.createdAt), likes: (post.likes || []).length,
             comments: post.comments_count || 0,
             views: post.views || 0,
             verified: post.user?.is_verified || false,
-            saved: post.saved_by.some(id => id.toString() === req.session.userId?.toString()),
-            myReaction: post.likes.some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
+            saved: (post.saved_by || []).some(id => id.toString() === req.session.userId?.toString()),
+            myReaction: (post.likes || []).some(id => id && id.toString() === req.session.userId?.toString()) ? 'like' : null,
             link_preview: post.link_preview // Include link preview
         });
     } catch (err) {
@@ -498,7 +498,7 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
     });
 
     // Generate link preview if a URL is present in the content
-    const detectedUrl = extractUrl(req.body.content);
+    const detectedUrl = extractUrl(content);
     if (detectedUrl) {
         const linkPreview = await getLinkPreview(detectedUrl);
         if (linkPreview) post.link_preview = linkPreview;
@@ -759,11 +759,11 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
                 media: p.media,
                 media_type: p.media_type,
                 time: formatTime(p.createdAt),
-                likes: p.likes.length,
+                likes: (p.likes || []).length,
                 comments: p.comments_count || 0,
             verified: p.user?.is_verified,
-                saved: p.saved_by.some(id => id.toString() === req.session.userId.toString()),
-                myReaction: p.likes.some(id => id.toString() === req.session.userId.toString()) ? 'like' : null,
+                saved: (p.saved_by || []).some(id => id.toString() === req.session.userId.toString()),
+                myReaction: (p.likes || []).some(id => id.toString() === req.session.userId.toString()) ? 'like' : null,
                 author: user.full_name, // Include link preview
                 avatar: user.avatar
             })),
@@ -845,7 +845,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
             poll_id: m.poll?._id,
             question: m.poll?.question,
             options: m.poll?.options,
-            starred: m.starred_by.some(id => id.toString() === userId?.toString()),
+            starred: (m.starred_by || []).some(id => id.toString() === userId?.toString()),
             replyTo: m.reply_to ? { author: 'User', content: m.reply_to.content } : null,
             first_name: m.sender?.first_name || m.sender?.name?.split(' ')[0] || 'User',
             surname: m.sender?.surname || ''
@@ -1307,12 +1307,12 @@ router.get('/saved_posts', isAuthenticated, async (req, res) => {
     res.json(posts.map(p => ({
         id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar,
         content: p.content, media: p.media, media_type: p.media_type,
-        time: formatTime(p.createdAt), likes: p.likes.length,
+        time: formatTime(p.createdAt), likes: (p.likes || []).length,
         comments: p.comments_count || 0,
         views: p.views || 0,
         verified: p.user?.is_verified || false,
         saved: true, // Always true for saved posts list
-        myReaction: p.likes.some(id => id.toString() === userId.toString()) ? 'like' : null
+        myReaction: (p.likes || []).some(id => id.toString() === userId.toString()) ? 'like' : null
     })));
 });
 
@@ -1486,9 +1486,9 @@ router.get('/get_trending_reels', isAuthenticated, async (req, res) => {
             dept: r.user?.dept,
             media: r.media,
             caption: r.content,
-            likes: r.likes.length,
+            likes: (r.likes || []).length,
             views: r.views || 0,
-            seen: r.viewed_by.some(id => id && id.toString() === userId?.toString())
+            seen: (r.viewed_by || []).some(id => id && id.toString() === userId?.toString())
         })));
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch trending reels' });
@@ -2777,6 +2777,21 @@ router.post('/admin/unblock_user', isAuthenticated, isAdmin, async (req, res) =>
     } catch (error) {
         res.status(500).json({ error: 'Failed to unblock user' });
     }
+});
+
+router.post('/report_bug', isAuthenticated, async (req, res) => {
+    try {
+        const { logs, userAgent } = req.body;
+        const report = new Report({
+            reporter: req.session.userId,
+            reason: 'Bug Report: Diagnostic Logs',
+            details: `User Agent: ${userAgent}\n\n--- CONSOLE LOGS ---\n${logs}`,
+            priority: 'medium',
+            status: 'open'
+        });
+        await report.save();
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ success: false }); }
 });
 
 router.get('/get_trending', isAuthenticated, async (req, res) => {

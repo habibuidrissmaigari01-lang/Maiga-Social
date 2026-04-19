@@ -654,7 +654,8 @@
                     </template>
                 </div>
             </div>
-            <div class="flex-1 overflow-y-auto">
+            <!-- Added padding-bottom to ensure the last chat items aren't hidden behind the fixed bottom nav on mobile -->
+            <div class="flex-1 overflow-y-auto pb-24 lg:pb-0">
                 <!-- All Chats -->
                 <div x-show="activeMessageTab === 'all'">
                     <template x-for="chat in sortedChats" :key="chat.id">
@@ -3061,7 +3062,8 @@
     </main>
 
     <!-- MAIN VIEW: REELS -->
-    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[65px] bg-black z-40 lg:static lg:h-[calc(100vh-65px)] lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
+    <!-- Increased bottom offset from 65px to 80px to account for larger bottom navs and safe area insets -->
+    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] bg-black z-40 lg:static lg:h-[calc(100vh-65px)] lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
         <div x-ref="reelsContainer" 
              class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y" 
              x-init="setupReelsObserver()" 
@@ -4047,6 +4049,16 @@
                     </div>
                     <i class="fa-solid fa-chevron-right text-gray-400 text-xs"></i>
                 </button>
+                <button @click="reportBug()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800 text-left">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600"><i class="fa-solid fa-bug"></i></div>
+                        <div>
+                            <span class="font-bold text-sm">Report Bug / Send Logs</span>
+                            <p class="text-[10px] text-gray-500 font-medium leading-tight">Send current console diagnostics to admins to help fix issues.</p>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-paper-plane text-blue-600 text-xs"></i>
+                </button>
                 <button @click="activeTab = 'security'; fetchSecurityData()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-shield-halved"></i></div>
@@ -4263,7 +4275,9 @@
     <!-- Create Post UI -->
     <div x-show="isCreatingPost" x-cloak class="fixed inset-0 z-[500] flex flex-col lg:items-center lg:justify-center">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm hidden lg:block" @click="isCreatingPost = false" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
-        <div class="bg-white dark:bg-gray-900 flex flex-col p-4 w-full h-full lg:w-[600px] lg:h-auto lg:rounded-3xl lg:shadow-2xl relative animate-slideUp" :style="`transform: translate(${createPostOffset.x}px, ${createPostOffset.y}px)`">
+        <div class="bg-white dark:bg-gray-900 flex flex-col w-full h-full lg:w-[600px] lg:h-auto lg:rounded-3xl lg:shadow-2xl relative animate-slideUp transition-all duration-300" 
+             :class="isKeyboardOpen ? 'p-2' : 'p-4'"
+             :style="`transform: translate(${createPostOffset.x}px, ${createPostOffset.y}px)`">
         <!-- Real Progress Bar for Posts/Reels -->
         <div x-show="isUploadingPost || isUploadingReel" class="absolute inset-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-3xl">
             <div class="w-64 h-3 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden relative border dark:border-gray-700">
@@ -4281,7 +4295,8 @@
                 </template>
             </p>
         </div>
-        <div class="flex justify-between items-center mb-6 lg:cursor-move"
+        <div class="flex justify-between items-center lg:cursor-move"
+             :class="isKeyboardOpen ? 'mb-2' : 'mb-6'"
              @mousedown="startCreatePostDrag($event)" @mousemove.window="handleCreatePostDrag($event)" @mouseup.window="stopCreatePostDrag()">
             <button @click="isCreatingPost = false" class="text-gray-500 font-bold p-2">Cancel</button>
             <h3 class="font-black" x-text="isUploadingPost ? 'Uploading...' : 'Create Post'"></h3>
@@ -4297,7 +4312,7 @@
                 <span class="text-[10px] text-gray-400 font-bold" x-text="user.dept"></span>
             </div>
         </div>
-        <div class="flex-1 flex flex-col min-h-[200px] rounded-3xl transition-all duration-500 overflow-hidden"
+        <div class="flex-1 flex flex-col min-h-[120px] rounded-3xl transition-all duration-500 overflow-hidden"
              :style="postBgStyleIndex !== -1 ? `background: ${textStoryStyles[postBgStyleIndex].background}; justify-content: center; align-items: center; padding: 2rem;` : ''">
             <textarea x-model="newPostContent" maxlength="1000" 
                       class="w-full bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-bold transition-all duration-500" 
@@ -4969,13 +4984,11 @@
         <div class="relative flex flex-col items-center">
             <!-- Pulsing Background Logo (Smooth Fade) -->
             <div class="relative w-64 h-64 flex items-center justify-center">
-                <img x-show="user.account_type !== 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/logo.png" class="w-full h-full opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
-                <img x-show="user.account_type === 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/ysu.png" class="w-full h-full opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
+                <img :src="user.account_type === 'ysu' ? 'img/ysu.png' : 'img/logo.png'" class="w-full h-full opacity-5 absolute blur-xl scale-150 pointer-events-none" alt="">
             </div>
             <!-- Foreground Pulse Logo (Smooth Fade) -->
             <div class="relative w-24 h-24 mb-10 z-10 flex items-center justify-center">
-                <img x-show="user.account_type !== 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/logo.png" class="w-full h-full absolute animate-pulse" alt="Maiga Logo">
-                <img x-show="user.account_type === 'ysu'" x-transition:enter="transition opacity duration-700" x-transition:leave="transition opacity duration-700" src="img/ysu.png" class="w-full h-full absolute animate-pulse" alt="YSU Logo">
+                <img :src="user.account_type === 'ysu' ? 'img/ysu.png' : 'img/logo.png'" class="w-full h-full absolute animate-pulse" alt="App Logo">
             </div>
             <div class="relative">
                 <!-- Dynamic Loading Spinner Colors -->
