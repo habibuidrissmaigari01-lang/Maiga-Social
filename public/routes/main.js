@@ -1382,7 +1382,8 @@ router.get('/get_comments', isAuthenticated, async (req, res) => {
             .sort({ createdAt: 1 });
         res.json(comments.map(c => ({
             id: c._id, user_id: c.user._id, author: c.user.name, avatar: c.user.avatar,
-            content: c.content, media: c.media, media_type: c.media_type, time: formatTime(c.createdAt)
+            content: c.content, media: c.media, media_type: c.media_type, time: formatTime(c.createdAt),
+            verified: c.user.is_verified || false,
         })));
     } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });

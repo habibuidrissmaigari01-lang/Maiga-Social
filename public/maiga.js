@@ -6456,7 +6456,7 @@ const initMaiga = () => {
             }
         },
         get desktopGridCols() {
-            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px]';
+            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px] h-screen overflow-hidden';
         },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;
@@ -8059,14 +8059,7 @@ const initMaiga = () => {
                 });
             }, options);
 
-            // New logic for loading more
-             const lastReel = this.$refs.reelsContainer.querySelector('.snap-start:last-child');
-            if (lastReel) {
-                // Handled by the general observer below
-            }
-
-
-
+             // Only observe actual reel containers
              this.$refs.reelsContainer.querySelectorAll('.reel-container').forEach(reel => {
                 this.observer.observe(reel);
             });

@@ -466,7 +466,7 @@
     <div id="welcomePopup" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm hidden">
         <div class="glass-card p-6 md:p-8 max-w-sm w-11/12 mx-auto text-center transform transition-all scale-100 shadow-2xl"
              x-data="{ installPrompt: null, installProgress: 0, isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream }"
-             x-init="window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $nextTick(() => { const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.remove('hidden'); }); }); window.addEventListener('appinstalled', () => { installPrompt = null; installProgress = 0; const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.add('hidden'); });">
+             x-init="window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; $nextTick(() => { const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.remove('hidden'); }); }); window.addEventListener('appinstalled', () => { installPrompt = null; installProgress = 0; const installBtn = document.getElementById('pwaInstallBtn'); if(installBtn) installBtn.classList.add('hidden'); });"> 
             <div class="flex flex-col items-center mb-6">
                 <img src="img/logo.png" class="w-16 h-16 mb-2 logo-pulse" alt="Maiga Social">
                 <h2 class="text-xl font-black text-gray-800">Maiga Social App</h2>
