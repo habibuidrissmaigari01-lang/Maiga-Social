@@ -173,8 +173,10 @@ const parseForm = (req) => {
 router.get('/get_init_data', isAuthenticated, async (req, res) => {
     try {
         const userId = req.session.userId;
+        console.time(`get_init_data_total:${userId}`);
         
         // Fetch all critical data in parallel on the server
+        console.time(`db_parallel_fetch:${userId}`);
         const [user, posts, chats, groups, connections, followersData, trending, notifications, postsCount, myPosts] = await Promise.all([
             User.findById(userId),
             Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
@@ -187,8 +189,10 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             Post.countDocuments({ user: userId }),
             Post.find({ user: userId, media_type: { $ne: 'video' } }).sort({ createdAt: -1 }).limit(12)
         ]);
+        console.timeEnd(`db_parallel_fetch:${userId}`);
 
         // Process Group Data with Last Messages (Prevents 'undefined' in UI)
+        console.time(`group_processing:${userId}`);
         const groupData = await Promise.all(groups.map(async g => {
             const lastMessage = await Message.findOne({ group: g._id }).sort({ createdAt: -1 }).populate('sender', 'name');
             const isMe = lastMessage ? (lastMessage.sender?._id.toString() === userId.toString()) : false;
@@ -207,6 +211,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 role: g.members.find(m => m.user.toString() === userId.toString())?.role || 'member'
             };
         }));
+        console.timeEnd(`group_processing:${userId}`);
 
         const processedChats = new Map();
         chats.forEach(m => {
@@ -257,7 +262,10 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             trending: processedTrending,
             notifications: notifications
         });
+        console.timeEnd(`get_init_data_total:${userId}`);
     } catch (err) {
+        console.timeEnd(`get_init_data_total:${userId}`);
+        console.error('Batch Init Error:', err);
         res.status(500).json({ error: 'Failed to aggregate data' });
     }
 });

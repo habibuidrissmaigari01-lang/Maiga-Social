@@ -245,6 +245,10 @@ self.addEventListener('fetch', (event) => {
   // SPEED OPTIMIZATION: Bypass SW for Video/Audio streams (R2 URLs)
   // Service Workers often throttle large media chunks. Direct browser handling is faster.
   if (event.request.url.match(/\.(mp4|webm|ogg|mp3|wav|mov|m4a|m4v)$/i) || event.request.url.includes('r2.dev') || event.request.url.includes('public_url') || event.request.url.includes('r2-core')) return;
+  
+  // WebSocket Optimization: Service Workers cannot proxy WebSockets. 
+  // Intercepting the handshake GET request will cause connection failure.
+  if (event.request.url.includes('/socket.io/')) return;
 
   const isApi = event.request.url.includes('/api/');
   // Fix: Explicitly ignore Tailwind CDN to avoid CORS fetch errors in SW
