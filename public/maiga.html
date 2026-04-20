@@ -489,7 +489,8 @@
       x-effect="document.documentElement.style.fontSize = (appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px')"
       x-data="appData">
 
-    <div class="bg-mesh"></div>
+    <!-- Background moved to be non-intrusive to the grid -->
+    <div class="bg-mesh pointer-events-none"></div>
 
     <!-- Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
@@ -548,14 +549,14 @@
     </div>
 
     <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 glass-panel shrink-0 transition-all duration-300 z-40" :class="isLeftSidebarCollapsed ? 'w-24' : 'w-72'">
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 glass-panel shrink-0 transition-all duration-300 z-40 w-[280px]">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
             <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
-            <span x-show="!isLeftSidebarCollapsed" class="amazing-logo text-2xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+            <span class="amazing-logo text-2xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
-        <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors" :class="isLeftSidebarCollapsed ? 'justify-center' : ''">
+        <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
             <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-12 h-12 parallelogram-sm object-cover">
-            <div x-show="!isLeftSidebarCollapsed">
+            <div>
                 <h3 class="font-bold text-md text-gray-900 dark:text-white" :class="user.is_verified ? 'text-verified-gold' : ''">
                     <span x-text="user.nickname || user.name"></span>
                     <template x-if="user.nickname"><span class="text-[10px] opacity-50 ml-1 font-normal" x-text="'(' + user.name + ')'"></span></template>
@@ -564,15 +565,15 @@
             </div>
         </div>
         
-        <div class="p-4 space-y-2 flex-1 flex flex-col overflow-y-auto">
-            <nav class="flex flex-col" :class="isLeftSidebarCollapsed ? 'items-center' : ''">
-            <button @click="activeTab = 'home'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="[activeTab === 'home' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300', isLeftSidebarCollapsed ? 'justify-center' : '']">
+        <div class="p-4 space-y-2 flex-1 flex flex-col overflow-y-auto no-scrollbar">
+            <nav class="flex flex-col">
+            <button @click="activeTab = 'home'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'home' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
                 <i class="fa-solid fa-house-chimney text-xl w-8 text-center"></i>
-                <span x-show="!isLeftSidebarCollapsed" class="font-bold">Home</span>
+                <span class="font-bold">Home</span>
             </button>
-            <button @click="activeTab = 'friends'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="[activeTab === 'friends' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300', isLeftSidebarCollapsed ? 'justify-center' : '']">
+            <button @click="activeTab = 'friends'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'friends' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
                 <i class="fa-solid fa-users text-xl w-8 text-center"></i>
-                <span x-show="!isLeftSidebarCollapsed" class="font-bold">Friends</span>
+                <span class="font-bold">Friends</span>
             </button>
             <button @click="activeTab = 'reels'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="[activeTab === 'reels' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300', isLeftSidebarCollapsed ? 'justify-center' : '']">
                 <i class="fa-solid fa-video text-xl w-8 text-center"></i>
@@ -3135,9 +3136,9 @@
 
     <!-- MAIN VIEW: REELS -->
     <!-- Increased bottom offset from 65px to 80px to account for larger bottom navs and safe area insets -->
-    <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] bg-black z-40 lg:static lg:h-[calc(100vh-65px)] lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6" x-cloak>
+   <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] bg-black z-40 lg:relative lg:inset-auto lg:w-full lg:h-full lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6 lg:z-0" x-cloak>
         <div x-ref="reelsContainer" 
-             class="h-full w-full lg:w-[400px] lg:h-[700px] lg:rounded-2xl overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y" 
+              class="h-full w-full lg:w-[420px] lg:h-[750px] lg:rounded-[3rem] overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y border-x dark:border-gray-800" 
              x-init="setupReelsObserver()" 
              @scroll.passive="handleReelsScroll($event.target)"
              @wheel.prevent="handleReelWheel($event)">
@@ -4822,15 +4823,14 @@
     </div>
 
     <!-- Right Sidebar (Desktop) -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300">
-        <div class="p-4 flex items-center border-b dark:border-gray-800" :class="isRightSidebarCollapsed ? 'justify-center' : 'justify-between'">
-            <div x-show="!isRightSidebarCollapsed" class="flex items-center gap-4" x-transition>
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300 w-96">
+        <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
+            <div class="flex items-center gap-4">
                 <h3 class="text-lg font-black">Messages</h3>
                 <button @click="isCreatingGroup = true; isMessaging = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
             </div>
-            <button @click="isRightSidebarCollapsed = !isRightSidebarCollapsed" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-gray-500"><i class="fa-solid" :class="isRightSidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i></button>
         </div>
-        <div class="p-4 border-b dark:border-gray-800" x-show="!isRightSidebarCollapsed" x-transition>
+        <div class="p-4 border-b dark:border-gray-800">
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
                 <input type="text" placeholder="Search messages..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500">

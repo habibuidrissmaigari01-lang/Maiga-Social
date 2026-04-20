@@ -6435,8 +6435,8 @@ const initMaiga = () => {
             }
         },
         get desktopGridCols() {
-          const isCollapsed = this.isRightSidebarCollapsed || !this.activeChat;
-            return isCollapsed ? 'lg:grid-cols-[auto_1fr_80px]' : 'lg:grid-cols-[auto_1fr_400px]';        },
+            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px]';
+        },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;
             if (!audio) return;
