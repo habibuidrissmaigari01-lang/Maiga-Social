@@ -487,10 +487,10 @@
     <body class="select-none lg:grid transition-all duration-300 font-size-container"
       :class="[{ 'dark': darkMode, 'theme-ysu': user.account_type === 'ysu' }, desktopGridCols]"
       x-effect="document.documentElement.style.fontSize = (appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px')"
-      x-data="appData">
-
-    <!-- Background moved to be non-intrusive to the grid -->
-    <div class="bg-mesh pointer-events-none"></div>
+      x-data="appData"
+      @touchstart="handlePullStart($event)"
+      @touchmove="handlePullMove($event)"
+      @touchend="handlePullEnd()">
 
     <!-- Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
@@ -667,6 +667,17 @@
             </button>
         </div>
     </header>
+
+    <!-- Global Pull Refresh Indicator -->
+    <div class="flex justify-center overflow-hidden"
+         :class="isBouncing ? 'transition-all duration-500 cubic-bezier(0.175, 0.885, 0.32, 1.275)' : ''"
+         :style="`height: ${isRefreshing ? '60px' : (pullDistance > 0 ? pullDistance + 'px' : '0px')}; opacity: ${pullDistance > 0 || isRefreshing ? 1 : 0}`">
+        <div class="flex items-center justify-center h-full py-2">
+            <div class="bg-white dark:bg-gray-800 parallelogram-sm p-2 shadow-md border dark:border-gray-700 flex items-center justify-center w-10 h-10">
+                <i class="fa-solid text-blue-600 transition-transform duration-200" :class="isRefreshing ? 'fa-spinner fa-spin' : 'fa-arrow-down'" :style="`transform: rotate(${pullDistance * 2}deg)`"></i>
+            </div>
+        </div>
+    </div>
 
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
@@ -1806,7 +1817,10 @@
     </div>
 
     <!-- Full Screen Post View -->
-    <div x-show="viewingPost" x-cloak class="fixed inset-0 z-[700] bg-black/95 flex flex-col animate-fadeIn overflow-y-auto">
+    <div x-show="viewingPost" x-cloak class="fixed inset-0 z-[700] bg-black/95 flex flex-col animate-fadeIn overflow-y-auto"
+         @touchstart="touchStartY = $event.changedTouches[0].screenY"
+         @touchend="if($event.changedTouches[0].screenY - touchStartY > 80) viewingPost = null"
+    >
         <div class="p-4 flex justify-between items-center sticky top-0 z-10 bg-black/50 backdrop-blur-md">
             <div class="flex items-center space-x-2">
                 <button @click="viewingPost = null" class="p-2 rounded-full bg-white/10 text-white"><i class="fa-solid fa-xmark"></i></button>
@@ -1835,14 +1849,36 @@
             </div>
             <p class="text-sm leading-relaxed mb-4 text-gray-200 whitespace-pre-wrap" x-text="viewingPost?.content"></p>
             <template x-if="viewingPost?.media">
-                <div class="rounded-xl overflow-hidden bg-gray-900 border border-gray-800 mb-4"
-                     @touchstart.passive="handlePinchStart($event)"
-                     @touchmove.passive.prevent="handlePinchMove($event)"
-                     @touchend.passive="handlePinchEnd($event)"
-                     @touchcancel.passive="handlePinchEnd($event)"
-                     @dblclick.stop.prevent="zoomScale = zoomScale > 1 ? 1 : 2; lastScale = zoomScale;">
-                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) !== 'video'"><img :src="Array.isArray(viewingPost?.media) ? viewingPost.media[0] : viewingPost?.media" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></template>
-                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) === 'video'"><video :src="Array.isArray(viewingPost?.media) ? viewingPost.media[0] : viewingPost?.media" controls class="w-full h-auto transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;`"></video></template>
+                <div class="rounded-xl overflow-hidden bg-gray-900 border border-gray-800 mb-4 relative"
+                     x-data="{ current: 1, total: 1 }"
+                     x-effect="total = Array.isArray(viewingPost?.media) ? viewingPost.media.length : 1">
+                    
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) !== 'video'">
+                        <div class="relative">
+                            <div class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar"
+                                 @scroll.debounce.50ms="current = Math.round($el.scrollLeft / $el.clientWidth) + 1">
+                                <template x-for="(src, idx) in (Array.isArray(viewingPost?.media) ? viewingPost.media : [viewingPost.media])" :key="idx">
+                                    <div class="w-full shrink-0 snap-start flex items-center justify-center min-h-[40vh]"
+                                         @touchstart.passive="handlePinchStart($event)"
+                                         @touchmove.passive.prevent="handlePinchMove($event)"
+                                         @touchend.passive="handlePinchEnd($event)"
+                                         @dblclick.stop.prevent="zoomScale = zoomScale > 1 ? 1 : 2; lastScale = zoomScale;">
+                                        <img :src="src" class="w-full h-auto object-contain transition-transform duration-150" :style="`transform: scale(${zoomScale}); transform-origin: center center;` ">
+                                    </div>
+                                </template>
+                            </div>
+                            <!-- Indicators for Modal -->
+                            <div x-show="total > 1" class="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-10">
+                                <template x-for="i in total" :key="i">
+                                    <div class="h-1 bg-white transition-all duration-300" :class="current === i ? 'w-6' : 'w-2 opacity-30'"></div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="(viewingPost?.mediaType || viewingPost?.media_type) === 'video'">
+                        <video :src="Array.isArray(viewingPost?.media) ? viewingPost.media[0] : viewingPost?.media" controls class="w-full h-auto"></video>
+                    </template>
                 </div>
             </template>
             <template x-if="user.is_admin && viewingPost?.author !== user.name">
@@ -1867,6 +1903,7 @@
          @mouseup="if(!replyContent.trim() && !isRecordingStoryReply) isPaused = false"
          @touchstart="if($event.target.tagName !== 'INPUT' && $event.target.tagName !== 'TEXTAREA') { isPaused = true; touchStartY = $event.changedTouches[0].screenY; pressStartTime = Date.now(); }"
          @touchend="if(!replyContent.trim() && !isRecordingStoryReply) isPaused = false; if($event.changedTouches[0].screenY - touchStartY > 80) closeStory()"
+         @contextmenu.prevent
     >
         <audio x-ref="storyAudio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
         <div class="flex space-x-1 p-2 pt-4 absolute top-0 left-0 right-0 z-20">
@@ -1892,7 +1929,17 @@
         </div>
         <div class="flex-1 flex items-center justify-center relative bg-black" @click="handleStoryTap($event)">
             <template x-if="viewingStory?.list[viewingStory.index].type === 'image'"><img :src="Array.isArray(viewingStory?.list[viewingStory.index].media) ? viewingStory.list[viewingStory.index].media[0] : viewingStory?.list[viewingStory.index].media" class="w-full h-full object-contain" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
-            <template x-if="viewingStory?.list[viewingStory.index].type === 'video'"><video :src="Array.isArray(viewingStory?.list[viewingStory.index].media) ? viewingStory.list[viewingStory.index].media[0] : viewingStory?.list[viewingStory.index].media" autoplay playsinline muted class="w-full h-full object-contain story-video"></video></template>
+            <template x-if="viewingStory?.list[viewingStory.index].type === 'video'"><video :src="Array.isArray(viewingStory?.list[viewingStory.index].media) ? viewingStory.list[viewingStory.index].media[0] : viewingStory?.list[viewingStory.index].media" 
+                autoplay playsinline muted 
+                class="w-full h-full object-contain story-video"
+                @waiting="isStoryLoading = true"
+                @playing="isStoryLoading = false"
+                @canplay="isStoryLoading = false"></video></template>
+
+            <!-- Full-Screen Story Loading Spinner -->
+            <div x-show="isStoryLoading" class="absolute inset-0 flex items-center justify-center z-10 bg-black/20">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-white/80"></i>
+            </div>
             <div x-show="viewingStory?.list[viewingStory.index].hasMusic" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/80 backdrop-blur-md px-4 py-2 rounded-xl flex items-center space-x-2 shadow-lg animate-pulse z-10 pointer-events-none">
                  <i class="fa-solid fa-music text-blue-600"></i>
                  <span class="text-xs font-bold text-black">Music Playing...</span>
@@ -2740,11 +2787,7 @@
     </div>
 
     <!-- MAIN VIEW: HOME -->
-    <main x-show="activeTab === 'home'" class="animate-fadeIn"
-          @touchstart="handlePullStart($event)"
-          @touchmove="handlePullMove($event)"
-          @touchend="handlePullEnd()"
-    >
+    <main x-show="activeTab === 'home'" class="animate-fadeIn">
         <!-- Redial Suggestion -->
         <div x-show="lastBusyCall" x-cloak class="mx-4 mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center justify-between animate-fadeIn">
             <div class="flex items-center space-x-3">
@@ -2960,15 +3003,19 @@
             <template x-if="myStories.length > 0">
                 <div @click="viewStory(myStories)" class="flex-shrink-0 cursor-pointer group">
                     <div class="p-1 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram rounded-2xl">
-                        <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-800">
+                        <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-700">
                             <template x-if="myStories[0].type === 'image'"><img :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
-                            <template x-if="myStories[0].type === 'video'"><video :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline></video></template>
+                            <template x-if="myStories[0].type === 'video'"><video :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @canplay="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline preload="metadata"></video></template>
                             
-                            <div x-show="loading" class="absolute inset-0 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-500"></i></div>
+                            <div x-show="loading" class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+                                <img :src="user.avatar" class="w-10 h-10 rounded-full blur-[2px] opacity-50">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl text-blue-500 absolute"></i>
+                            </div>
 
                             <template x-if="!loading">
                                 <div>
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
+                                    <div x-show="myStories[0].type === 'video'" class="absolute top-2 right-2 text-white/80 drop-shadow-md"><i class="fa-solid fa-video text-[10px]"></i></div>
                                     <div class="absolute top-3 left-3 w-10 h-10 border-2 p-0.5 rounded-xl" :class="myStories[0].audience === 'close_friends' ? 'border-green-500' : 'border-blue-500'">
                                         <img :src="user.avatar" class="w-full h-full parallelogram-sm object-cover">
                                     </div>
@@ -2983,21 +3030,25 @@
             <template x-for="friend in following" :key="friend.id">
                 <div x-show="friend.stories && friend.stories.length > 0" @click="viewStory(friend.stories, friend)" class="flex-shrink-0 cursor-pointer group">
                     <div class="p-1 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram rounded-2xl">
-                        <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-800">
+                        <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-700">
                             <template x-if="friend.stories && friend.stories.length > 0">
                                 <template x-if="friend.stories[0].type === 'image'">
                                     <img :src="Array.isArray(friend.stories[0].media) ? friend.stories[0].media[0] : friend.stories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'">
                                 </template>
                                 <template x-if="friend.stories[0].type === 'video'">
-                                    <video :src="Array.isArray(friend.stories[0].media) ? friend.stories[0].media[0] : friend.stories[0].media" @loadeddata="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline></video>
+                                    <video :src="Array.isArray(friend.stories[0].media) ? friend.stories[0].media[0] : friend.stories[0].media" @canplay="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline preload="metadata"></video>
                                 </template>
                             </template>
                             
-                            <div x-show="loading" class="absolute inset-0 flex items-center justify-center"><i class="fa-solid fa-spinner fa-spin text-2xl text-gray-500"></i></div>
+                            <div x-show="loading" class="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
+                                <img :src="friend.avatar" class="w-10 h-10 rounded-full blur-[2px] opacity-50">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl text-blue-500 absolute"></i>
+                            </div>
 
                             <template x-if="!loading">
                                 <div>
                                     <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none"></div>
+                                    <div x-show="friend.stories[0].type === 'video'" class="absolute top-2 right-2 text-white/80 drop-shadow-md"><i class="fa-solid fa-video text-[10px]"></i></div>
                                     <div class="absolute top-3 left-3 w-10 h-10 border-2 border-blue-500 overflow-hidden rounded-xl">
                                         <img :src="friend.avatar" class="w-full h-full object-cover parallelogram-sm">
                                     </div>
@@ -3031,6 +3082,12 @@
         <!-- Feed -->
         <template x-for="post in homePosts" :key="post.id" x-show="!showSkeletons">
             <div @click="viewingPost = post" 
+                 @mousedown="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
+                 @mouseup="clearTimeout(postHoldTimer)"
+                 @mouseleave="clearTimeout(postHoldTimer)"
+                 @touchstart="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
+                 @touchend="clearTimeout(postHoldTimer)"
+                 @contextmenu.prevent
                  x-transition:enter="transition ease-out duration-500"
                  x-transition:enter-start="opacity-0 translate-y-4"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -3052,9 +3109,37 @@
                 </div>
                  <p class="text-sm leading-relaxed mb-3 whitespace-pre-wrap" x-html="formatContent(post.content, post.link_preview)"></p>
                 <template x-if="post.media">
-                    <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3">
-                        <template x-if="post.mediaType !== 'video'"><img :src="Array.isArray(post.media) ? post.media[0] : post.media" class="w-full h-auto object-cover" loading="lazy"></template>
-                        <template x-if="post.mediaType === 'video'"><video :src="post.media" controls class="w-full h-auto"></video></template>
+                    <div class="rounded-2xl overflow-hidden bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 mb-3 relative group/slider"
+                         x-data="{ current: 1, total: 1 }" 
+                         x-init="total = Array.isArray(post.media) ? post.media.length : 1">
+                        
+                        <template x-if="post.mediaType !== 'video'">
+                            <div class="relative">
+                                <!-- Horizontal Scroll Container -->
+                                <div class="flex overflow-x-auto snap-x snap-mandatory no-scrollbar bg-black/5"
+                                     @scroll.debounce.50ms="current = Math.round($el.scrollLeft / $el.clientWidth) + 1">
+                                    <template x-for="(src, idx) in (Array.isArray(post.media) ? post.media : [post.media])" :key="idx">
+                                        <div class="w-full shrink-0 snap-start flex items-center justify-center min-h-[300px]">
+                                            <img :src="src" class="w-full h-auto object-cover" loading="lazy" @click.stop="viewingPost = post">
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <!-- Dot Indicators -->
+                                <div x-show="total > 1" class="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
+                                    <template x-for="i in total" :key="i">
+                                        <div class="h-1.5 rounded-full transition-all duration-300"
+                                             :class="current === i ? 'w-4 bg-blue-600' : 'w-1.5 bg-white/50 shadow-sm'"></div>
+                                    </template>
+                                </div>
+                                
+                                <!-- Number Badge -->
+                                <div x-show="total > 1" class="absolute top-4 right-4 bg-black/50 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-black text-white tracking-widest z-10">
+                                    <span x-text="current"></span>/<span x-text="total"></span>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="post.mediaType === 'video'"><video :src="Array.isArray(post.media) ? post.media[0] : post.media" controls class="w-full h-auto"></video></template>
                     </div>
                 </template>
                 <div class="mt-4 flex justify-between items-center text-gray-500 dark:text-gray-400 px-1">
@@ -3136,16 +3221,16 @@
 
     <!-- MAIN VIEW: REELS -->
     <!-- Increased bottom offset from 65px to 80px to account for larger bottom navs and safe area insets -->
-   <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] bg-black z-40 lg:relative lg:inset-auto lg:w-full lg:h-full lg:bg-gray-100 dark:lg:bg-gray-900 lg:flex lg:justify-center lg:items-center lg:py-6 lg:z-0" x-cloak>
+   <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] left-0 right-0 bg-black z-40 flex justify-center items-center lg:relative lg:inset-auto lg:w-full lg:h-full lg:bg-gray-100 dark:lg:bg-gray-900 lg:py-6 lg:z-0" x-cloak>
         <div x-ref="reelsContainer" 
-              class="h-full w-full lg:w-[420px] lg:h-[750px] lg:rounded-[3rem] overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y border-x dark:border-gray-800" 
+              class="h-full w-full lg:w-[420px] lg:h-[750px] lg:rounded-[3rem] overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y lg:border-x dark:border-gray-800" 
              x-init="setupReelsObserver()" 
              @scroll.passive="handleReelsScroll($event.target)"
              @wheel.prevent="handleReelWheel($event)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
-                <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden transform-gpu" :data-reel-id="reel.id">
+                <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative bg-black lg:rounded-2xl overflow-hidden transform-gpu" :data-reel-id="reel.id">
                     <video :id="'reel-video-' + reel.id" 
-                        class="w-full h-full object-cover will-change-transform"
+                        class="absolute inset-0 w-full h-full object-cover will-change-transform"
                         :class="(!isReelVisible(reel.id) && !reel.userExplicitlyStarted) ? 'invisible' : ''"
                         playsinline muted loop preload="metadata"
                         :src="reel.media" 
@@ -5145,3 +5230,8 @@
         <span class="text-[10px] font-black uppercase tracking-widest">Tap to Return to Call • <span x-text="activeChat?.name"></span></span>
     </div>
 </div>
+
+ <!-- Background moved to end of body to prevent it from occupying a Grid Column on Desktop -->
+    <div class="bg-mesh pointer-events-none"></div>
+</body>
+</html>

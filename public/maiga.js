@@ -196,6 +196,7 @@ const initMaiga = () => {
         isReporting: false,
         homeSearchTab: 'users',
         hasMorePosts: true,
+        postHoldTimer: null,
         showReelMenu: false,
         reelForwardSearchQuery: '',
         friendsSearchQuery: '',
@@ -382,6 +383,7 @@ const initMaiga = () => {
         isSocketConnected: false,
         currentTime: Date.now(),
         typingUsers: {},
+        isStoryLoading: false,
         drafts: {},
         toasts: [],
         recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
@@ -2191,7 +2193,10 @@ const initMaiga = () => {
         isRefreshing: false,
         hasMoreFriends: false,
         handlePullStart(e) {
-            if (this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
+            let scrollEl = this.$refs.mainContent;
+            if (this.activeTab === 'reels') scrollEl = this.$refs.reelsContainer;
+
+            if (scrollEl && scrollEl.scrollTop === 0) {
                 this.pullStartY = e.touches[0].clientY;
                 this.touchStartX = e.touches[0].clientX;
             }
@@ -2202,8 +2207,12 @@ const initMaiga = () => {
             const deltaX = touchX - this.touchStartX;
             const deltaY = touchY - this.pullStartY;
 
+            let scrollEl = this.$refs.mainContent;
+            if (this.activeTab === 'reels') scrollEl = this.$refs.reelsContainer;
+
             // Prevent tab swiping if interacting with horizontal scroll areas (like stories)
             if (e.target.closest('[data-no-swipe]') || e.target.closest('.no-scrollbar') || e.target.closest('.overflow-x-auto')) return;
+            if (this.activeChat || this.isCreatingStory || this.isCreatingPost || this.viewingPost || this.viewingStory) return;
 
             // Gesture Tab Navigation (Horizontal Swipe)
             // Only trigger if horizontal movement is significantly greater than vertical
@@ -2224,11 +2233,11 @@ const initMaiga = () => {
                 }
             }
 
-            if (this.pullStartY > 0 && this.$refs.mainContent && this.$refs.mainContent.scrollTop === 0 && window.scrollY === 0) {
+            if (this.pullStartY > 0 && scrollEl && scrollEl.scrollTop === 0) {
                 const dist = touchY - this.pullStartY;
                 if (dist > 0) {
                     this.isBouncing = false;
-                    e.preventDefault(); // Prevent browser's default pull-to-refresh
+                    if (e.cancelable) e.preventDefault(); // Prevent browser's default pull-to-refresh
                     this.pullDistance = Math.min(dist * 0.4, 150);
 
                     // Progressive Haptic Feedback
@@ -3606,6 +3615,17 @@ const initMaiga = () => {
             this.selectedMediaList = [];
 
             const hasVideo = files.some(f => f.type.startsWith('video'));
+             
+            if (hasVideo && files.length > 1) {
+                this.showToast('Selection Error', 'Videos must be posted individually.', 'error');
+                event.target.value = '';
+                return;
+            }
+            if (!hasVideo && files.length > 5) {
+                this.showToast('Limit Exceeded', 'You can select a maximum of 5 images.', 'error');
+                event.target.value = '';
+                return;
+            }
             
             if (hasVideo) {
                 const file = files.find(f => f.type.startsWith('video'));
@@ -4960,7 +4980,8 @@ const initMaiga = () => {
             // 1. Long Press Menu timer (TikTok style)
             this.reelMenuTimer = setTimeout(() => {
                 if (!this.isSpeedingUp) {
-                    this.showReelMenu = true;
+                    this.selectedReel = reel;
+                    this.showReelOptions = true; // Opens the 3-dot options
                     if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
                 }
             }, 700); // 700ms for menu
@@ -6160,7 +6181,7 @@ const initMaiga = () => {
             this.handleStoryMusic();
             this.storyProgress = 0;
             this.storyTimer = setInterval(() => {
-                if (!this.viewingStory || this.isPaused) return; // Check if viewingStory is null
+                if (!this.viewingStory || this.isPaused || this.isStoryLoading) return; // Pause when loading
                 this.storyProgress += 1;
                 // Duration for story segment is 5 seconds
                 const segmentDuration = 5000; // ms
