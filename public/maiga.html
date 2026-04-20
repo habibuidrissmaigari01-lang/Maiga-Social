@@ -2134,7 +2134,12 @@
                             <img @click.stop="openUserProfile(comment.user_id)" :src="comment.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
                             <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                 <div class="flex justify-between items-center gap-2">
-                                    <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="comment.author"></p>
+                                            <div class="flex items-center space-x-1 min-w-0">
+                                        <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" :class="comment.verified ? 'text-verified-gold' : ''" x-text="comment.author"></p>
+                                        <template x-if="comment.verified">
+                                            <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
+                                        </template>
+                                    </div>
                                     <button x-show="comment.user_id == user.id || (viewingComments && viewingComments.post_author_id == user.id)" @click="deleteComment(comment.id)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash text-[10px]"></i></button>
                                 </div>
                                 
@@ -2162,7 +2167,12 @@
                                     <img @click.stop="openUserProfile(reply.user_id)" :src="reply.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
                                     <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                         <div class="flex justify-between items-center gap-2">
-                                            <p @click.stop="openUserProfile(reply.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="reply.author"></p>
+                                           <div class="flex items-center space-x-1 min-w-0">
+                                                <p @click.stop="openUserProfile(reply.user_id)" class="text-xs font-bold cursor-pointer hover:underline" :class="reply.verified ? 'text-verified-gold' : ''" x-text="reply.author"></p>
+                                                <template x-if="reply.verified">
+                                                    <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
+                                                </template>
+                                            </div>
                                             <button x-show="reply.user_id == user.id || (viewingComments && viewingComments.post_author_id == user.id)" @click="deleteComment(reply.id)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash text-[10px]"></i></button>
                                         </div>
                                         <p x-show="reply.text" class="text-sm" x-text="reply.text"></p>
@@ -3115,11 +3125,6 @@
                                 <template x-if="post.verified">
                                     <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5 cursor-pointer"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
                                 </template>
-                            <div class="flex items-center space-x-1">
-                                <span class="font-bold text-sm" :class="post.verified ? 'text-verified-gold' : ''" x-text="post.author"></span>
-                                <template x-if="post.verified">
-                                    <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5 cursor-pointer"><i class="fa-solid fa-crown text-[8px] text-white"></i></span>
-                                </template>
                             </div> 
                             <span class="text-[11px] text-gray-500 font-medium" x-text="post.time"></span>
                         </div>
@@ -3679,13 +3684,12 @@
                 <template x-for="activeUser in mostActiveUsers" :key="activeUser.id">
                     <div @click="openUserProfile(activeUser.id)" class="flex-shrink-0 bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border dark:border-gray-700 flex flex-col items-center justify-center min-w-[120px] cursor-pointer hover:border-blue-500 transition-all">
                         <img :src="activeUser.avatar" class="w-16 h-16 parallelogram-sm object-cover mb-2" :class="{'verified-border': activeUser.is_verified}">
-                        <div class="flex items-center space-x-1">
-                            <p class="font-bold text-sm truncate w-full text-center" :class="activeUser.is_verified ? 'text-verified-gold' : ''" x-text="activeUser.name"></p>
+                        <div class="flex items-center justify-center space-x-1 w-full">
+                            <p class="font-bold text-sm truncate text-center" :class="activeUser.is_verified ? 'text-verified-gold' : ''" x-text="activeUser.name"></p>
                             <template x-if="activeUser.is_verified">
                                 <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
                             </template>
                         </div>
-                        <p class="font-bold text-sm truncate w-full text-center" :class="activeUser.is_verified ? 'text-verified-gold' : ''" x-text="activeUser.name"></p>
                         <p class="text-xs text-gray-500" x-text="'@' + activeUser.username"></p>
                         <div class="mt-2 flex items-center space-x-1 text-xs text-gray-600 dark:text-gray-400">
                             <i class="fa-solid fa-pen-to-square"></i>
