@@ -484,26 +484,16 @@
         
     </style>
 </head>
-    <body class="select-none lg:grid transition-all duration-300 font-size-container h-screen overflow-hidden"
+    <body class="select-none lg:grid transition-all duration-300 font-size-container"
       :class="[{ 'dark': darkMode, 'theme-ysu': user.account_type === 'ysu' }, desktopGridCols]"
       x-effect="document.documentElement.style.fontSize = (appFontSize === 'small' ? '14px' : appFontSize === 'medium' ? '16px' : '18px')"
-      x-data="appData">
+      x-data="appData"
+      @touchstart="handlePullStart($event)"
+      @touchmove="handlePullMove($event)"
+      @touchend="handlePullEnd()">
 
-    <!-- Hidden Utilities (Moved to prevent Grid Slot Theft on Desktop) -->
-    <div class="hidden">
-        <audio id="ringing-sound" src="https://actions.google.com/sounds/v1/alarms/phone_ringing.ogg" loop></audio>
-        <audio id="message-sound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
-        <audio id="notification-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
-        <audio id="scan-sound" src="https://actions.google.com/sounds/v1/foley/beeps_and_clicks.ogg" preload="auto"></audio>
-        <audio id="sent-sound" src="https://actions.google.com/sounds/v1/foley/button_click.ogg" preload="auto"></audio>
-        <audio id="post-success-sound" src="https://actions.google.com/sounds/v1/cartoon/pop.ogg" preload="auto"></audio>
-        <audio id="system-warning-sound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
-        <audio x-ref="remoteAudio" autoplay></audio>
-        <audio x-ref="storyAudio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
-    </div>
-
-    <!-- COLUMN 1: LEFT SIDEBAR (Desktop) -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 glass-panel shrink-0 transition-all duration-300 z-40 w-[280px]">
+    <!-- Sidebar -->
+    <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
         <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"></div>
         <div class="fixed inset-y-0 left-0 max-w-xs w-full glass-panel lg:squircle flex flex-col transition-transform duration-300 transform"
              x-transition:enter="transition ease-out duration-300"
@@ -644,11 +634,7 @@
         </div>
     </aside>
 
-    <!-- COLUMN 2: MIDDLE CONTENT (Flexible) -->
-    <div class="flex flex-col min-w-0 relative h-screen border-x dark:border-gray-800"
-         @touchstart="handlePullStart($event)"
-         @touchmove="handlePullMove($event)"
-         @touchend="handlePullEnd()">
+    <div class="flex flex-col min-w-0 relative">
     <!-- Background Sync Progress Bar -->
     <div x-show="syncState.active" x-transition x-cloak class="fixed top-0 left-0 right-0 z-[2000] bg-blue-600 h-1.5 shadow-lg">
         <div class="h-full bg-white transition-all duration-500 ease-out" 
@@ -737,9 +723,9 @@
                 <h4 class="text-xs font-bold text-gray-600 dark:text-gray-400 mb-2 ml-1">ONLINE NOW</h4>
                 <div class="flex gap-3 overflow-x-auto no-scrollbar">
                     <template x-for="contact in onlineContacts" :key="contact.id">
-                        <button @click="activeChat = contact; chat.unread = false; activeMessageTab = 'all'" class="flex flex-col items-center gap-1.5 shrink-0 hover:opacity-75 transition-opacity parallelogram-sm">
+                        <button @click="activeChat = contact; chat.unread = false; activeMessageTab = 'all'" class="flex flex-col items-center gap-1.5 shrink-0 hover:opacity-75 transition-opacity">
                             <div class="relative">
-                                <img :src="contact.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700">
+                                <img :src="contact.avatar" class="w-12 h-12 rounded-full border-2 dark:border-gray-700">
                                 <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                             </div>
                             <span class="text-[10px] font-bold truncate max-w-[48px]" x-text="contact.name"></span>
@@ -764,10 +750,10 @@
                                  @touchmove="handleChatSwipeMove($event)"
                                  @touchend="handleChatSwipeEnd()"
                                  @contextmenu.prevent="chatContextMenu = { show: true, x: $event.clientX, y: $event.clientY, chat: chat }"
-                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10 parallelogram-sm"
+                                 class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <div class="relative">
-                                <img :src="chat.avatar || (chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-14 h-14 parallelogram-sm border dark:border-gray-700">
+                                <img :src="chat.avatar || (chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-14 h-14 rounded-full border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
                                     <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                                 </template>
@@ -838,7 +824,7 @@
                                  @touchend="handleChatSwipeEnd()"
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === group.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                             <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 parallelogram-sm border dark:border-gray-700 object-cover">
+                             <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 rounded-full border dark:border-gray-700 object-cover">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold truncate max-w-[150px]" x-text="group.name || 'Unnamed Group'"></span>
@@ -889,11 +875,11 @@
                 <!-- Call History -->
                 <div x-show="activeMessageTab === 'calls'" class="p-2">
                     <div x-show="callHistory.length > 0" class="px-3 py-2 border-b dark:border-gray-800 flex justify-end">
-                        <button @click="clearCallHistory()" class="text-[10px] font-black text-red-500 uppercase hover:underline tracking-widest parallelogram-sm">Clear History</button>
+                        <button @click="clearCallHistory()" class="text-[10px] font-black text-red-500 uppercase hover:underline tracking-widest">Clear History</button>
                     </div>
                     <template x-for="call in callHistory" :key="call._id">
                         <div class="flex items-center p-3 space-x-4 border-b dark:border-gray-800">
-                            <img :src="call.caller._id == user.id ? call.receiver.avatar : call.caller.avatar" class="w-10 h-10 parallelogram-sm">
+                            <img :src="call.caller._id == user.id ? call.receiver.avatar : call.caller.avatar" class="w-10 h-10 rounded-full">
                             <div class="flex-1">
                                 <p class="font-bold text-sm" x-text="call.caller._id == user.id ? call.receiver.name : call.caller.name"></p>
                                 <div class="flex items-center text-[10px] text-gray-500">
@@ -925,7 +911,7 @@
                                  @touchend="handleChatSwipeEnd()"
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                            <img :src="chat.avatar" class="w-14 h-14 parallelogram-sm border dark:border-gray-700">
+                            <img :src="chat.avatar" class="w-14 h-14 rounded-full border dark:border-gray-700">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold" x-text="chat.name"></span>
@@ -1027,7 +1013,7 @@
                     </div>
                     <template x-for="friend in filteredFollowingForGroup" :key="friend.id">
                         <div @click="toggleNewGroupMember(friend.id)" class="flex items-center p-4 space-x-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 border-b dark:border-gray-800/50">
-                            <img :src="friend.avatar" class="w-12 h-12 parallelogram-sm object-cover">
+                            <img :src="friend.avatar" class="w-12 h-12 rounded-full object-cover">
                             <div class="flex-1">
                                 <p class="font-bold text-sm" x-text="friend.name"></p>
                                 <p class="text-[10px] text-gray-500 uppercase font-bold" x-text="friend.dept"></p>
@@ -1077,8 +1063,8 @@
         <!-- Single Chat View -->
         <div x-show="activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn" x-transition>
             <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md overflow-visible relative z-50">
-                <button @click="activeChat = null; showChatOptions = false" class="p-2 parallelogram-sm active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
-                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 parallelogram-sm cursor-pointer">
+                <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
+                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <div class="flex items-center space-x-1.5">
                         <p class="font-bold text-sm truncate" :class="activeChat?.verified ? 'text-verified-gold' : ''" x-text="activeChat?.name"></p>
@@ -1192,9 +1178,9 @@
                  <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
-                        <div class="w-8 h-8 parallelogram-sm flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
+                        <div class="w-8 h-8 rounded-full flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
                             <template x-if="activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index)">
-                                <img :src="msg.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + msg.author" class="w-full h-full object-cover parallelogram-sm">
+                                <img :src="msg.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + msg.author" class="w-full h-full object-cover rounded-full">
                             </template>
                            </div>
                         <!-- Message Bubble and Meta -->
@@ -1523,7 +1509,7 @@
                         <div class="space-y-2">
                             <template x-for="req in activeChat.join_requests" :key="req.id">
                                 <div class="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-100 dark:border-red-900/30">
-                                    <div class="flex items-center space-x-3"><img :src="req.avatar" class="w-10 h-10 parallelogram-sm"><span class="font-bold text-sm" x-text="req.first_name + ' ' + req.surname"></span></div>
+                                    <div class="flex items-center space-x-3"><img :src="req.avatar" class="w-10 h-10 rounded-full"><span class="font-bold text-sm" x-text="req.first_name + ' ' + req.surname"></span></div>
                                     <div class="flex space-x-2"><button @click="handleJoinRequest(activeChat.id, req.id, 'approve')" class="text-green-600 bg-green-100 p-2 rounded-full text-xs hover:bg-green-200 transition-colors"><i class="fa-solid fa-check"></i></button><button @click="handleJoinRequest(activeChat.id, req.id, 'reject')" class="text-red-600 bg-red-100 p-2 rounded-full text-xs hover:bg-red-200 transition-colors"><i class="fa-solid fa-xmark"></i></button></div>
                                 </div>
                             </template>
@@ -1541,7 +1527,7 @@
                     <template x-for="member in sortedGroupMembers" :key="member.id">
                         <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <div @click.stop="handleMemberClick(member)" class="flex items-center space-x-3 flex-1 cursor-pointer">
-                                <img @click.stop="openUserProfile(member.id)" :src="member.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + member.first_name" class="w-10 h-10 parallelogram-sm cursor-pointer object-cover">
+                                <img @click.stop="openUserProfile(member.id)" :src="member.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + member.first_name" class="w-10 h-10 rounded-full cursor-pointer object-cover">
                                 <div class="flex-1">
                                     <div class="flex items-center space-x-2">
                                         <p class="font-bold text-sm" x-text="member.first_name + ' ' + member.surname"></p>
@@ -1576,7 +1562,7 @@
             <div class="flex-1 overflow-y-auto p-6 space-y-6">
                 <div class="flex flex-col items-center">
                     <div @click="$refs.editGroupAvatarInput.click()" class="relative group cursor-pointer">
-                        <img :src="editingGroup.avatarPreview" class="w-24 h-24 parallelogram-sm border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
+                        <img :src="editingGroup.avatarPreview" class="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
                         <div class="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                             <i class="fa-solid fa-camera text-2xl"></i>
                         </div>
@@ -1707,7 +1693,7 @@
                     <template x-for="read in messageInfoData.read_details" :key="read.user.id">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-3">
-                                <img :src="read.user.avatar" class="w-8 h-8 parallelogram-sm">
+                                <img :src="read.user.avatar" class="w-8 h-8 rounded-full">
                                 <span class="text-sm font-bold" x-text="read.user.name"></span>
                             </div>
                             <span class="text-[10px] text-gray-400 font-mono" x-text="new Date(read.read_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})"></span>
@@ -1763,7 +1749,7 @@
                 <template x-for="reaction in messageReactions" :key="reaction._id">
                     <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl cursor-pointer" @click="openUserProfile(reaction.user.id); showReactionsModal = false">
                         <div class="flex items-center space-x-3">
-                            <img :src="reaction.user.avatar" class="w-10 h-10 parallelogram-sm object-cover border dark:border-gray-700">
+                            <img :src="reaction.user.avatar" class="w-10 h-10 rounded-full object-cover border dark:border-gray-700">
                             <div>
                                 <p class="font-bold text-sm" x-text="reaction.user.name"></p>
                                 <p class="text-xs text-gray-500" x-text="'@' + reaction.user.username"></p>
@@ -1785,7 +1771,7 @@
             <div class="flex-1 overflow-y-auto p-2">
                 <template x-for="friend in friends" :key="friend.id">
                     <div @click="forwardTo(friend)" class="flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl cursor-pointer">
-                        <img :src="friend.avatar" class="w-10 h-10 parallelogram-sm object-cover">
+                        <img :src="friend.avatar" class="w-10 h-10 rounded-full object-cover">
                         <span class="font-bold text-sm" x-text="friend.name"></span>
                     </div>
                 </template>
@@ -1848,7 +1834,7 @@
         </div>
         <div class="flex-1 p-4 pb-20"> 
             <div class="flex items-center space-x-3 mb-4">
-                <img :src="viewingPost?.avatar" class="w-10 h-10 parallelogram-sm border border-gray-700">
+                <img :src="viewingPost?.avatar" class="w-10 h-10 rounded-full border border-gray-700">
                 <div>
                     <div class="flex items-center">
                         <span class="font-bold text-sm text-white" x-text="viewingPost?.author"></span>
@@ -1927,7 +1913,7 @@
         </div>
         <div class="absolute top-6 left-0 right-0 p-4 z-20 flex justify-between items-center">
             <div class="flex items-center space-x-3 cursor-pointer" @click.stop="const uid = viewingStory.user.id || viewingStory.user._id; openUserProfile(uid); closeStory()">
-                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 parallelogram-sm border border-white/50 object-cover">
+                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 rounded-full border border-white/50 object-cover">
                 <span class="text-white font-bold text-sm shadow-black drop-shadow-md hover:underline pointer-events-none" x-text="String(viewingStory?.user?.id || viewingStory?.user?._id) === String(user.id || user._id) ? 'Your Story' : viewingStory?.user?.name"></span>
                 <span x-show="viewingStory?.list[viewingStory.index].audience === 'close_friends'" class="bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm border border-white/20">Close Friends</span>
             </div>
@@ -1997,14 +1983,14 @@
         <div x-show="showSeenList" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full" class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 rounded-t-3xl z-50 max-h-[60vh] flex flex-col shadow-2xl" @click.away="showSeenList = false; startStoryProgress()">
             <div class="p-4 border-b dark:border-gray-800 flex justify-between items-center">
                 <h3 class="font-black text-lg">Seen by</h3>
-                <button @click="showSeenList = false; startStoryProgress()" class="p-2 bg-gray-100 dark:bg-gray-800 parallelogram-sm"><i class="fa-solid fa-xmark"></i></button>
+                <button @click="showSeenList = false; startStoryProgress()" class="p-2 bg-gray-100 dark:bg-gray-800 rounded-full"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto p-4 space-y-4">
                 <template x-for="viewer in viewingStory?.list[viewingStory.index].seenBy" :key="viewer.id">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-3">
-                            <img :src="viewer.avatar" class="w-10 h-10 parallelogram-sm">
-                            <span class="font-bold text-sm parallelogram-sm" x-text="viewer.name"></span>
+                            <img :src="viewer.avatar" class="w-10 h-10 rounded-full">
+                            <span class="font-bold text-sm" x-text="viewer.name"></span>
                         </div>
                         <i x-show="viewer.liked" class="fa-solid fa-heart text-red-500 text-lg"></i>
                     </div>
@@ -2065,7 +2051,7 @@
             </div>
             <div class="p-6 bg-black flex justify-between items-center space-x-4">
                 <button @click="postStory('public')" class="flex-1 bg-white text-black py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2">
-                   <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-6 h-6 parallelogram-sm object-cover">
+                    <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-6 h-6 rounded-full object-cover">
                     <span>Your Story</span>
                 </button>
                 <button @click="if(closeFriends.length === 0) { showCloseFriendsManager = true; } else { postStory('close_friends'); }" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 relative">
@@ -2107,7 +2093,7 @@
             <div class="flex-1 overflow-y-auto p-4 space-y-2">
                 <template x-for="friend in friends" :key="friend.id">
                     <div @click="toggleCloseFriend(friend.id)" class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 cursor-pointer">
-                        <div class="flex items-center space-x-3"><img :src="friend.avatar" class="w-10 h-10 parallelogram-sm"><span class="font-bold text-sm" x-text="friend.name"></span></div>
+                        <div class="flex items-center space-x-3"><img :src="friend.avatar" class="w-10 h-10 rounded-full"><span class="font-bold text-sm" x-text="friend.name"></span></div>
                         <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors" :class="closeFriends.includes(friend.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600'"><i x-show="closeFriends.includes(friend.id)" class="fa-solid fa-check text-white text-xs"></i></div>
                     </div>
                 </template>
@@ -2131,15 +2117,10 @@
                 <template x-for="comment in (viewingComments?.list || [])" :key="comment.id">
                     <div>
                         <div class="flex space-x-3">
-                            <img @click.stop="openUserProfile(comment.user_id)" :src="comment.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
+                            <img @click.stop="openUserProfile(comment.user_id)" :src="comment.avatar" class="w-8 h-8 rounded-full object-cover cursor-pointer">
                             <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                 <div class="flex justify-between items-center gap-2">
-                                            <div class="flex items-center space-x-1 min-w-0">
-                                        <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" :class="comment.verified ? 'text-verified-gold' : ''" x-text="comment.author"></p>
-                                        <template x-if="comment.verified">
-                                            <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
-                                        </template>
-                                    </div>
+                                    <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="comment.author"></p>
                                     <button x-show="comment.user_id == user.id || (viewingComments && viewingComments.post_author_id == user.id)" @click="deleteComment(comment.id)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash text-[10px]"></i></button>
                                 </div>
                                 
@@ -2164,15 +2145,10 @@
                         <div x-show="comment.replies && comment.replies.length > 0" class="pl-11 mt-3 space-y-3">
                             <template x-for="reply in comment.replies" :key="reply.id">
                                 <div class="flex space-x-3">
-                                    <img @click.stop="openUserProfile(reply.user_id)" :src="reply.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
+                                    <img @click.stop="openUserProfile(reply.user_id)" :src="reply.avatar" class="w-8 h-8 rounded-full object-cover cursor-pointer">
                                     <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                         <div class="flex justify-between items-center gap-2">
-                                           <div class="flex items-center space-x-1 min-w-0">
-                                                <p @click.stop="openUserProfile(reply.user_id)" class="text-xs font-bold cursor-pointer hover:underline" :class="reply.verified ? 'text-verified-gold' : ''" x-text="reply.author"></p>
-                                                <template x-if="reply.verified">
-                                                    <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
-                                                </template>
-                                            </div>
+                                            <p @click.stop="openUserProfile(reply.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="reply.author"></p>
                                             <button x-show="reply.user_id == user.id || (viewingComments && viewingComments.post_author_id == user.id)" @click="deleteComment(reply.id)" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash text-[10px]"></i></button>
                                         </div>
                                         <p x-show="reply.text" class="text-sm" x-text="reply.text"></p>
@@ -2218,7 +2194,7 @@
                 <button @click="replyingToComment = null" class="p-1 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="p-4 border-t dark:border-gray-800 flex items-center space-x-2" :class="replyingToComment ? 'bg-gray-50 dark:bg-gray-800/50' : ''">
-                <img :src="user.avatar" class="w-8 h-8 parallelogram-sm object-cover">
+                <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
                 <div class="flex-1 relative min-w-0">
                     <input type="text" x-model="commentInput" @keyup.enter="addComment()" placeholder="Add a comment..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-blue-500" :class="{'opacity-0': isRecordingComment}">
                     <button @click="showCommentStickers = !showCommentStickers" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors">
@@ -2257,7 +2233,7 @@
                 </template>
                 <template x-for="liker in likersList" :key="liker.id">
                     <div class="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer" @click="openUserProfile(liker)">
-                        <img :src="liker.avatar" class="w-10 h-10 parallelogram-sm object-cover">
+                        <img :src="liker.avatar" class="w-10 h-10 rounded-full object-cover">
                         <div class="flex-1">
                             <h4 class="font-semibold text-sm" x-text="liker.name"></h4>
                             <p class="text-xs text-gray-500" x-text="'@' + liker.username"></p>
@@ -2283,7 +2259,7 @@
                 <template x-for="person in filteredConnectionList" :key="person.id">
                     <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">
                         <div @click.stop="openUserProfile(person.id)" class="flex items-center space-x-3 cursor-pointer">
-                            <img :src="person.avatar" class="w-10 h-10 parallelogram-sm object-cover"> 
+                            <img :src="person.avatar" class="w-10 h-10 rounded-full object-cover"> 
                             <div>
                                 <p class="font-bold text-sm hover:underline" x-text="person.name"></p>
                                 <p class="text-xs text-gray-500" x-text="person.dept"></p>
@@ -2840,7 +2816,7 @@
        <div class="px-4 pt-0 pb-2 sticky top-0 z-30 bg-gray-50 dark:bg-gray-900">
                <div class="flex items-center gap-2 transition-all">
                 <div class="relative flex-1">
-                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors parallelogram-sm" :class="isSearchFocused ? 'text-blue-600' : ''"></i>
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 transition-colors" :class="isSearchFocused ? 'text-blue-600' : ''"></i>
                 <input x-ref="searchInput" type="text" x-model="homeSearchQuery" 
                        @focus="isSearchFocused = true; showSuggestions = true" @input.debounce.300ms="searchUsers()"
                        @blur="setTimeout(() => isSearchFocused = false, 200)"
@@ -2848,10 +2824,10 @@
                 
                 <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
                     <button x-show="homeSearchQuery.length > 0" @click="homeSearchQuery = ''; $refs.searchInput.focus()" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                        <i class="fa-solid fa-xmark parallelogram-sm"></i>
+                        <i class="fa-solid fa-xmark"></i>
                     </button>
-                    <button @click="openCamera('scan')" class="p-2 text-gray-400 hover:text-blue-600 transition-colors parallelogram-sm" title="Scan QR Code">
-                        <i class="fa-solid fa-qrcode parallelogram-sm"></i>
+                    <button @click="openCamera('scan')" class="p-2 text-gray-400 hover:text-blue-600 transition-colors" title="Scan QR Code">
+                        <i class="fa-solid fa-qrcode"></i>
                     </button>
                     <button @click="startVoiceSearch()" class="p-2 text-gray-400 hover:text-blue-600 transition-colors">
                         <i class="fa-solid fa-microphone"></i>
@@ -2906,10 +2882,10 @@
                         <!-- Posts Results -->
                         <template x-if="homeSearchTab === 'posts'">
                             <div class="divide-y dark:divide-gray-700">
-                                <template x-for="post in searchPostsResults" :key="post.id">
+                                <template x-for="post in searchPostsResults" :key="post.id"> 
                                     <div @click="viewingPost = post; homeSearchQuery = ''" class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <img :src="post.avatar" class="w-5 h-5 parallelogram-sm">
+                                            <img :src="post.avatar" class="w-5 h-5 rounded-full">
                                             <span class="text-[10px] font-bold text-gray-500" x-text="post.author"></span>
                                         </div>
                                         <p class="text-xs text-gray-800 dark:text-gray-200 line-clamp-2" x-html="highlight(post.content, homeSearchQuery)"></p>
@@ -2922,7 +2898,7 @@
                         <!-- Reels Results -->
                         <template x-if="homeSearchTab === 'reels'">
                             <div class="grid grid-cols-2 gap-2 p-2">
-                                <template x-for="reel in searchReelsResults" :key="reel.id">
+                                <template x-for="reel in searchReelsResults" :key="reel.id"> 
                                     <div @click="selectedReel = reel; activeTab = 'reels'; homeSearchQuery = ''" class="relative aspect-[9/16] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-900 group cursor-pointer">
                                         <video :src="reel.media" class="w-full h-full object-cover"></video>
                                         <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-2">
@@ -2984,7 +2960,7 @@
                     <div class="flex p-2 space-x-2 overflow-x-auto no-scrollbar bg-white dark:bg-gray-800">
                         <template x-for="trReel in trendingReels" :key="trReel.id">
                             <div @click="selectedReel = trReel; activeTab = 'reels'; isSearchFocused = false" class="relative w-24 h-40 shrink-0 rounded-xl overflow-hidden shadow-sm group cursor-pointer border dark:border-gray-700">
-                                <video :src="trReel.media" class="w-full h-full object-cover parallelogram-sm"></video>
+                                <video :src="trReel.media" class="w-full h-full object-cover"></video>
                                 <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-2">
                                     <p class="text-[8px] text-white font-black leading-tight line-clamp-2" x-text="trReel.caption"></p>
                                     <p class="text-[7px] text-blue-400 font-bold mt-1" x-text="formatNumber(trReel.views) + ' views'"></p>
@@ -3010,7 +2986,7 @@
         <!-- Stories -->
         <div class="bg-white dark:bg-gray-900 py-4 border-b dark:border-gray-800 flex px-4 gap-1 overflow-x-auto no-scrollbar mt-2" data-no-swipe="true">
             <div @click="isCreatingStory = true" class="flex-shrink-0 cursor-pointer group">
-                <div class="p-1 bg-gray-200 dark:bg-gray-700 parallelogram-sm rounded-2xl">
+                <div class="p-1 bg-gray-200 dark:bg-gray-700 parallelogram rounded-2xl">
                     <div class="w-28 h-48 parallelogram overflow-hidden relative bg-gray-100 dark:bg-gray-800 rounded-xl">
                         <img :src="user.avatar" class="w-full h-full object-cover brightness-90 parallelogram">
                         <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
@@ -3026,7 +3002,7 @@
 
             <template x-if="myStories.length > 0">
                 <div @click="viewStory(myStories)" class="flex-shrink-0 cursor-pointer group">
-                    <div class="p-1 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram-sm rounded-2xl">
+                    <div class="p-1 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram rounded-2xl">
                         <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-700">
                             <template x-if="myStories[0].type === 'image'"><img :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @load="loading = false" class="w-full h-full object-cover parallelogram" @error="$el.src='https://placehold.co/400x800?text=Image+Not+Found'"></template>
                             <template x-if="myStories[0].type === 'video'"><video :src="Array.isArray(myStories[0].media) ? myStories[0].media[0] : myStories[0].media" @canplay="loading = false" class="w-full h-full object-cover parallelogram" muted playsinline preload="metadata"></video></template>
@@ -3053,7 +3029,7 @@
 
             <template x-for="friend in following" :key="friend.id">
                 <div x-show="friend.stories && friend.stories.length > 0" @click="viewStory(friend.stories, friend)" class="flex-shrink-0 cursor-pointer group">
-                    <div class="p-1 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram-sm rounded-2xl">
+                    <div class="p-1 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram rounded-2xl">
                         <div x-data="{ loading: true }" class="w-28 h-48 parallelogram overflow-hidden relative rounded-xl bg-gray-200 dark:bg-gray-700">
                             <template x-if="friend.stories && friend.stories.length > 0">
                                 <template x-if="friend.stories[0].type === 'image'">
@@ -3108,7 +3084,7 @@
             <div @click="viewingPost = post" 
                  @mousedown="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
                  @mouseup="clearTimeout(postHoldTimer)"
-                 @mouseleave="clearTimeout(postHoldTimer)" 
+                 @mouseleave="clearTimeout(postHoldTimer)"
                  @touchstart="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
                  @touchend="clearTimeout(postHoldTimer)"
                  @contextmenu.prevent
@@ -3264,7 +3240,6 @@
                         @seeking="handleReelLoading(reel, true)"
                         @stalled="handleReelLoading(reel, true)"
                         @timeupdate="reel.progress = ($el.currentTime / ($el.duration || 1)) * 100"
-                        @playing="reel.isLoading = false"
                         @error="reel.hasError = true; reel.isLoading = false"
                         x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume; if(activeReelId === String(reel.id) && !dataSaverMode) $el.play().catch(()=>{})"></video>
 
@@ -3683,13 +3658,8 @@
             <div class="flex space-x-3 overflow-x-auto no-scrollbar pb-2">
                 <template x-for="activeUser in mostActiveUsers" :key="activeUser.id">
                     <div @click="openUserProfile(activeUser.id)" class="flex-shrink-0 bg-white dark:bg-gray-800 p-3 rounded-2xl shadow-sm border dark:border-gray-700 flex flex-col items-center justify-center min-w-[120px] cursor-pointer hover:border-blue-500 transition-all">
-                        <img :src="activeUser.avatar" class="w-16 h-16 parallelogram-sm object-cover mb-2" :class="{'verified-border': activeUser.is_verified}">
-                        <div class="flex items-center justify-center space-x-1 w-full">
-                            <p class="font-bold text-sm truncate text-center" :class="activeUser.is_verified ? 'text-verified-gold' : ''" x-text="activeUser.name"></p>
-                            <template x-if="activeUser.is_verified">
-                                <span @click.stop="showToast('Verified Identity', 'This account has been verified by Maiga Social.', 'success')" class="verified-badge-anim inline-flex items-center justify-center w-3 h-3 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm cursor-pointer"><i class="fa-solid fa-crown text-[7px] text-white"></i></span>
-                            </template>
-                        </div>
+                        <img :src="activeUser.avatar" class="w-16 h-16 rounded-full object-cover mb-2">
+                        <p class="font-bold text-sm truncate w-full text-center" x-text="activeUser.name"></p>
                         <p class="text-xs text-gray-500" x-text="'@' + activeUser.username"></p>
                         <div class="mt-2 flex items-center space-x-1 text-xs text-gray-600 dark:text-gray-400">
                             <i class="fa-solid fa-pen-to-square"></i>
@@ -3758,7 +3728,7 @@
             <template x-for="friend in filteredFollowingList" :key="friend.id">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center space-x-4 shadow-sm border dark:border-gray-700">
                     <div class="relative cursor-pointer" @click.stop="openUserProfile(friend.id)">
-                        <img :src="friend.avatar" class="w-14 h-14 parallelogram-sm border border-gray-100 dark:border-gray-700 parallelogram-sm">
+                        <img :src="friend.avatar" class="w-14 h-14 parallelogram-sm border border-gray-100 dark:border-gray-700">
                         <template x-if="friend.online">
                             <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                         </template>
@@ -3808,14 +3778,6 @@
                     <div x-show="notif.is_read == 0" class="w-2 h-2 bg-blue-600 parallelogram-sm"></div>
                 </div>
             </template>
-
-            <!-- REELS INFINITE SCROLL INDICATOR (Moved outside loop) -->
-            <div x-show="isLoadingMoreReels" class="h-full w-full shrink-0 snap-start flex flex-col items-center justify-center bg-black lg:rounded-2xl">
-                <div class="w-12 h-12 border-4 border-white/10 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                <p class="text-white text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
-                    Next Reel Loading
-                </p>
-            </div>
         </div>
     </main>
 
@@ -3829,7 +3791,7 @@
         <div class="px-4 -mt-14 relative">
             <div @click="viewingPost = { avatar: user.avatar, media: user.avatar, author: user.name, content: 'Profile Picture', time: 'Now', mediaType: 'image', isOwnProfilePic: true }" class="relative inline-block cursor-pointer">
                 <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" 
-                     class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover parallelogram" :class="{'verified-border': user.is_verified}">
+                     class="w-28 h-28 parallelogram border-4 border-white dark:border-gray-900 shadow-2xl bg-white object-cover" :class="{'verified-border': user.is_verified}">
                 <div class="absolute -bottom-2 -right-2 border-4 border-white dark:border-gray-900 w-8 h-8 parallelogram-sm flex items-center justify-center transition-colors duration-500"
                      :class="isOffline ? 'bg-gray-500' : 'bg-green-500'">
                      <i x-show="isOffline" class="fa-solid fa-wifi-slash text-white text-[10px]"></i>
@@ -4281,7 +4243,7 @@
             <template x-for="bUser in filteredBlockedUsers" :key="bUser.id">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
                     <div class="flex items-center space-x-3">
-                        <img :src="bUser.avatar" class="w-10 h-10 parallelogram-sm object-cover">
+                        <img :src="bUser.avatar" class="w-10 h-10 rounded-full object-cover">
                         <div><p class="font-bold text-sm" x-text="bUser.name"></p><p class="text-xs text-gray-500" x-text="'@' + bUser.username"></p></div>
                     </div>
                     <button @click="viewingUser = bUser; toggleBlock(); blockedUserDetails = blockedUserDetails.filter(u => u.id !== bUser.id)" class="text-xs font-bold text-blue-600 border border-blue-600 px-4 py-1.5 rounded-lg">Unblock</button>
@@ -4314,8 +4276,8 @@
             </div>
             <div class="flex flex-col items-center">
                 <div @click="$refs.profileAvatarInput.click()" class="relative group cursor-pointer">
-                    <img :src="editUser.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-24 h-24 parallelogram border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
-                    <div class="absolute inset-0 bg-black/30 parallelogram flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <img :src="editUser.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-24 h-24 rounded-full border-4 border-gray-100 dark:border-gray-800 shadow-lg object-cover">
+                    <div class="absolute inset-0 bg-black/30 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                         <i class="fa-solid fa-camera text-2xl"></i>
                     </div>
                 </div>
@@ -4779,7 +4741,7 @@
                     <div class="flex-1 overflow-y-auto">
                         <div class="p-6 flex flex-col items-center">
                             <div class="relative">
-                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 parallelogram border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
+                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
                                 <template x-if="viewingUser?.online">
                                     <div class="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-900 rounded-full"></div>
                                 </template>
@@ -4796,7 +4758,7 @@
                                 <div class="px-6 mt-4 flex items-center text-xs text-gray-500">
                                     <div class="flex -space-x-2 mr-2">
                                         <template x-for="mutual in viewingUser.mutual_followers" :key="mutual.id">
-                                            <img :src="mutual.avatar" class="w-6 h-6 parallelogram-sm border-2 border-white dark:border-gray-900 object-cover">
+                                            <img :src="mutual.avatar" class="w-6 h-6 rounded-full border-2 border-white dark:border-gray-900 object-cover">
                                         </template>
                                     </div>
                                     <p>Followed by <span class="font-bold" x-text="viewingUser.mutual_followers[0].name"></span><span x-show="viewingUser.mutual_followers_count > 1"> and <span x-text="viewingUser.mutual_followers_count - 1"></span> others you know</span></p>
@@ -4926,7 +4888,7 @@
                 <template x-for="session in loginSessions" :key="session.id">
                     <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
                         <div class="flex items-center space-x-4">
-                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 parallelogram-sm flex items-center justify-center text-gray-500">
+                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
                                 <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
                             </div>
                             <div>
@@ -4945,13 +4907,13 @@
         </div>
     </div>
 
-    <!-- COLUMN 3: RIGHT MESSAGING SIDEBAR -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 bg-white dark:bg-gray-900 transition-all duration-300 w-96 border-l dark:border-gray-800">
+    <!-- Right Sidebar (Desktop) -->
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300 w-96">
         <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
             <div class="flex items-center gap-4">
                 <h3 class="text-lg font-black">Messages</h3>
                 <button @click="isCreatingGroup = true; isMessaging = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
-            </div> 
+            </div>
         </div>
         <div class="p-4 border-b dark:border-gray-800">
             <div class="relative">
@@ -4963,7 +4925,7 @@
             <div x-show="isRightSidebarCollapsed" class="flex flex-col items-center space-y-4 py-4" x-transition>
                 <template x-for="chat in sortedChats" :key="chat.id">
                     <div @click.stop="openUserStory(chat.id)" class="cursor-pointer" :class="getStoryRingClass(chat.id)"><img @click.stop="activeChat = chat; isMessaging = true" :src="chat.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700 cursor-pointer hover:border-blue-500 transition-colors" :class="getStoryRingClass(chat.id) ? 'border-white dark:border-gray-900' : ''"></div>
-                </template> 
+                </template>
             </div>
             <template x-for="chat in sortedChats" :key="chat.id">
                 <div class="flex items-center p-3 space-x-3 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer" x-show="!isRightSidebarCollapsed" x-transition>

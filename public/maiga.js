@@ -164,7 +164,21 @@ const initMaiga = () => {
                 this.showToast('App Updated', 'A new version is available. Reloading...', 'info');
                 setTimeout(() => window.location.reload(), 2000);
             });
-            // Removed the manual Proxy return as it breaks Alpine's internal reactivity
+
+            // --- PROXY SAFETY WRAPPER ---
+            // This wraps the initialized component in a Proxy to prevent ReferenceErrors 
+            // if the HTML calls a variable that hasn't been defined in the object yet.
+            return new Proxy(this, {
+                get(target, prop, receiver) {
+                    if (prop in target || typeof prop === 'symbol') {
+                        return Reflect.get(target, prop, receiver);
+                    }
+                    // Log the missing property so you can fix it later, but return undefined
+                    // so the UI doesn't crash.
+                    console.error(`[Reference Protection] Property "${String(prop)}" is used in HTML but missing in appData.`);
+                    return undefined;
+                }
+            });
         },
         installPrompt: null,
         // Core App State
@@ -203,7 +217,6 @@ const initMaiga = () => {
         hasFlashlight: false,
         isFlashOn: false,
         isAutoExpanding: false,
-        dataSaverMode: localStorage.getItem('maiga_data_saver') === 'true',
         hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
         avatarFileToUpload: null,
         avatarOriginalFile: null,
@@ -1715,6 +1728,29 @@ const initMaiga = () => {
             window.location.reload();
         },
 
+        async forceAppReset() {
+            if (!confirm('This will clear the app cache and force a full reload. Continue?')) return;
+            
+            this.showToast('Resetting', 'Clearing cache and reloading...', 'info');
+
+            // 1. Unregister Service Worker
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                }
+            }
+
+            // 2. Clear all PWA Caches
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+            }
+
+            // 3. Reload the page from the server
+            window.location.reload();
+        },
+
         async shareFile() {
             if (!this.postFile) return;
             if (navigator.canShare && navigator.canShare({ files: [this.postFile] })) {
@@ -1913,7 +1949,6 @@ const initMaiga = () => {
         postAudioChunks: [],
         postRecordingTimer: null,
         isProcessingMetadata: false,
-        // Note: dataSaverMode is also initialized above near line 229
         showWallpaperPicker: false,
         selectedWallpaper: null,
         wallpaperBrightness: 100,
@@ -2516,7 +2551,7 @@ const initMaiga = () => {
 
             // --- RESILIENT SOCKET.IO INITIALIZATION ---
             if (typeof io !== 'undefined') {
-                this.socket = io(API_BASE_URL, { transports: ['websocket'] });
+                this.socket = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
                 this.isSocketConnected = this.socket.connected;
             } else {
                 this.socket = { on: () => {}, emit: () => {}, connected: false };
@@ -6421,7 +6456,7 @@ const initMaiga = () => {
             }
         },
         get desktopGridCols() {
-            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px] h-screen overflow-hidden';
+            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px]';
         },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;
@@ -8024,7 +8059,14 @@ const initMaiga = () => {
                 });
             }, options);
 
-             // Only observe actual reel containers
+            // New logic for loading more
+             const lastReel = this.$refs.reelsContainer.querySelector('.snap-start:last-child');
+            if (lastReel) {
+                // Handled by the general observer below
+            }
+
+
+
              this.$refs.reelsContainer.querySelectorAll('.reel-container').forEach(reel => {
                 this.observer.observe(reel);
             });

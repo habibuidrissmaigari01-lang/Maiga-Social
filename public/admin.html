@@ -15,7 +15,7 @@
     <audio id="verify-success-sound" src="https://actions.google.com/sounds/v1/foley/success_fanfare_trumpet.ogg" preload="auto"></audio>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-       @keyframes verified-shimmer {
+        @keyframes verified-shimmer {
             0% { background-position: -200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
             50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); }
             100% { background-position: 200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
@@ -25,144 +25,6 @@
             background-size: 200% 100%;
             animation: verified-shimmer 3s infinite linear;
         }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
 
         .bg-mesh {
             position: fixed;
@@ -197,7 +59,7 @@
     <!-- Mobile Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
         <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-        <div class="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl flex flex-col transition-transform duration-300 transform squircle"
+        <div class="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl flex flex-col transition-transform duration-300 transform"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="-translate-x-full"
              x-transition:enter-end="translate-x-0"
@@ -207,10 +69,10 @@
             <div class="p-4 border-b dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
                 <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale">
                 <span class="text-xl font-black text-gray-800 dark:text-gray-200 italic">Maiga Social</span>
-            </div> 
+            </div>
             <div class="p-6 border-b dark:border-gray-700 flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <img :src="admin.avatar" class="w-10 h-10 parallelogram-sm object-cover">
+                    <img :src="admin.avatar" class="w-10 h-10 rounded-full object-cover">
                     <div>
                         <h3 class="font-bold text-md text-gray-900 dark:text-white" x-text="admin.name"></h3>
                         <p class="text-gray-500 text-xs">Admin Panel</p>
@@ -242,7 +104,7 @@
     <!-- Desktop Sidebar -->
     <aside class="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
-            <img src="img/logo.png" class="w-10 h-10 mr-2 parallelogram-sm">
+            <img src="img/logo.png" class="w-10 h-10 mr-2">
             <span class="text-2xl font-black text-gray-800 dark:text-gray-200 italic">Maiga</span>
         </div>
         <div @click="isEditingAdminProfile = true" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -521,8 +383,8 @@
                 <tbody class="divide-y dark:divide-gray-700">
                     <template x-for="user in users" :key="user.id">
                         <tr>
-                            <td class="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors parallelogram-sm" @click="openUserOptions(user)">
-                                <img :src="user.avatar" class="w-10 h-10 parallelogram-sm object-cover">
+                            <td class="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" @click="openUserOptions(user)">
+                                <img :src="user.avatar" class="w-10 h-10 rounded-full object-cover">
                                 <div>
                                     <p class="font-bold" x-text="user.name"></p>
                                     <p class="text-xs text-gray-500" x-text="user.dept"></p>
@@ -764,7 +626,7 @@
             <h3 class="text-lg font-black text-center mb-2" x-text="selectedUser?.name"></h3>
             
             <button @click="toggleVerify(selectedUser); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/20 font-bold flex items-center justify-center space-x-2 border border-amber-100 dark:border-amber-900/30 transition-all active:scale-95">
-                <i class="fa-solid parallelogram-sm" :class="selectedUser?.is_verified ? 'fa-certificate' : 'fa-crown'"></i>
+                <i class="fa-solid" :class="selectedUser?.is_verified ? 'fa-certificate' : 'fa-crown'"></i>
                 <span class="uppercase text-[10px] font-black tracking-widest" x-text="selectedUser?.is_verified ? 'Unverify User (Remove Crown)' : 'Verify Account (Assign Crown)'"></span>
             </button>
 
@@ -830,12 +692,12 @@
             <template x-if="viewingUser">
                 <div class="flex flex-col h-full">
                     <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-                        <h3 class="font-black text-lg parallelogram-sm" x-text="viewingUser.name + ' - Profile'"></h3>
+                        <h3 class="font-black text-lg" x-text="viewingUser.name + ' - Profile'"></h3>
                         <button @click="showUserProfileModal = false" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="flex-1 overflow-y-auto p-6">
                         <div class="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
-                            <img :src="viewingUser.avatar" class="w-24 h-24 parallelogram-sm object-cover border-4 border-gray-100 dark:border-gray-700">
+                            <img :src="viewingUser.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
                             <div class="text-center sm:text-left">
                                 <h2 class="text-2xl font-black" x-text="viewingUser.name"></h2>
                                 <p class="text-gray-500" x-text="'@' + viewingUser.username"></p>
@@ -863,7 +725,7 @@
             <h3 class="text-lg font-black text-center mb-2">Edit Admin Profile</h3>
             <div class="flex flex-col items-center">
                 <div class="relative group cursor-pointer">
-                    <img :src="editAdmin.avatar" class="w-24 h-24 parallelogram object-cover border-4 border-gray-100 dark:border-gray-700">
+                    <img :src="editAdmin.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
                     <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                         <i class="fa-solid fa-camera text-2xl"></i>
                     </div>
