@@ -549,7 +549,9 @@
     </div>
 
     <!-- Desktop Sidebar -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 glass-panel shrink-0 transition-all duration-300 z-40 w-[280px]">
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-r dark:border-gray-800 glass-panel shrink-0 transition-all duration-300 z-40"
+           :class="isLeftSidebarCollapsed ? 'w-24' : 'w-[280px]'"
+           :style="isLayoutSwapped ? 'order: 3' : 'order: 1'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
             <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
             <span class="amazing-logo text-2xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
@@ -3987,6 +3989,18 @@
                 </div>
                 <div class="w-full flex items-center justify-between p-4 border-t dark:border-gray-800">
                     <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i class="fa-solid fa-arrows-left-right"></i></div>
+                        <div>
+                            <span class="font-bold text-sm">Swap Sidebars</span>
+                            <p class="text-[10px] text-gray-500 font-medium">Switch Left and Right sides</p>
+                        </div>
+                    </div>
+                    <div @click="isLayoutSwapped = !isLayoutSwapped" class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors cursor-pointer" :class="isLayoutSwapped ? 'bg-blue-600' : ''">
+                        <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="isLayoutSwapped ? 'left-6' : 'left-1'"></div>
+                    </div>
+                </div>
+                <div class="w-full flex items-center justify-between p-4 border-t dark:border-gray-800">
+                    <div class="flex items-center space-x-3">
                         <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600"><i class="fa-solid fa-layer-group"></i></div>
                         <div>
                             <span class="font-bold text-sm">Message Shadows</span>
@@ -4906,77 +4920,57 @@
                     <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
                 </template>
             </div>
+
+            <!-- MAIN VIEW: SECURITY CHECK (Moved inside center container) -->
+    <main x-show="activeTab === 'security'" class="animate-fadeIn">
+        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
+            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
+            <h3 class="font-black text-xl">Security Check</h3>
+        </div>
+        <div class="p-4 space-y-4">
+            <p class="text-xs text-gray-500 px-2 font-medium">Review devices where you're currently logged in.</p>
+            <div class="space-y-2">
+                <template x-for="session in loginSessions" :key="session.id">
+                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
+                                <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm" x-text="session.browser + ' on ' + session.device"></p>
+                                <p class="text-[10px] text-gray-500" x-text="session.location + ' • ' + session.ip"></p>
+                                <p class="text-[9px] text-blue-600 font-bold uppercase mt-1" x-text="'Last active: ' + new Date(session.last_active).toLocaleString()"></p>
+                            </div>
+                        </div>
+                        <button class="text-xs font-bold text-red-500 hover:underline">Log Out</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </main>
+
         </div>
     </div>
 
     <!-- Right Sidebar (Desktop) -->
-    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300 w-[380px]">
+    <aside class="hidden lg:flex flex-col h-screen sticky top-0 border-l dark:border-gray-800 bg-white dark:bg-gray-900 transition-all duration-300"
+           :class="isRightSidebarCollapsed ? 'w-20' : 'w-[380px]'"
+           :style="isLayoutSwapped ? 'order: 1' : 'order: 3'">
         <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
-            <div class="flex items-center gap-4">
+             <div class="flex items-center gap-4" x-show="!isRightSidebarCollapsed">
                 <h3 class="text-lg font-black">Messages</h3>
                 <button @click="isCreatingGroup = true; isMessaging = true" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-pen-to-square"></i></button>
             </div>
+         <button @click="isRightSidebarCollapsed = !isRightSidebarCollapsed" class="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                <i class="fa-solid" :class="isRightSidebarCollapsed ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
+            </button>
         </div>
-        <div class="p-4 border-b dark:border-gray-800">
+        <div class="p-4 border-b dark:border-gray-800" x-show="!isRightSidebarCollapsed">
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
                 <input type="text" placeholder="Search messages..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 pl-9 pr-4 text-sm focus:ring-1 focus:ring-blue-500">
             </div>
         </div>
-        <div class="flex-1 overflow-y-auto">
-            <div x-show="isRightSidebarCollapsed" class="flex flex-col items-center space-y-4 py-4" x-transition>
-                <template x-for="chat in sortedChats" :key="chat.id">
-                    <div @click.stop="openUserStory(chat.id)" class="cursor-pointer" :class="getStoryRingClass(chat.id)"><img @click.stop="activeChat = chat; isMessaging = true" :src="chat.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700 cursor-pointer hover:border-blue-500 transition-colors" :class="getStoryRingClass(chat.id) ? 'border-white dark:border-gray-900' : ''"></div>
-                </template>
-            </div>
-            <template x-for="chat in sortedChats" :key="chat.id">
-                <div class="flex items-center p-3 space-x-3 active:bg-gray-100 dark:active:bg-gray-800 transition-colors cursor-pointer" x-show="!isRightSidebarCollapsed" x-transition>
-                    <div class="relative flex-shrink-0 cursor-pointer" :class="getStoryRingClass(chat.id)" @click.stop="openUserStory(chat.id)">
-                        <img :src="chat.avatar" class="w-12 h-12 parallelogram-sm border dark:border-gray-700" :class="getStoryRingClass(chat.id) ? 'border-2 border-white dark:border-gray-900' : ''">
-                        <template x-if="chat.status === 'online'">
-                            <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
-                        </template>
-                    </div>
-                    <div class="flex-1 min-w-0" x-show="!isRightSidebarCollapsed" @click="activeChat = chat; isMessaging = true">
-                        <div class="flex justify-between items-center">
-                            <div class="flex items-center min-w-0">
-                                <span class="font-bold text-sm truncate" :class="chat.verified ? 'text-verified-gold' : ''" x-text="chat.name"></span>
-                                <template x-if="chat.callInProgress">
-                                    <span class="ml-1.5 flex h-1.5 w-1.5 shrink-0">
-                                        <span class="animate-ping absolute inline-flex h-1.5 w-1.5 rounded-full bg-green-400 opacity-75"></span>
-                                        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
-                                    </span>
-                                </template>
-                            </div>
-                            <template x-if="isPinned(chat.id, chat.type || 'user')">
-                                <i class="fa-solid fa-thumbtack text-[10px] text-yellow-500 mr-1"></i>
-                            </template>
-                            <span class="text-[10px] text-gray-400 font-bold" x-text="chat.time"></span>
-                        </div>
-                        <div class="flex justify-between items-center mt-1">
-                            <div class="flex items-center gap-1 overflow-hidden">
-                                <template x-if="drafts[chat.id] && drafts[chat.id].trim()">
-                                    <p class="text-xs truncate">
-                                        <span class="text-rose-500 font-bold">Draft:</span>
-                                        <span class="text-gray-500" x-text="drafts[chat.id]"></span>
-                                    </p>
-                                </template>
-                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim()) && chat.lastMsgByMe">
-                                    <i class="fa-solid fa-check-double text-[10px] shrink-0" :class="chat.lastMsgIsRead ? 'text-blue-500' : 'text-gray-400'"></i>
-                                </template>
-                                <template x-if="!(drafts[chat.id] && drafts[chat.id].trim())">
-                                    <p class="text-xs text-gray-500 truncate" :class="chat.unread ? 'font-bold text-gray-900 dark:text-white' : ''" x-html="chat.lastMsg"></p>
-                                </template>
-                            </div>
-                            <template x-if="chat.unreadCount > 0">
-                                <span class="bg-blue-600 text-white text-[9px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center" x-text="chat.unreadCount > 99 ? '99+' : chat.unreadCount"></span>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-            </template>
-        </div>
-    </aside>
 
     <!-- Custom Context Menu for Chats (Desktop) -->
     <div x-show="chatContextMenu.show" 

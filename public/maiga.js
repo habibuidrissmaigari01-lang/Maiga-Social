@@ -164,21 +164,7 @@ const initMaiga = () => {
                 this.showToast('App Updated', 'A new version is available. Reloading...', 'info');
                 setTimeout(() => window.location.reload(), 2000);
             });
-
-            // --- PROXY SAFETY WRAPPER ---
-            // This wraps the initialized component in a Proxy to prevent ReferenceErrors 
-            // if the HTML calls a variable that hasn't been defined in the object yet.
-            return new Proxy(this, {
-                get(target, prop, receiver) {
-                    if (prop in target || typeof prop === 'symbol') {
-                        return Reflect.get(target, prop, receiver);
-                    }
-                    // Log the missing property so you can fix it later, but return undefined
-                    // so the UI doesn't crash.
-                    console.error(`[Reference Protection] Property "${String(prop)}" is used in HTML but missing in appData.`);
-                    return undefined;
-                }
-            });
+            // Removed the manual Proxy return as it breaks Alpine's internal reactivity
         },
         installPrompt: null,
         // Core App State
@@ -217,6 +203,7 @@ const initMaiga = () => {
         hasFlashlight: false,
         isFlashOn: false,
         isAutoExpanding: false,
+        dataSaverMode: localStorage.getItem('maiga_data_saver') === 'true',
         hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
         avatarFileToUpload: null,
         avatarOriginalFile: null,
@@ -230,7 +217,8 @@ const initMaiga = () => {
         showChatShadows: localStorage.getItem('maiga_chat_shadows') !== 'false',
         isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
-        isRightSidebarCollapsed: false,
+        isRightSidebarCollapsed: localStorage.getItem('maiga_right_sidebar_collapsed') === 'true',
+        isLayoutSwapped: localStorage.getItem('maiga_layout_swapped') === 'true',
         customWallpaperFile: null,
         pendingPosts: [],
         pendingMessages: [],
@@ -1728,29 +1716,6 @@ const initMaiga = () => {
             window.location.reload();
         },
 
-        async forceAppReset() {
-            if (!confirm('This will clear the app cache and force a full reload. Continue?')) return;
-            
-            this.showToast('Resetting', 'Clearing cache and reloading...', 'info');
-
-            // 1. Unregister Service Worker
-            if ('serviceWorker' in navigator) {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                for (let registration of registrations) {
-                    await registration.unregister();
-                }
-            }
-
-            // 2. Clear all PWA Caches
-            if ('caches' in window) {
-                const cacheNames = await caches.keys();
-                await Promise.all(cacheNames.map(name => caches.delete(name)));
-            }
-
-            // 3. Reload the page from the server
-            window.location.reload();
-        },
-
         async shareFile() {
             if (!this.postFile) return;
             if (navigator.canShare && navigator.canShare({ files: [this.postFile] })) {
@@ -1949,6 +1914,7 @@ const initMaiga = () => {
         postAudioChunks: [],
         postRecordingTimer: null,
         isProcessingMetadata: false,
+        // Note: dataSaverMode is also initialized above near line 229
         showWallpaperPicker: false,
         selectedWallpaper: null,
         wallpaperBrightness: 100,
@@ -2551,7 +2517,7 @@ const initMaiga = () => {
 
             // --- RESILIENT SOCKET.IO INITIALIZATION ---
             if (typeof io !== 'undefined') {
-                this.socket = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
+                this.socket = io(API_BASE_URL, { transports: ['websocket'] });
                 this.isSocketConnected = this.socket.connected;
             } else {
                 this.socket = { on: () => {}, emit: () => {}, connected: false };
@@ -2961,6 +2927,12 @@ const initMaiga = () => {
             this.$watch('isLeftSidebarCollapsed', (value) => {
                 localStorage.setItem('maiga_sidebar_collapsed', value);
             });
+            this.$watch('isRightSidebarCollapsed', (value) => {
+                localStorage.setItem('maiga_right_sidebar_collapsed', value);
+            });
+            this.$watch('isLayoutSwapped', (value) => {
+                localStorage.setItem('maiga_layout_swapped', value);
+            });
 
             // Watch for user profile modal closure
             this.$watch('showUserProfile', (val) => {
@@ -3155,7 +3127,10 @@ const initMaiga = () => {
             
             try {
                 // USE THE NEW BATCH ENDPOINT instead of 5 separate calls
+                const startTime = performance.now();
                 const initData = await this.apiFetch('/api/get_init_data');
+                const duration = (performance.now() - startTime).toFixed(2);
+                console.info(`[/api/get_init_data] finished in ${duration}ms`);
                 
                 if (initData) {
                     this.user = { ...this.user, ...initData.user };
@@ -6456,7 +6431,12 @@ const initMaiga = () => {
             }
         },
         get desktopGridCols() {
-            return 'lg:grid-cols-[280px_minmax(0,1fr)_380px]';
+            const leftW = this.isLeftSidebarCollapsed ? '96px' : '280px';
+            const rightW = this.isRightSidebarCollapsed ? '80px' : '380px';
+            if (this.isLayoutSwapped) {
+                return `lg:grid lg:grid-cols-[${rightW}_minmax(0,1fr)_${leftW}] h-screen overflow-hidden`;
+            }
+            return `lg:grid lg:grid-cols-[${leftW}_minmax(0,1fr)_${rightW}] h-screen overflow-hidden`;
         },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;
@@ -8059,14 +8039,7 @@ const initMaiga = () => {
                 });
             }, options);
 
-            // New logic for loading more
-             const lastReel = this.$refs.reelsContainer.querySelector('.snap-start:last-child');
-            if (lastReel) {
-                // Handled by the general observer below
-            }
-
-
-
+             // Only observe actual reel containers
              this.$refs.reelsContainer.querySelectorAll('.reel-container').forEach(reel => {
                 this.observer.observe(reel);
             });
