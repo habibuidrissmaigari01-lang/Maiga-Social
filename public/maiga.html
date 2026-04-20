@@ -3267,14 +3267,6 @@
                         </div>
                     </template>
 
-                     <!-- Reels Infinite Scroll Indicator -->
-            <div class="h-full w-full shrink-0 snap-start flex flex-col items-center justify-center bg-black">
-                <div class="w-12 h-12 border-4 border-white/10 border-t-white rounded-full animate-spin mb-4"></div>
-                <p class="text-white text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
-                    Next Reel Loading
-                </p>
-            </div>
-
                     <!-- Seen Badge & Watch Again -->
                     <div x-show="reel.seen" class="absolute top-20 left-4 z-30 flex items-center gap-2">
                         <div class="bg-blue-600/60 backdrop-blur-md text-white px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-lg border border-white/10">
@@ -3422,6 +3414,14 @@
                     </div>
                 </div>
             </template>
+
+            <!-- Global Reels Infinite Scroll Indicator (Outside Loop) -->
+            <div x-show="isLoadingMoreReels" class="h-full w-full shrink-0 snap-start flex flex-col items-center justify-center bg-black lg:rounded-2xl">
+                <div class="w-12 h-12 border-4 border-white/10 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+                <p class="text-white text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
+                    Next Reel Loading
+                </p>
+            </div>
         </div>
     </main>
 

@@ -7986,6 +7986,9 @@ const initMaiga = () => {
                 entries.forEach(entry => {
                     const video = entry.target.querySelector('video');
                     const reelId = entry.target.dataset.reelId; // Ensure reel.id is string
+                    
+                    if (!reelId) return; // Skip if this is the loading indicator
+
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
@@ -8059,12 +8062,12 @@ const initMaiga = () => {
             // New logic for loading more
              const lastReel = this.$refs.reelsContainer.querySelector('.snap-start:last-child');
             if (lastReel) {
-                this.observer.observe(lastReel);
+                // Handled by the general observer below
             }
 
 
 
-             this.$refs.reelsContainer.querySelectorAll('.snap-start').forEach(reel => {
+             this.$refs.reelsContainer.querySelectorAll('.reel-container').forEach(reel => {
                 this.observer.observe(reel);
             });
         },
