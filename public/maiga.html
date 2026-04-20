@@ -3238,6 +3238,8 @@
                         @loadstart="handleReelLoading(reel, true)"
                         @waiting="handleReelLoading(reel, true)"
                         @seeking="handleReelLoading(reel, true)"
+                        @playing="handleReelLoading(reel, false)"
+                        @canplay="handleReelLoading(reel, false)"
                         @stalled="handleReelLoading(reel, true)"
                         @timeupdate="reel.progress = ($el.currentTime / ($el.duration || 1)) * 100"
                         @error="reel.hasError = true; reel.isLoading = false"
