@@ -217,6 +217,7 @@ const initMaiga = () => {
         hasFlashlight: false,
         isFlashOn: false,
         isAutoExpanding: false,
+        dataSaverMode: localStorage.getItem('maiga_data_saver') === 'true',
         hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
         avatarFileToUpload: null,
         avatarOriginalFile: null,
@@ -1949,6 +1950,7 @@ const initMaiga = () => {
         postAudioChunks: [],
         postRecordingTimer: null,
         isProcessingMetadata: false,
+        // Note: dataSaverMode is also initialized above near line 229
         showWallpaperPicker: false,
         selectedWallpaper: null,
         wallpaperBrightness: 100,
