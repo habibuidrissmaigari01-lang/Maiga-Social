@@ -78,19 +78,19 @@
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/font/IntelOneMono-Bold.woff2') format('woff2');
+            src: url('/fonts/IntelOneMono-Bold.woff2') format('woff2');
             font-weight: bold;
             font-style: normal;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/font/IntelOneMono-Italic.woff2') format('woff2');
+            src: url('/fonts/IntelOneMono-Italic.woff2') format('woff2');
             font-weight: normal;
             font-style: italic;
         }
         @font-face {
             font-family: 'Intel One Mono';
-            src: url('/font/IntelOneMono-BoldItalic.woff2') format('woff2');
+            src: url('/fonts/IntelOneMono-BoldItalic.woff2') format('woff2');
             font-weight: bold;
             font-style: italic;
         }
@@ -3143,23 +3143,19 @@
              @wheel.prevent="handleReelWheel($event)">
             <template x-for="(reel, index) in reels" :key="(reel.id ? reel.id.toString() : 'reel') + '-' + index">
                 <div class="h-full w-full shrink-0 snap-start snap-always reel-container relative flex items-center justify-center bg-black lg:rounded-2xl overflow-hidden transform-gpu" :data-reel-id="reel.id">
-                     <template x-if="isReelVisible(reel.id) && (!dataSaverMode || reel.userExplicitlyStarted)">
                     <video :id="'reel-video-' + reel.id" 
-                        class="w-full h-full object-cover will-change-transform" 
-                        playsinline muted loop preload="auto"
+                        class="w-full h-full object-cover will-change-transform"
+                        :class="(!isReelVisible(reel.id) && !reel.userExplicitlyStarted) ? 'invisible' : ''"
+                        playsinline muted loop preload="metadata"
                         :src="reel.media" 
                         @ended="scrollToNextReel(index)" 
                         @loadstart="handleReelLoading(reel, true)"
                         @waiting="handleReelLoading(reel, true)"
                         @seeking="handleReelLoading(reel, true)"
-                        @playing="handleReelLoading(reel, false)"
-                        @canplay="handleReelLoading(reel, false)"
                         @stalled="handleReelLoading(reel, true)"
                         @timeupdate="reel.progress = ($el.currentTime / ($el.duration || 1)) * 100"
                         @error="reel.hasError = true; reel.isLoading = false"
-                        x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume"></video>
-
-                        </template>
+                        x-effect="$el.muted = isReelsMuted; $el.volume = reelVolume; if(activeReelId === String(reel.id) && !dataSaverMode) $el.play().catch(()=>{})"></video>
 
                     <!-- Data Saver Placeholder -->
                     <div x-show="dataSaverMode && !reel.userExplicitlyStarted" 
@@ -3302,7 +3298,7 @@
                                     </div>
                                 </div> 
                                 <div class="max-w-[80%]">
-                                    <p class="text-sm transition-all duration-300" :class="reel.isExpanded ? '' : 'line-clamp-2'" x-text="reel.caption"></p>
+                                    <p class="text-sm transition-all duration-300" :class="reel.isExpanded ? '' : 'line-clamp-2'" x-text="reel.caption || reel.content || ''"></p>
                                     <button x-show="reel.caption?.length > 60" @click.stop="toggleReelDescription(reel)" class="text-gray-300 font-black text-[10px] uppercase mt-1 tracking-widest">
                                         <span x-text="reel.isExpanded ? 'Show Less' : '...more'"></span>
                                     </button>

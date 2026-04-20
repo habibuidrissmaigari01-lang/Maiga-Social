@@ -848,7 +848,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
 
         const messages = await Message.find(query)
             .sort({ createdAt: 1 })
-            .populate('sender', 'name first_name surname avatar gender')
+            .populate('sender', 'name first_name surname avatar gender is_verified')
             .populate('reply_to');
 
         res.json(messages.map(m => ({
@@ -858,6 +858,7 @@ router.get('/get_messages', isAuthenticated, async (req, res) => {
             is_read: m.is_read, avatar: m.sender?.avatar, 
             pinned: m.is_pinned,
             is_edited: m.is_edited,
+            verified: m.sender?.is_verified,
             gender: m.sender?.gender,
             read_by: m.read_by,
             link_preview: m.link_preview,

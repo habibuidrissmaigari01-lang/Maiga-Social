@@ -7958,7 +7958,7 @@ const initMaiga = () => {
 
             const options = {
                 root: this.$refs.reelsContainer,
-                threshold: 0.8, // Be stricter about what counts as "active"
+                threshold: 0.6, // Increased compatibility for different screen sizes
             };
 
             this.observer = new IntersectionObserver((entries) => {
@@ -7968,7 +7968,7 @@ const initMaiga = () => {
                     const reel = this.reels.find(r => r.id == reelId);
 
                     if (entry.isIntersecting) {
-                        this.activeReelId = reelId;
+                        this.activeReelId = String(reelId);
 
                         this.$nextTick(() => {
                             if (!video) return;
@@ -8027,7 +8027,7 @@ const initMaiga = () => {
                         }
                         if (reel) reel.seen = true;
                     } else {
-                        if (!video) return;
+                        if (!video || video.paused) return;
                         video.pause();
                         video.muted = true;
                         video.currentTime = 0;
