@@ -6443,9 +6443,9 @@ const initMaiga = () => {
             const leftW = this.isLeftSidebarCollapsed ? '96px' : '280px';
             const rightW = this.isRightSidebarCollapsed ? '80px' : '380px';
             if (this.isLayoutSwapped) {
-                return `lg:grid lg:grid-cols-[${rightW}_minmax(0,1fr)_${leftW}] h-screen overflow-hidden`;
+                    return `lg:grid lg:grid-cols-[${rightW}_minmax(0,1fr)_${leftW}] h-[100dvh] overflow-hidden`;
             }
-            return `lg:grid lg:grid-cols-[${leftW}_minmax(0,1fr)_${rightW}] h-screen overflow-hidden`;
+                return `lg:grid lg:grid-cols-[${leftW}_minmax(0,1fr)_${rightW}] h-[100dvh] overflow-hidden`;
         },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;

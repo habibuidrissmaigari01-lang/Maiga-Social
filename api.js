@@ -108,6 +108,21 @@ app.use((req, res, next) => {
     next();
 });
 
+// Middleware to check for Admin privileges
+const isAdmin = async (req, res, next) => {
+    // isAuthenticated should have already set req.session.userId
+    if (!req.session.userId) {
+        // This case should ideally be caught by isAuthenticated first,
+        // but it's a good fallback.
+        return res.redirect('/'); 
+    }
+    const user = await User.findById(req.session.userId);
+    if (user && user.is_admin) {
+        return next();
+    }
+    // If authenticated but not admin, redirect to home
+    return res.redirect('/home'); 
+};
 // Session Setup
 const mongoConnection = mongoose.connect(MONGO_URI, {
     // Prevent the app from hanging forever if DB is down
@@ -487,9 +502,30 @@ const requireLogin = (req, res, next) => {
 };
 
 // Intercept app routes to check session and serve the shell
-app.get(['/maiga.html', '/maiga', '/home'], (req, res) => {
+app.get(['/maiga.html', '/maiga', '/home'], requireLogin, (req, res) => {
     // Adjusted path to find the HTML in the public subfolder
     res.sendFile(path.join(__dirname, 'public', 'maiga.html'));
+});
+
+// Explicit route for YSU portal (Always accessible without login)
+app.get(['/ysu', '/ysu.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'ysu.html'));
+});
+
+// NEW: Admin panel route with authentication and admin check
+app.get('/admin', isAuthenticated, isAdmin, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// NEW: Middleware to restrict direct access to sensitive files
+// This is placed BEFORE express.static to intercept the requests
+app.use((req, res, next) => {
+    const protectedFiles = ['/maiga.js', '/offline.html'];
+    
+    if (protectedFiles.includes(req.path) && !req.session.userId) {
+        return res.redirect('/');
+    }
+    next();
 });
 
 // Serve static assets ONLY from the public folder

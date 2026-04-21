@@ -13,7 +13,12 @@ export default {
         let path = url.pathname;
 
         // Determine if this is an API or Socket.io request that needs proxying
-        const isProxyRequest = path.startsWith('/api') || path.startsWith('/socket.io') || request.headers.get('Upgrade') === 'websocket';
+        // We now also proxy app routes and sensitive files so the backend can enforce access control
+        const isProxyRequest = 
+            path.startsWith('/api') || 
+            path.startsWith('/socket.io') || 
+            request.headers.get('Upgrade') === 'websocket' ||
+            ['/home', '/maiga', '/maiga.js', '/offline.html', '/admin'].includes(path);
 
         if (isProxyRequest) {
             if (!env.BACKEND_URL) return jsonError('Backend URL not configured in Worker environment.', 502);
@@ -76,11 +81,7 @@ export default {
                 return env.ASSETS.fetch(new Request(new URL('/ysu.html', request.url), request));
             } else if (path === '/home' || path === '/maiga') {
                 return env.ASSETS.fetch(new Request(new URL('/maiga.html', request.url), request));
-            } else if (path === '/admin') {
-                return env.ASSETS.fetch(new Request(new URL('/admin.html', request.url), request));
             }
-
-            // Fallback to serving other static assets
             return env.ASSETS.fetch(request);
         }
     },
