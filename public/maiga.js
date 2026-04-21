@@ -2165,14 +2165,12 @@ const initMaiga = () => {
         isSocketConnected: false,
         isRefreshing: false,
         hasMoreFriends: false,
+        isPulling: false,
         handlePullStart(e) {
+            this.touchStartX = e.touches[0].clientX;
+            this.pullStartY = e.touches[0].clientY;
+            this.isPulling = false;
             let scrollEl = this.$refs.mainContent;
-            if (this.activeTab === 'reels') scrollEl = this.$refs.reelsContainer;
-
-            if (scrollEl && scrollEl.scrollTop === 0) {
-                this.pullStartY = e.touches[0].clientY;
-                this.touchStartX = e.touches[0].clientX;
-            }
         },
         handlePullMove(e) {
             const touchX = e.touches[0].clientX;
@@ -2188,8 +2186,8 @@ const initMaiga = () => {
             if (this.activeChat || this.isCreatingStory || this.isCreatingPost || this.viewingPost || this.viewingStory) return;
 
             // Gesture Tab Navigation (Horizontal Swipe)
-            // Only trigger if horizontal movement is significantly greater than vertical
-            if (Math.abs(deltaX) > Math.abs(deltaY) * 2 && Math.abs(deltaX) > 40) {
+            // Only trigger if movement is primarily horizontal and we aren't currently pulling to refresh
+            if (Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && Math.abs(deltaX) > 40 && this.pullDistance === 0) {
                 if (this.activeChat || this.isCreatingStory || this.isCreatingPost) return;
                 
                 const tabs = ['home', 'friends', 'reels'];
@@ -2206,11 +2204,13 @@ const initMaiga = () => {
                 }
             }
 
-            if (this.pullStartY > 0 && scrollEl && scrollEl.scrollTop === 0) {
+            // Pull to Refresh logic
+            if (scrollEl && scrollEl.scrollTop <= 0 && deltaY > 0) {
                 const dist = touchY - this.pullStartY;
-                if (dist > 0) {
+                if (dist > 5) {
                     this.isBouncing = false;
-                    if (e.cancelable) e.preventDefault(); // Prevent browser's default pull-to-refresh
+                    this.isPulling = true;
+                    if (e.cancelable) e.preventDefault(); 
                     this.pullDistance = Math.min(dist * 0.4, 150);
 
                     // Progressive Haptic Feedback
@@ -2230,14 +2230,16 @@ const initMaiga = () => {
         },
         handlePullEnd() {
             this.isBouncing = true;
+            this.isPulling = false;
             if (this.pullDistance > 80) { // Increased threshold for better UX
                 this.refreshAllData();
             } else {
                 this.pullDistance = 0;
-                this.pullStartY = 0;
-                this.lastHapticStep = 0;
                 setTimeout(() => { this.isBouncing = false; }, 500);
             }
+            this.pullStartY = 0;
+            this.touchStartX = 0;
+            this.lastHapticStep = 0;
         },
         checkConnection() {
             if (!this.isOffline && navigator.onLine) {
