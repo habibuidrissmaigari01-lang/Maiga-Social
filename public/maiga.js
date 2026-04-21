@@ -5,7 +5,14 @@ const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribu
 const consoleBuffer = [];
 const MAX_LOGS = 500;
 const captureLog = (type, args) => {
-    const entry = `[${new Date().toLocaleTimeString()}] [${type.toUpperCase()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}`;
+    const safeArgs = args.map(a => {
+        if (typeof a === 'object' && a !== null) {
+            try { return JSON.stringify(a); }
+            catch (e) { return `[Object ${a.constructor?.name || 'Complex'}]`; }
+        }
+        return String(a);
+    });
+    const entry = `[${new Date().toLocaleTimeString()}] [${type.toUpperCase()}] ${safeArgs.join(' ')}`;
     consoleBuffer.push(entry);
     if (consoleBuffer.length > MAX_LOGS) consoleBuffer.shift();
 };
@@ -8555,7 +8562,13 @@ const initMaiga = () => {
             app: null,
 
             async init(appInstance) {
-                this.app = appInstance;
+                // Prevent circular reference issues during serialization (JSON.stringify) 
+                // by making the 'app' property non-enumerable.
+                Object.defineProperty(this, 'app', {
+                    value: appInstance,
+                    enumerable: false,
+                    writable: true
+                });
                 try {
                     this.db = await openMaigaDB();
                     if (this.db) {
