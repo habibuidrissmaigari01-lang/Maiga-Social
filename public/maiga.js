@@ -2207,7 +2207,7 @@ const initMaiga = () => {
             // Pull to Refresh logic
             if (scrollEl && scrollEl.scrollTop <= 0 && deltaY > 0) {
                 const dist = touchY - this.pullStartY;
-                if (dist > 5) {
+                if (dist > 15) { // Increased threshold to prevent sticky scrolling
                     this.isBouncing = false;
                     this.isPulling = true;
                     if (e.cancelable) e.preventDefault(); 
@@ -6443,9 +6443,9 @@ const initMaiga = () => {
             const leftW = this.isLeftSidebarCollapsed ? '96px' : '280px';
             const rightW = this.isRightSidebarCollapsed ? '80px' : '380px';
             if (this.isLayoutSwapped) {
-                    return `lg:grid lg:grid-cols-[${rightW}_minmax(0,1fr)_${leftW}] h-[100dvh] overflow-hidden`;
+                    return `lg:grid lg:grid-cols-[${rightW}_minmax(0,1fr)_${leftW}] lg:h-[100dvh] lg:overflow-hidden`;
             }
-                return `lg:grid lg:grid-cols-[${leftW}_minmax(0,1fr)_${rightW}] h-[100dvh] overflow-hidden`;
+                return `lg:grid lg:grid-cols-[${leftW}_minmax(0,1fr)_${rightW}] lg:h-[100dvh] lg:overflow-hidden`;
         },
         handleStoryMusic() {
             const audio = this.$refs.storyAudio;

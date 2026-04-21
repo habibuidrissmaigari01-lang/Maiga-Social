@@ -70,16 +70,22 @@ app.use(express.urlencoded({ extended: true }));
 
 // --- Content Security Policy Middleware ---
 app.use((req, res, next) => {
+    const r2Domain = R2_PUBLIC_URL ? new URL(R2_PUBLIC_URL).hostname : '';
     res.setHeader(
         "Content-Security-Policy",
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
-        "img-src 'self' data: blob: https:; " +
+        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com; ` +
+        `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co; ` +
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        "connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io wss:; " +
+        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io ${r2Domain} wss:; ` +
         "frame-src 'self' https://accounts.google.com https://www.facebook.com https://www.google.com; " +
-        "base-uri 'self' https://accounts.google.com;"
+        "worker-src 'self' blob:; " +
+        "manifest-src 'self'; " +
+        "object-src 'none'; " +
+        "base-uri 'self' https://accounts.google.com; " +
+        "form-action 'self';"
     );
     next();
 });
