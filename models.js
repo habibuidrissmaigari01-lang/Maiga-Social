@@ -20,7 +20,7 @@ const s3Client = new S3Client({
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
 if (publicVapidKey && privateVapidKey) {
-    const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social';
+    const senderEmail = process.env.SENDER_EMAIL || 'admin@maiga.social'; // Missing space
     webpush.setVapidDetails(`mailto:${senderEmail}`, publicVapidKey, privateVapidKey);
 }
 
@@ -586,6 +586,14 @@ const logSchema = new mongoose.Schema({
     details: String,
     ip: String,
     timestamp: { type: Date, default: Date.now }
+});
+
+logSchema.pre('save', function(next) {
+    // Capture IP address if available from the request context (e.g., from req.ip in Express)
+    // This requires passing req.ip to the log creation, or setting it in a middleware
+    // For now, we'll assume it's set if available, otherwise it's undefined.
+    if (!this.ip && this.parent && this.parent.req && this.parent.req.ip) this.ip = this.parent.req.ip;
+    next();
 });
 
 const broadcastSchema = new mongoose.Schema({

@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Maiga Social - Admin Panel</title>
     <link href="css/main.css" rel="stylesheet">
+    <link rel="stylesheet" href="/vendor/font-awesome.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
     <script src="alpine.js" defer></script>
     <audio id="admin-notif-sound" src="https://actions.google.com/sounds/v1/foley/notification_simple_01.ogg" preload="auto"></audio>
     <audio id="verify-success-sound" src="https://actions.google.com/sounds/v1/foley/success_fanfare_trumpet.ogg" preload="auto"></audio>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        @keyframes verified-shimmer {
+       @keyframes verified-shimmer {
             0% { background-position: -200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
             50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.6); }
             100% { background-position: 200% 0; box-shadow: 0 0 5px rgba(245, 158, 11, 0.2); }
@@ -25,6 +25,29 @@
             background-size: 200% 100%;
             animation: verified-shimmer 3s infinite linear;
         }
+
+        .bg-mesh {
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background-color: #f1f5f9;
+            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
+        }
+        .dark .bg-mesh {
+            background-color: #020617;
+            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+        .dark .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .squircle { border-radius: 2rem !important; }
 
         .bg-mesh {
             position: fixed;
@@ -59,7 +82,7 @@
     <!-- Mobile Sidebar -->
     <div x-show="isSideMenuOpen" class="fixed inset-0 z-[500] overflow-hidden lg:hidden" x-cloak>
         <div @click="isSideMenuOpen = false" class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
-        <div class="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl flex flex-col transition-transform duration-300 transform"
+        <div class="fixed inset-y-0 left-0 max-w-xs w-full bg-white dark:bg-gray-800 shadow-xl flex flex-col transition-transform duration-300 transform squircle"
              x-transition:enter="transition ease-out duration-300"
              x-transition:enter-start="-translate-x-full"
              x-transition:enter-end="translate-x-0"
@@ -69,10 +92,10 @@
             <div class="p-4 border-b dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-900/50">
                 <img src="img/logo.png" class="w-8 h-8 mr-2 logo-grayscale">
                 <span class="text-xl font-black text-gray-800 dark:text-gray-200 italic">Maiga Social</span>
-            </div>
+            </div> 
             <div class="p-6 border-b dark:border-gray-700 flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <img :src="admin.avatar" class="w-10 h-10 rounded-full object-cover">
+                    <img :src="admin.avatar" class="w-10 h-10 parallelogram-sm object-cover">
                     <div>
                         <h3 class="font-bold text-md text-gray-900 dark:text-white" x-text="admin.name"></h3>
                         <p class="text-gray-500 text-xs">Admin Panel</p>
@@ -82,8 +105,16 @@
             </div>
             <div class="flex-1 p-4 space-y-2 overflow-y-auto">
                 <button @click="activeTab = 'dashboard'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'dashboard' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-tachometer-alt text-xl w-8 text-center"></i><span class="font-bold">Dashboard</span></button>
-                <button @click="activeTab = 'users'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-users text-xl w-8 text-center"></i><span class="font-bold">Users</span></button>
+                <button @click="activeTab = 'users'; isSideMenuOpen = false" class="flex items-center justify-between w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <div class="flex items-center space-x-4">
+                        <i class="fa-solid fa-users text-xl w-8 text-center"></i>
+                        <span class="font-bold">Users</span>
+                    </div>
+                    <span x-show="stats.online_users > 0" class="flex h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" title="Users Online"></span>
+                </button>
                 <button @click="activeTab = 'reports'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'reports' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-flag text-xl w-8 text-center"></i><span class="font-bold">Reports</span></button>
+                <button @click="activeTab = 'health'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'health' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-heart-pulse text-xl w-8 text-center"></i><span class="font-bold">System Health</span></button>
+                <button @click="activeTab = 'storage'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'storage' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-database text-xl w-8 text-center"></i><span class="font-bold">Media & Storage</span></button>
                 <button @click="activeTab = 'moderation'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'moderation' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-shield-halved text-xl w-8 text-center"></i><span class="font-bold">Moderation</span></button>
                 <button @click="activeTab = 'broadcast'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'broadcast' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-bullhorn text-xl w-8 text-center"></i><span class="font-bold">Broadcast</span></button>
                 <button @click="activeTab = 'logs'; isSideMenuOpen = false" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'logs' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'"><i class="fa-solid fa-clipboard-list text-xl w-8 text-center"></i><span class="font-bold">System Logs</span></button>
@@ -104,7 +135,7 @@
     <!-- Desktop Sidebar -->
     <aside class="hidden lg:flex flex-col w-72 h-screen sticky top-0 border-r dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
-            <img src="img/logo.png" class="w-10 h-10 mr-2">
+            <img src="img/logo.png" class="w-10 h-10 mr-2 parallelogram-sm">
             <span class="text-2xl font-black text-gray-800 dark:text-gray-200 italic">Maiga</span>
         </div>
         <div @click="isEditingAdminProfile = true" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -121,13 +152,25 @@
                     <i class="fa-solid fa-tachometer-alt text-xl w-8 text-center"></i>
                     <span class="font-bold">Dashboard</span>
                 </button>
-                <button @click="activeTab = 'users'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
-                    <i class="fa-solid fa-users text-xl w-8 text-center"></i>
-                    <span class="font-bold">Users</span>
+                <button @click="activeTab = 'users'" class="flex items-center justify-between w-full p-3 rounded-xl transition-colors" :class="activeTab === 'users' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <div class="flex items-center space-x-4">
+                        <i class="fa-solid fa-users text-xl w-8 text-center"></i>
+                        <span class="font-bold">Users</span>
+                    </div>
+                    <span x-show="stats.online_users > 0" class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 text-[10px] font-black px-2 py-0.5 rounded-full" 
+                          x-text="stats.online_users"></span>
                 </button>
                 <button @click="activeTab = 'reports'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'reports' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
                     <i class="fa-solid fa-flag text-xl w-8 text-center"></i>
                     <span class="font-bold">Reports</span>
+                </button>
+                <button @click="activeTab = 'health'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'health' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-heart-pulse text-xl w-8 text-center"></i>
+                    <span class="font-bold">System Health</span>
+                </button>
+                <button @click="activeTab = 'storage'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'storage' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                    <i class="fa-solid fa-database text-xl w-8 text-center"></i>
+                    <span class="font-bold">Media & Storage</span>
                 </button>
                 <button @click="activeTab = 'moderation'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'moderation' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
                     <i class="fa-solid fa-shield-halved text-xl w-8 text-center"></i>
@@ -236,35 +279,35 @@
             <div x-show="activeTab === 'dashboard'">
                 <h2 class="text-2xl font-black mb-6">Dashboard</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4">
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 border dark:border-gray-700">
                         <div class="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-full"><i class="fa-solid fa-users text-2xl text-blue-600"></i></div>
                         <div>
                             <p class="text-gray-500 text-sm font-bold">Total Users</p>
                             <p class="text-3xl font-black" x-text="stats.total_users || 0"></p>
                         </div>
                     </div>
-                    <div @click="setFilterAndGoToUsers('maiga')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                    <div @click="setFilterAndGoToUsers('maiga')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200 border dark:border-gray-700">
                         <div class="bg-indigo-100 dark:bg-indigo-900/30 p-4 rounded-full"><i class="fa-solid fa-user-check text-2xl text-indigo-600"></i></div>
                         <div>
                             <p class="text-gray-500 text-sm font-bold">Maiga Users</p>
                             <p class="text-3xl font-black" x-text="stats.maiga_users || 0"></p>
                         </div>
                     </div>
-                    <div @click="setFilterAndGoToUsers('ysu')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                    <div @click="setFilterAndGoToUsers('ysu')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200 border dark:border-gray-700">
                         <div class="bg-teal-100 dark:bg-teal-900/30 p-4 rounded-full"><i class="fa-solid fa-user-graduate text-2xl text-teal-600"></i></div>
                         <div>
                             <p class="text-gray-500 text-sm font-bold">YSU Users</p>
                             <p class="text-3xl font-black" x-text="stats.ysu_users || 0"></p>
                         </div>
                     </div>
-                    <div @click="activeTab = 'reports'" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                    <div @click="activeTab = 'reports'" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200 border dark:border-gray-700">
                         <div class="bg-red-100 dark:bg-red-900/30 p-4 rounded-full"><i class="fa-solid fa-flag text-2xl text-red-600"></i></div>
                         <div>
                             <p class="text-gray-500 text-sm font-bold">Open Reports</p>
                             <p class="text-3xl font-black" x-text="stats.open_reports || 0"></p>
                         </div>
                     </div>
-                    <div @click="setFilterAndGoToUsers('online')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200">
+                    <div @click="setFilterAndGoToUsers('online')" class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md flex items-center space-x-4 cursor-pointer hover:shadow-lg hover:scale-105 transition-transform duration-200 border dark:border-gray-700">
                         <div class="bg-green-100 dark:bg-green-900/30 p-4 rounded-full"><i class="fa-solid fa-circle text-2xl text-green-600"></i></div>
                         <div>
                             <p class="text-gray-500 text-sm font-bold">Online Users</p>
@@ -275,19 +318,19 @@
                 <div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
                         <h3 class="font-bold text-lg mb-4">Weekly Activity</h3>
-                        <canvas id="userActivityChart"></canvas>
+                        <div class="h-64 sm:h-80"><canvas id="userActivityChart"></canvas></div>
                     </div>
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
                         <h3 class="font-bold text-lg mb-4">User Account Types</h3>
-                        <canvas id="accountTypeChart"></canvas>
+                        <div class="h-64 sm:h-80"><canvas id="accountTypeChart"></canvas></div>
                     </div>
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md">
                         <h3 class="font-bold text-lg mb-4">Weekly Signups by Type</h3>
-                        <canvas id="signupsByAccountTypeChart"></canvas>
+                        <div class="h-64 sm:h-80"><canvas id="signupsByAccountTypeChart"></canvas></div>
                     </div>
                     <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md lg:col-span-2">
                         <h3 class="font-bold text-lg mb-4">Posts per Day (Last 7 Days)</h3>
-                        <canvas id="postsPerDayChart"></canvas>
+                        <div class="h-64 sm:h-80"><canvas id="postsPerDayChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -383,8 +426,8 @@
                 <tbody class="divide-y dark:divide-gray-700">
                     <template x-for="user in users" :key="user.id">
                         <tr>
-                            <td class="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" @click="openUserOptions(user)">
-                                <img :src="user.avatar" class="w-10 h-10 rounded-full object-cover">
+                            <td class="p-4 flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors parallelogram-sm" @click="openUserOptions(user)">
+                                <img :src="user.avatar" class="w-10 h-10 parallelogram-sm object-cover">
                                 <div>
                                     <p class="font-bold" x-text="user.name"></p>
                                     <p class="text-xs text-gray-500" x-text="user.dept"></p>
@@ -432,9 +475,22 @@
 
     <!-- Reports -->
     <div x-show="activeTab === 'reports'">
-        <h2 class="text-2xl font-black mb-6">User Reports</h2>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h2 class="text-2xl font-black">User Reports</h2>
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+                            <div class="relative w-full sm:w-auto">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                <input type="text" x-model="reportSearchQuery" placeholder="Search reports..." class="w-full sm:w-64 pl-9 pr-4 py-2 rounded-xl border-none bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-blue-500 shadow-sm">
+                            </div>
+                            <button @click="exportReportsToPDF()" :disabled="isExportingReports" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 w-full sm:w-auto disabled:opacity-50">
+                                <i class="fa-solid" :class="isExportingReports ? 'fa-spinner fa-spin' : 'fa-file-pdf'"></i>
+                                <span x-text="isExportingReports ? 'Exporting...' : 'Export PDF'"></span>
+                            </button>
+                        </div>
+                    </div>
+                    
         <div class="space-y-4">
-            <template x-for="report in reports" :key="report.id">
+                        <template x-for="report in filteredReports" :key="report.id">
                 <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-md">
                     <div class="flex justify-between items-start">
                         <div>
@@ -447,6 +503,7 @@
                     <p class="text-sm mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg" x-text="report.details"></p>
                     <div class="mt-3 flex justify-end space-x-3">
                         <button @click="dismissReport(report.id)" class="text-sm font-bold text-gray-500 hover:text-gray-700">Resolve</button>
+                        <button @click="deleteReport(report.id)" class="text-sm font-bold text-red-500 hover:text-red-700">Delete</button>
                         <template x-if="report.reported_user"><button @click="warnUser(report)" class="text-sm font-bold text-orange-600 hover:underline">Warn</button></template>
                         <template x-if="report.reported_user"><button @click="blockAndResolveReport(report)" class="text-sm font-bold text-red-600 hover:underline">Block & Resolve</button></template>
                         <button @click="sendMessageToUser(report.reporter.id)" class="text-sm font-bold text-blue-600 hover:underline">Chat with Reporter</button>
@@ -455,6 +512,179 @@
             </template>
         </div>
     </div>
+
+            <!-- API & System Health Monitoring -->
+            <div x-show="activeTab === 'health'" class="animate-fadeIn">
+                <h2 class="text-2xl font-black mb-6">API & System Health Monitoring</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Server Status Card -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="font-bold text-lg">Server Status (Railway)</h3>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest" 
+                                  :class="systemHealth.server?.status === 'Online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                  x-text="systemHealth.server?.status || 'Offline'"></span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Uptime</span>
+                                <span class="text-sm font-bold" x-text="formatUptime(systemHealth.server?.uptime)"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">System Load (1/5/15m)</span>
+                                <span class="text-sm font-bold" x-text="systemHealth.server?.cpu?.map(l => l.toFixed(2)).join(' / ') || '0.00 / 0.00 / 0.00'"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Memory Usage (RSS)</span>
+                                <span class="text-sm font-bold" x-text="formatMemory(systemHealth.server?.memory?.rss)"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Node.js Version</span>
+                                <span class="text-sm font-bold" x-text="systemHealth.server?.nodeVersion"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Database Status Card -->
+                    <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-6">
+                            <h3 class="font-bold text-lg">Database (MongoDB Atlas)</h3>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest" 
+                                  :class="systemHealth.database?.status === 'Connected' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'"
+                                  x-text="systemHealth.database?.status || 'Disconnected'"></span>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Database Name</span>
+                                <span class="text-sm font-bold" x-text="systemHealth.database?.name"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Cluster Host</span>
+                                <span class="text-sm font-bold truncate max-w-[150px]" x-text="systemHealth.database?.host"></span>
+                            </div>
+                            <div class="flex justify-between items-center py-2 border-b dark:border-gray-700 last:border-0">
+                                <span class="text-sm text-gray-500">Environment</span>
+                                <span class="text-sm font-bold uppercase text-blue-600" x-text="systemHealth.environment"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Error Logs Stream -->
+                    <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center space-x-2">
+                                <h3 class="font-bold text-lg">Recent Backend Errors</h3>
+                                <span class="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full" x-text="errorLogs.length"></span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button @click="clearErrorLogs()" class="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors text-red-500" title="Clear Log File">
+                                    <i class="fa-solid fa-trash-can text-sm"></i>
+                                </button>
+                                <button @click="fetchErrorLogs()" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500">
+                                    <i class="fa-solid fa-rotate text-sm"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="space-y-4 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+                            <template x-if="errorLogs.length === 0">
+                                <div class="text-center py-12 text-gray-500">
+                                    <i class="fa-solid fa-circle-check text-4xl text-green-500 mb-3"></i>
+                                    <p class="font-bold">No errors reported recently.</p>
+                                </div>
+                            </template>
+                            <template x-for="(log, index) in errorLogs" :key="index">
+                                <div class="p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl">
+                                    <pre class="text-[10px] font-mono text-red-800 dark:text-red-400 overflow-x-auto whitespace-pre-wrap" x-text="log"></pre>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Media & Storage Explorer -->
+            <div x-show="activeTab === 'storage'" class="animate-fadeIn">
+                <h2 class="text-2xl font-black mb-6">Media & Storage Explorer</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Storage Metrics -->
+                    <div class="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700">
+                        <h3 class="font-bold text-lg mb-6">R2 Bucket Metrics</h3>
+                        <div class="space-y-4">
+                            <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                                <p class="text-xs font-bold text-blue-600 uppercase">Total Size</p>
+                                <p class="text-2xl font-black" x-text="formatMemory(storageMetrics.totalSize)"></p>
+                            </div>
+                            <div class="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl">
+                                <p class="text-xs font-bold text-indigo-600 uppercase">Total Files</p>
+                                <p class="text-2xl font-black" x-text="storageMetrics.fileCount || 0"></p>
+                            </div>
+                            <button @click="fetchStorageMetrics()" class="w-full py-3 rounded-xl border-2 border-blue-600 text-blue-600 font-bold text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Refresh Metrics</button>
+                             <div class="mt-4 pt-4 border-t dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs font-bold">Auto-Cleanup</p>
+                                    <p class="text-[10px] text-gray-500">Run weekly scans</p>
+                                </div>
+                                <div @click="settings.auto_cleanup_enabled = !settings.auto_cleanup_enabled; saveSettings()" class="w-10 h-5 bg-gray-200 dark:bg-gray-700 rounded-full relative transition-colors cursor-pointer" :class="settings.auto_cleanup_enabled ? 'bg-blue-600' : ''">
+                                    <div class="w-3 h-3 bg-white rounded-full absolute top-1 transition-all" :class="settings.auto_cleanup_enabled ? 'left-6' : 'left-1'"></div>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- Orphaned File Cleaner -->
+                    <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700 flex flex-col">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="font-bold text-lg">Orphaned File Cleaner</h3>
+                            <button @click="scanOrphans()" :disabled="isScanningOrphans" class="text-sm font-bold text-blue-600 hover:underline">
+                                <i x-show="isScanningOrphans" class="fa-solid fa-spinner fa-spin mr-1"></i>
+                                <span>Scan for Orphans</span>
+                            </button>
+                        </div>
+                        <div class="flex-1 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
+                            <template x-if="orphanedFiles.length === 0">
+                                <div class="text-center py-12 text-gray-400">
+                                    <i class="fa-solid fa-broom text-4xl mb-2"></i>
+                                    <p class="text-sm font-medium">No orphaned files found. Bucket is clean!</p>
+                                </div>
+                            </template>
+                            <div class="space-y-2">
+                                <template x-for="file in orphanedFiles" :key="file.key">
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-xl text-xs">
+                                        <span class="font-mono truncate max-w-[200px]" x-text="file.key"></span>
+                                        <div class="flex items-center gap-4">
+                                            <span class="font-bold text-gray-500" x-text="formatMemory(file.size)"></span>
+                                            <button @click="cleanupOrphans([file.key])" class="text-red-500 hover:text-red-700"><i class="fa-solid fa-trash-can"></i></button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <button x-show="orphanedFiles.length > 0" @click="cleanupOrphans(orphanedFiles.map(f => f.key))" class="mt-4 w-full py-3 bg-red-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg shadow-red-500/30">Delete All Orphans</button>
+                    </div>
+
+                    <!-- Recent Media Preview -->
+                    <div class="lg:col-span-3 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-md border dark:border-gray-700">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                            <h3 class="font-bold text-lg">Recent Upload Preview</h3>
+                            <div class="relative w-full sm:w-64">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                                <input type="text" x-model="mediaSearchQuery" placeholder="Filter by author..." class="w-full pl-9 pr-4 py-2 rounded-xl border-none bg-gray-100 dark:bg-gray-700 text-xs focus:ring-2 focus:ring-blue-500 shadow-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-10 gap-3">
+                            <template x-for="item in filteredRecentMedia" :key="item.url">
+                                <div class="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border dark:border-gray-700" @click="window.open(item.url, '_blank')">
+                                    <template x-if="item.type === 'video'"><video :src="item.url" class="w-full h-full object-cover"></video></template>
+                                    <template x-if="item.type !== 'video'"><img :src="item.url" class="w-full h-full object-cover"></img</template>
+                                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1">
+                                        <p class="text-[8px] text-white font-black truncate" x-text="item.author"></p>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
     <!-- Moderation Queue -->
     <div x-show="activeTab === 'moderation'">
@@ -626,7 +856,7 @@
             <h3 class="text-lg font-black text-center mb-2" x-text="selectedUser?.name"></h3>
             
             <button @click="toggleVerify(selectedUser); showUserOptionsModal = false" class="w-full p-3 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-900/20 font-bold flex items-center justify-center space-x-2 border border-amber-100 dark:border-amber-900/30 transition-all active:scale-95">
-                <i class="fa-solid" :class="selectedUser?.is_verified ? 'fa-certificate' : 'fa-crown'"></i>
+                <i class="fa-solid parallelogram-sm" :class="selectedUser?.is_verified ? 'fa-certificate' : 'fa-crown'"></i>
                 <span class="uppercase text-[10px] font-black tracking-widest" x-text="selectedUser?.is_verified ? 'Unverify User (Remove Crown)' : 'Verify Account (Assign Crown)'"></span>
             </button>
 
@@ -692,18 +922,23 @@
             <template x-if="viewingUser">
                 <div class="flex flex-col h-full">
                     <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-                        <h3 class="font-black text-lg" x-text="viewingUser.name + ' - Profile'"></h3>
+                        <h3 class="font-black text-lg parallelogram-sm" x-text="viewingUser.name + ' - Profile'"></h3>
                         <button @click="showUserProfileModal = false" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                     <div class="flex-1 overflow-y-auto p-6">
                         <div class="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-6 mb-6">
-                            <img :src="viewingUser.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
+                            <img :src="viewingUser.avatar" class="w-24 h-24 parallelogram-sm object-cover border-4 border-gray-100 dark:border-gray-700">
                             <div class="text-center sm:text-left">
                                 <h2 class="text-2xl font-black" x-text="viewingUser.name"></h2>
                                 <p class="text-gray-500" x-text="'@' + viewingUser.username"></p>
                                 <p class="text-sm text-gray-600 dark:text-gray-400 mt-2" x-text="viewingUser.bio"></p>
                                 <div class="text-xs text-gray-400 mt-2 space-x-4">
-                                    <span>Joined: <span class="font-semibold" x-text="new Date(viewingUser.created_at).toLocaleDateString()"></span></span>
+                                   <span>Joined: <span class="font-semibold" x-text="new Date(viewingUser.createdAt).toLocaleDateString()"></span></span>
+                                    <template x-if="viewingUser.is_verified">
+                                        <span class="verified-badge-anim inline-flex items-center justify-center w-4 h-4 rounded-full bg-gradient-to-tr from-yellow-400 via-orange-500 to-yellow-500 shadow-sm ml-0.5 cursor-pointer" title="Verified Account">
+                                            <i class="fa-solid fa-crown text-[8px] text-white"></i>
+                                        </span>
+                                    </template>
                                     <span>Last Seen: <span class="font-semibold" x-text="new Date(viewingUser.last_seen).toLocaleString()"></span></span>
                                 </div>
                             </div>
@@ -725,7 +960,7 @@
             <h3 class="text-lg font-black text-center mb-2">Edit Admin Profile</h3>
             <div class="flex flex-col items-center">
                 <div class="relative group cursor-pointer">
-                    <img :src="editAdmin.avatar" class="w-24 h-24 rounded-full object-cover border-4 border-gray-100 dark:border-gray-700">
+                    <img :src="editAdmin.avatar" class="w-24 h-24 parallelogram object-cover border-4 border-gray-100 dark:border-gray-700">
                     <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                         <i class="fa-solid fa-camera text-2xl"></i>
                     </div>
@@ -760,7 +995,54 @@
                 viewingUser: null,
                 selectedUser: null,
                 activeTab: 'dashboard',
-                stats: { maiga_users: 0, ysu_users: 0 },
+                reportSearchQuery: '',
+                isExportingReports: false,
+                get filteredReports() {
+                    if (!this.reportSearchQuery.trim()) return this.reports;
+                    const q = this.reportSearchQuery.toLowerCase();
+                    return this.reports.filter(r => 
+                        (r.reason && r.reason.toLowerCase().includes(q)) ||
+                        (r.details && r.details.toLowerCase().includes(q)) ||
+                        (r.reporter?.name && r.reporter.name.toLowerCase().includes(q)) ||
+                        (r.reported_user?.name && r.reported_user.name.toLowerCase().includes(q))
+                    );
+                },
+                exportReportsToPDF() {
+                    if (this.isExportingReports || this.reports.length === 0) return;
+                    this.isExportingReports = true;
+                    try {
+                        const { jsPDF } = window.jspdf;
+                        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for more space
+                        
+                        const tableColumn = ["ID", "Reporter", "Reported User", "Reason", "Details", "Date"];
+                        const tableRows = this.filteredReports.map(r => [
+                            r.id,
+                            r.reporter?.name || 'N/A',
+                            r.reported_user?.name || 'N/A',
+                            r.reason || '',
+                            r.details || '',
+                            r.time || ''
+                        ]);
+
+                        doc.text("System Reports Summary", 14, 15);
+                        doc.autoTable({
+                            head: [tableColumn],
+                            body: tableRows,
+                            startY: 20,
+                            theme: 'striped',
+                            headStyles: { fillColor: [220, 38, 38] }, // Red header
+                            styles: { fontSize: 8, overflow: 'linebreak' },
+                            columnStyles: { 4: { cellWidth: 80 } } // Expand details
+                        });
+                        doc.save(`system_reports_${new Date().toLocaleDateString()}.pdf`);
+                    } catch (error) {
+                        console.error("PDF Export Error:", error);
+                        alert("Failed to generate PDF report.");
+                    } finally {
+                        this.isExportingReports = false;
+                    }
+                },
+                stats: { maiga_users: 0, ysu_users: 0, online_users: 0 },
                 userActivityChart: null,
                 accountTypeChart: null,
                 signupsByAccountTypeChart: null,
@@ -1076,6 +1358,7 @@
                         },
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
                             scales: {
                                 y: { beginAtZero: true, ticks: { stepSize: 2 } },
                                 x: { grid: { display: false } }
@@ -1102,6 +1385,7 @@
                         },
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
                             plugins: {
                                 legend: {
                                     position: 'top',
@@ -1128,6 +1412,7 @@
                         },
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
                             scales: {
                                 y: { beginAtZero: true, ticks: { stepSize: 1 } },
                                 x: { grid: { display: false } }
@@ -1155,6 +1440,7 @@
                         },
                         options: {
                             responsive: true,
+                            maintainAspectRatio: false,
                             scales: {
                                 y: { beginAtZero: true, ticks: { stepSize: 1 } },
                                 x: { grid: { display: false } }
@@ -1171,8 +1457,23 @@
                     this.reports = this.reports.filter(r => r.id !== id);
                     fetch('/api/admin/dismiss_report', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                         body: JSON.stringify({ report_id: id })
+                    });
+                },
+                deleteReport(id) {
+                    if (!confirm('Permanently delete this report record?')) return;
+                    this.reports = this.reports.filter(r => r.id !== id);
+                    fetch('/api/admin/delete_report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ report_id: id })
+                    }).then(res => res.json()).then(data => {
+                        if (data.success) {
+                            this.fetchDashboardData(); // Update counts
+                        } else {
+                            alert('Failed to delete report');
+                        }
                     });
                 },
                 blockAndResolveReport(report) {
@@ -1180,7 +1481,7 @@
                     this.reports = this.reports.filter(r => r.id !== report.id);
                     fetch('/api/admin/block_and_resolve_report', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
                         body: JSON.stringify({ 
                             report_id: report.id, 
                             user_id: report.reported_user.id || report.reported_user._id 
@@ -1289,6 +1590,14 @@
                         else document.documentElement.classList.remove('dark');
                         this.updateChartColors();
                     });
+
+                    // Auto-refresh Health Tab every 20 seconds
+                    setInterval(() => {
+                        if (this.activeTab === 'health') {
+                            this.fetchSystemHealth();
+                        }
+                    }, 20000);
+
                     this.editAdmin = { ...this.admin };
 
                     // Watchers for server-side filtering
@@ -1313,6 +1622,12 @@ this.loadInitialData();
                     this.socket.on('connect', () => {
                         // Join the admin-only notification room
                         this.socket.emit('join_room', 'admins');
+                    });
+
+                    // Real-time online count listener
+                    this.socket.on('user_status', (data) => {
+                        // Refresh dashboard stats to get updated online count
+                        this.fetchDashboardData();
                     });
 
                     this.socket.on('new_report', (data) => {
@@ -1345,6 +1660,74 @@ this.loadInitialData();
                         this.fetchError = true;
                     });
                 },
+                storageMetrics: { totalSize: 0, fileCount: 0 },
+                orphanedFiles: [],
+                recentMedia: [],
+                mediaSearchQuery: '',
+                get filteredRecentMedia() {
+                    if (!this.mediaSearchQuery.trim()) return this.recentMedia;
+                    const q = this.mediaSearchQuery.toLowerCase();
+                    return this.recentMedia.filter(m => 
+                        m.author && m.author.toLowerCase().includes(q)
+                    );
+                },
+                isScanningOrphans: false,
+                fetchStorageMetrics() {
+                    fetch('/api/admin/storage_metrics').then(r => r.json()).then(d => { if(d.success) this.storageMetrics = d; });
+                },
+                scanOrphans() {
+                    this.isScanningOrphans = true;
+                    fetch('/api/admin/scan_orphans').then(r => r.json()).then(d => {
+                        if(d.success) this.orphanedFiles = d.orphans;
+                        this.isScanningOrphans = false;
+                    });
+                },
+                cleanupOrphans(keys) {
+                    if(!confirm(`Permanently delete ${keys.length} unreferenced files from R2?`)) return;
+                    fetch('/api/admin/cleanup_orphans', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+                        body: JSON.stringify({ keys })
+                    }).then(r => r.json()).then(d => {
+                        if(d.success) {
+                            this.orphanedFiles = this.orphanedFiles.filter(f => !keys.includes(f.key));
+                            this.fetchStorageMetrics();
+                            alert('Cleanup completed.');
+                        }
+                    });
+                },
+                fetchRecentMedia() {
+                    fetch('/api/admin/recent_media').then(r => r.json()).then(d => { if(d.success) this.recentMedia = d.media; });
+                },
+                systemHealth: {},
+                errorLogs: [],
+                fetchSystemHealth() {
+                    return fetch('/api/admin/system_health')
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.systemHealth = data.health; });
+                },
+                fetchErrorLogs() {
+                    return fetch('/api/admin/error_logs')
+                        .then(res => res.json())
+                        .then(data => { if (data.success) this.errorLogs = data.logs; });
+                },
+                clearErrorLogs() {
+                    if (!confirm('Are you sure you want to permanently clear the backend error log file?')) return;
+                    fetch('/api/admin/clear_error_logs', { method: 'POST', headers: { 'X-CSRF-Token': CSRF_TOKEN } })
+                        .then(res => res.json())
+                        .then(data => { if (data.success) { this.errorLogs = []; alert('Log file cleared.'); } });
+                },
+                formatUptime(seconds) {
+                    if (!seconds) return '0s';
+                    const h = Math.floor(seconds / 3600);
+                    const m = Math.floor((seconds % 3600) / 60);
+                    const s = Math.floor(seconds % 60);
+                    return `${h}h ${m}m ${s}s`;
+                },
+                formatMemory(bytes) {
+                    if (!bytes) return '0 MB';
+                    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+                },
                 fetchDashboardData() {
                     return Promise.all([
                         fetch('/api/admin/get_dashboard_stats').then(r => r.json()).then(d => { this.stats = {...this.stats, ...d}; }),
@@ -1354,7 +1737,9 @@ this.loadInitialData();
                         fetch('/api/admin/get_weekly_signups_by_type').then(r => r.json()).then(d => this.initSignupsByAccountTypeChart(d)),
                         fetch('/api/admin/get_flagged_posts').then(r => r.json()).then(d => this.flaggedPosts = d),
                         fetch('/api/admin/get_reports').then(r => r.json()).then(d => this.reports = d),
-                        fetch('/api/admin/get_blocked_user_details').then(r => r.json()).then(d => this.recentBans = d.slice(0, 5))
+                        fetch('/api/admin/get_blocked_user_details').then(r => r.json()).then(d => this.recentBans = d.slice(0, 5)),
+                        this.fetchSystemHealth(),
+                        this.fetchErrorLogs()
                     ]);
                 },
                 fetchUsers() {

@@ -2,11 +2,12 @@ const express = require('express');
 const mongoose = require('mongoose');
 const router = express.Router();
 const formidable = require('formidable');
+const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const webpush = require('web-push');
 const { exec } = require('child_process');
-const { PutObjectCommand, DeleteObjectCommand, HeadObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, HeadObjectCommand, GetObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
 
@@ -34,7 +35,7 @@ const getVideoDuration = (filePath) => {
                 return resolve(null);
             }
 
-            exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, (err, stdout) => {
+            exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, (err, stdout, stderr) => {
                 if (err) return resolve(null);
             resolve(parseFloat(stdout));
         });
@@ -58,7 +59,7 @@ const uploadToR2 = async (file, folder) => {
             }
         }
 
-        const fileBuffer = fs.readFileSync(file.filepath);
+        const fileBuffer = fs.readFileSync(file.filepath); // Missing closing parenthesis
         await s3Client.send(new PutObjectCommand({
             Bucket: process.env.R2_BUCKET_NAME,
             Key: key,
@@ -2058,7 +2059,7 @@ router.get('/admin/get_users', isAuthenticated, async (req, res) => {
 
 router.get('/admin/get_settings', isAuthenticated, async (req, res) => {
     const settings = await Setting.find({});
-    const config = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true, allow_cross_portal_login: false };
+    const config = { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true, allow_cross_portal_login: false, auto_cleanup_enabled: false };
     settings.forEach(s => config[s.key] = s.value);
     res.json({ success: true, settings: config });
 });
@@ -2239,17 +2240,32 @@ router.get('/get_notifications', isAuthenticated, async (req, res) => {
     categoryCounts.forEach(item => { if (unreadByCategory[item._id] !== undefined) unreadByCategory[item._id] = item.count; });
 
     const formatted = notifications.map(n => {
-        let content = n.content;
-        if (n.type === 'like' && n.trigger_user) {
-            const name = n.trigger_user.first_name || n.trigger_user.name;
-            content = n.others_count > 0 
-                ? `${name} and ${n.others_count} others liked your post` 
-                : `${name} liked your post`;
+        let message = n.content; // Default for system/broadcast
+        
+        if (n.trigger_user) {
+            const name = n.trigger_user.first_name || n.trigger_user.name || 'Someone';
+            if (n.type === 'like') {
+                message = n.others_count > 0 ? `${name} and ${n.others_count} others liked your post` : `${name} liked your post`;
+            } else if (n.type === 'follow') {
+                message = `${name} started following you`;
+            } else if (n.type === 'comment') {
+                message = n.others_count > 0 ? `${name} and ${n.others_count} others commented on your post` : `${name} commented on your post`;
+            } else if (n.type === 'mention') {
+                message = `${name} mentioned you in a post`;
+            } else if (n.type === 'post') {
+                message = `${name} shared a new post`;
+            } else if (n.type === 'story') {
+                message = `${name} added to their story`;
+            }
         }
-        const obj = n.toObject();
-        obj.content = content; // Override content with grouped text
-        obj.trigger_user_id = n.trigger_user?._id || n.trigger_user;
-        return obj;
+
+        return {
+            ...n.toObject(),
+            id: n._id.toString(), // Ensure Alpine.js can track the ID
+            content: message || 'New activity on your account',
+            trigger_user_id: n.trigger_user?._id || n.trigger_user,
+            time: formatTime(n.created_at)
+        };
     });
 
     const unreadCount = await Notification.countDocuments({ user: req.session.userId, is_read: false });
@@ -2424,6 +2440,111 @@ router.post('/revoke_group_invite_link', isAuthenticated, async (req, res) => {
 });
 
 // Admin Routes
+router.get('/admin/storage_metrics', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const command = new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME });
+        const response = await s3Client.send(command);
+        
+        let totalSize = 0;
+        let fileCount = 0;
+        
+        if (response.Contents) {
+            fileCount = response.Contents.length;
+            totalSize = response.Contents.reduce((acc, obj) => acc + obj.Size, 0);
+        }
+
+        res.json({ success: true, totalSize, fileCount });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch storage metrics' });
+    }
+});
+
+router.get('/admin/scan_orphans', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        // 1. Get all objects from R2
+        const listCommand = new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME });
+        const r2Data = await s3Client.send(listCommand);
+        if (!r2Data.Contents) return res.json({ success: true, orphans: [] });
+
+        const r2Keys = r2Data.Contents.map(obj => obj.Key);
+
+        // 2. Get all media references from DB
+        const [users, posts, stories, messages, comments, groups] = await Promise.all([
+            User.find({}, 'avatar banner'),
+            Post.find({}, 'media'),
+            Story.find({}, 'media'),
+            Message.find({}, 'media'),
+            Comment.find({}, 'media'),
+            Group.find({}, 'avatar')
+        ]);
+
+        const dbUrls = new Set();
+        users.forEach(u => { if (u.avatar) dbUrls.add(u.avatar); if (u.banner) dbUrls.add(u.banner); });
+        groups.forEach(g => { if (g.avatar) dbUrls.add(g.avatar); });
+        posts.forEach(p => p.media.forEach(m => dbUrls.add(m)));
+        stories.forEach(s => s.media.forEach(m => dbUrls.add(m)));
+        messages.forEach(m => { if (m.media) dbUrls.add(m.media); });
+        comments.forEach(c => { if (c.media) dbUrls.add(c.media); });
+
+        // 3. Find keys in R2 not present in DB URLs
+        const orphans = r2Data.Contents.filter(obj => {
+            const key = obj.Key;
+            // Check if any DB URL ends with this key
+            return ![...dbUrls].some(url => url && url.includes(key));
+        }).map(obj => ({
+            key: obj.Key,
+            size: obj.Size,
+            lastModified: obj.LastModified
+        }));
+
+        res.json({ success: true, orphans });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to scan for orphaned files' });
+    }
+});
+
+router.post('/admin/cleanup_orphans', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { keys } = req.body;
+        if (!keys || !keys.length) return res.json({ success: true });
+
+        const command = new DeleteObjectsCommand({
+            Bucket: process.env.R2_BUCKET_NAME,
+            Delete: { Objects: keys.map(k => ({ Key: k })) }
+        });
+
+        await s3Client.send(command);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Cleanup failed' });
+    }
+});
+
+router.get('/admin/recent_media', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const [posts, stories] = await Promise.all([
+            Post.find({ media: { $exists: true, $not: { $size: 0 } } })
+                .sort({ createdAt: -1 }).limit(20).populate('user', 'name avatar'),
+            Story.find({ media: { $exists: true, $not: { $size: 0 } } })
+                .sort({ createdAt: -1 }).limit(10).populate('user', 'name avatar')
+        ]);
+
+        const media = [];
+        posts.forEach(p => p.media.forEach(m => media.push({ 
+            url: m, type: p.media_type, author: p.user?.name, 
+            date: p.createdAt, context: 'Post', id: p._id 
+        })));
+        stories.forEach(s => s.media.forEach(m => media.push({ 
+            url: m, type: s.type, author: s.user?.name, 
+            date: s.createdAt, context: 'Story', id: s._id 
+        })));
+
+        res.json({ success: true, media: media.sort((a,b) => b.date - a.date).slice(0, 30) });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch recent media' });
+    }
+});
+
 router.get('/admin/get_reports', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const reports = await Report.find({ status: 'open' })
@@ -2451,6 +2572,43 @@ router.post('/admin/dismiss_report', isAuthenticated, isAdmin, async (req, res) 
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to dismiss report' });
+    }
+});
+
+router.get('/admin/system_health', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const health = {
+            server: {
+                status: 'Online',
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                platform: process.platform,
+                nodeVersion: process.version
+            },
+            database: {
+                status: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+                name: mongoose.connection.name,
+                host: mongoose.connection.host
+            },
+            environment: process.env.NODE_ENV || 'development'
+        };
+        res.json({ success: true, health });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch system health' });
+    }
+});
+
+router.get('/admin/error_logs', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const logPath = path.join(__dirname, '../../server_errors.log');
+        if (!fs.existsSync(logPath)) {
+            return res.json({ success: true, logs: [] });
+        }
+        const data = fs.readFileSync(logPath, 'utf8');
+        const logEntries = data.split('-'.repeat(50)).filter(entry => entry.trim() !== '').reverse();
+        res.json({ success: true, logs: logEntries.slice(0, 20) });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch error logs' });
     }
 });
 
@@ -2618,18 +2776,34 @@ router.get('/admin/group_activity_report', isAuthenticated, isAdmin, async (req,
 router.get('/admin/get_admin_notifications', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const notifications = await Notification.find({ user: req.session.userId })
+            .populate('trigger_user', 'name first_name surname')
             .sort({ created_at: -1 })
             .limit(20);
         
         res.json({ 
             success: true, 
-            notifications: notifications.map(n => ({
-                id: n._id,
-                message: n.content,
-                time: formatTime(n.created_at),
-                unread: !n.is_read,
-                icon: n.type === 'system' ? 'fa-triangle-exclamation' : 'fa-bell'
-            }))
+            notifications: notifications.map(n => {
+                let message = n.content; // Default for system type
+                
+                if (n.trigger_user) {
+                    const name = n.trigger_user.first_name || n.trigger_user.name;
+                    if (n.type === 'like') {
+                        message = n.others_count > 0 ? `${name} and ${n.others_count} others liked your post` : `${name} liked your post`;
+                    } else if (n.type === 'follow') {
+                        message = `${name} started following you`;
+                    } else if (n.type === 'comment') {
+                        message = n.others_count > 0 ? `${name} and ${n.others_count} others commented on your post` : `${name} commented on your post`;
+                    }
+                }
+
+                return {
+                    id: n._id,
+                    message: message || 'New system activity',
+                    time: formatTime(n.created_at),
+                    unread: !n.is_read,
+                    icon: n.type === 'system' ? 'fa-triangle-exclamation' : 'fa-bell'
+                };
+            })
         });
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch notifications' });
@@ -3056,11 +3230,57 @@ router.post('/toggle_pin_chat', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/admin/migrate_avatars', isAuthenticated, async (req, res) => {
+router.get('/admin/system_health', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const adminUser = await User.findById(req.session.userId);
-        if (!adminUser || !adminUser.is_admin) return res.status(403).json({ error: 'Access denied' });
+        const health = {
+            server: {
+                status: 'Online',
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                cpu: os.loadavg(), // 1, 5, and 15 minute load averages
+                platform: process.platform,
+                nodeVersion: process.version
+            },
+            database: {
+                status: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+                name: mongoose.connection.name,
+                host: mongoose.connection.host
+            },
+            environment: process.env.NODE_ENV || 'development'
+        };
+        res.json({ success: true, health });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch system health' });
+    }
+});
 
+router.get('/admin/error_logs', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const logPath = path.join(__dirname, '../../server_errors.log');
+        if (!fs.existsSync(logPath)) return res.json({ success: true, logs: [] });
+        const data = fs.readFileSync(logPath, 'utf8');
+        const logEntries = data.split('-'.repeat(50)).filter(entry => entry.trim() !== '').reverse();
+        res.json({ success: true, logs: logEntries.slice(0, 20) });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch error logs' });
+    }
+});
+
+router.post('/admin/clear_error_logs', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const logPath = path.join(__dirname, '../../server_errors.log');
+        if (fs.existsSync(logPath)) {
+            fs.writeFileSync(logPath, ''); // Truncate the file
+        }
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to clear error logs' });
+    }
+});
+
+
+router.post('/admin/migrate_avatars', isAuthenticated, isAdmin, async (req, res) => {
+    try {
         // Identify the old default strings you want to replace
         const oldDefaults = [
             'img/default-avatar.png',

@@ -3183,7 +3183,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_trending').then(d => { this.trendingTopics = Array.isArray(d) ? d : []; incrementProgress(); });
                 this.apiFetch('/api/get_animated_stickers').then(d => { if(Array.isArray(d)) this.animatedStickers = d; incrementProgress(); });
                 this.apiFetch('/api/get_stories').then(d => { this.processStories(Array.isArray(d) ? d : []); incrementProgress(); });
-                this.apiFetch('/api/get_notifications').then(d => { this.notifications = Array.isArray(d) ? d : []; incrementProgress(); });
+                this.apiFetch('/api/get_notifications').then(d => { this.notifications = d?.notifications || []; incrementProgress(); });
                 this.apiFetch(`/api/friends/suggestions?page=${this.friendsPage}&limit=${this.friendsLimit}`).then(data => { 
                     if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem('maiga_friends_cache', JSON.stringify(data.users)); } incrementProgress();
                 });

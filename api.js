@@ -8,14 +8,14 @@ const path = require('path');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const passport = require('passport');
-const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 
 // Updated paths because routes were moved into the public folder
 const authRoutes = require('./public/routes/auth');
 const mainRoutes = require('./public/routes/main');
 const { isAuthenticated } = require('./middleware');
 // Models are now in the same directory
-const { User, Message, Post, Group, Story, Call, Setting, s3Client, setIo } = require('./models'); 
+const { User, Message, Post, Group, Story, Call, Setting, Comment, s3Client, setIo } = require('./models'); 
 
 const app = express();
 const server = http.createServer(app);
@@ -34,7 +34,7 @@ mongoose.set('strictQuery', false);
 
 // --- Configuration ---
 const PORT = parseInt(process.env.PORT, 10) || 3000;
-const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL; 
+const MONGO_URI = process.env.MONGO_URL || process.env.MONGODB_URL;
 const SESSION_SECRET = process.env.SESSION_SECRET; 
 
 // Robust URL handling: ensure no trailing slash on the public URL
@@ -220,6 +220,59 @@ const cleanupExpiredPosts = async () => {
     }
 };
 
+const runWeeklyOrphanCleanup = async () => {
+    try {
+        const enabledSetting = await Setting.findOne({ key: 'auto_cleanup_enabled' });
+        if (!enabledSetting || !enabledSetting.value) return;
+
+        console.info('[Auto-Cleanup] Starting weekly orphaned file scan...');
+
+        // 1. Get all objects from R2
+        const listCommand = new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME });
+        const r2Data = await s3Client.send(listCommand);
+        if (!r2Data.Contents || r2Data.Contents.length === 0) return;
+
+        // 2. Aggregate all media references from database
+        const [users, posts, stories, messages, comments, groups] = await Promise.all([
+            User.find({}, 'avatar banner'),
+            Post.find({}, 'media'),
+            Story.find({}, 'media'),
+            Message.find({}, 'media'),
+            Comment.find({}, 'media'),
+            Group.find({}, 'avatar')
+        ]);
+
+        const dbUrls = new Set();
+        users.forEach(u => { if (u.avatar) dbUrls.add(u.avatar); if (u.banner) dbUrls.add(u.banner); });
+        groups.forEach(g => { if (g.avatar) dbUrls.add(g.avatar); });
+        posts.forEach(p => p.media.forEach(m => dbUrls.add(m)));
+        stories.forEach(s => s.media.forEach(m => dbUrls.add(m)));
+        messages.forEach(m => { if (m.media) dbUrls.add(m.media); });
+        comments.forEach(c => { if (c.media) dbUrls.add(c.media); });
+
+        // 3. Filter for orphans
+        const orphans = r2Data.Contents.filter(obj => {
+            return ![...dbUrls].some(url => url && url.includes(obj.Key));
+        }).map(obj => ({ Key: obj.Key }));
+
+        if (orphans.length > 0) {
+            // R2 DeleteObjects supports max 1000 keys per request
+            for (let i = 0; i < orphans.length; i += 1000) {
+                const chunk = orphans.slice(i, i + 1000);
+                await s3Client.send(new DeleteObjectsCommand({
+                    Bucket: process.env.R2_BUCKET_NAME,
+                    Delete: { Objects: chunk }
+                }));
+            }
+            console.info(`[Auto-Cleanup] Successfully deleted ${orphans.length} orphaned files.`);
+        } else {
+            console.info('[Auto-Cleanup] No orphaned files found.');
+        }
+    } catch (err) {
+        console.error('[Auto-Cleanup] Error during scheduled cleanup:', err);
+    }
+};
+
 // MongoDB Connection
 mongoConnection.then(() => {
     // --- Mongoose 8 Change Stream: Read Receipts ---
@@ -251,6 +304,8 @@ mongoConnection.then(() => {
 
     runAllCleanups();
     setInterval(runAllCleanups, 60 * 60 * 1000);
+    // Run orphan cleanup every 7 days
+    setInterval(runWeeklyOrphanCleanup, 7 * 24 * 60 * 60 * 1000);
 }).catch(err => { });
 
 // --- Routes ---
