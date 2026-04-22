@@ -71,10 +71,19 @@ app.use(express.urlencoded({ extended: true }));
 // --- Content Security Policy Middleware ---
 app.use((req, res, next) => {
     const r2Domain = R2_PUBLIC_URL ? new URL(R2_PUBLIC_URL).hostname : '';
+     
+    // Identify admin requests to provide a slightly more flexible policy
+    const isAdminRequest = req.path.startsWith('/admin') || req.path.includes('monitor.html');
+    
+    // If not admin, restrict to specific file paths instead of entire domains
+    const cdnSources = isAdminRequest 
+        ? "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com" 
+        : "https://cdn.jsdelivr.net/npm/chart.js https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js";
+
     res.setHeader(
         "Content-Security-Policy",
         "default-src 'self'; " +
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com; " +
+       `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com ${cdnSources}; ` +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
         `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co; ` +
         `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
@@ -416,7 +425,7 @@ io.on('connection', (socket) => {
         try {
             const caller = await User.findById(data.from);
             const receiver = await User.findById(data.userToCall);
-            if (caller && receiver && !caller.blocked_users.includes(receiver._id) && !receiver.blocked_users.includes(caller._id)) {
+            if (caller && receiver && (caller.is_admin || (!caller.blocked_users.includes(receiver._id) && !receiver.blocked_users.includes(caller._id)))) {
                 // Create call record in DB
                 const call = await Call.create({
                     caller: data.from,
@@ -525,11 +534,18 @@ app.get('/admin', isAuthenticated, isAdmin, (req, res) => {
 
 // NEW: Middleware to restrict direct access to sensitive files
 // This is placed BEFORE express.static to intercept the requests
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
     const protectedFiles = ['/maiga.js', '/offline.html'];
+    const adminFiles = ['/monitor.html'];
     
     if (protectedFiles.includes(req.path) && !req.session.userId) {
         return res.redirect('/');
+    }
+
+    if (adminFiles.includes(req.path)) {
+        if (!req.session.userId) return res.redirect('/');
+        const user = await User.findById(req.session.userId);
+        if (!user || !user.is_admin) return res.redirect('/home');
     }
     next();
 });

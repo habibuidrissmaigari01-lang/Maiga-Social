@@ -324,16 +324,16 @@
         .skeleton { background: #e1e4e8; background-image: linear-gradient(to right, #e1e4e8 0%, #edf2f7 20%, #e1e4e8 40%, #e1e4e8 100%); background-repeat: no-repeat; background-size: 800px 100%; animation: shimmer 1.5s infinite linear forwards; }
         .dark .skeleton { background: #2d3748; background-image: linear-gradient(to right, #2d3748 0%, #4a5568 20%, #2d3748 40%, #2d3748 100%); }
         @keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
-        .parallelogram {
-            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
-            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="15,0 100,0 85,100 0,100" /></svg>');
+        .parallelogram { /* Sharper edges */
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="5,0 100,0 95,100 0,100" /></svg>');
+            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="5,0 100,0 95,100 0,100" /></svg>');
             -webkit-mask-size: 100% 100%;
             mask-size: 100% 100%;
             border-radius: 1.5rem; /* More rounded */
         }
-        .parallelogram-sm {
-            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="25,0 100,0 75,100 0,100" /></svg>');
-            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="25,0 100,0 75,100 0,100" /></svg>');
+        .parallelogram-sm { /* Sharper edges */
+            -webkit-mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="10,0 100,0 90,100 0,100" /></svg>');
+            mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="10,0 100,0 90,100 0,100" /></svg>');
             -webkit-mask-size: 100% 100%;
             mask-size: 100% 100%;
             border-radius: 1.25rem; /* More rounded */
@@ -727,7 +727,7 @@
                     <template x-for="contact in onlineContacts" :key="contact.id">
                         <button @click="activeChat = contact; chat.unread = false; activeMessageTab = 'all'" class="flex flex-col items-center gap-1.5 shrink-0 hover:opacity-75 transition-opacity">
                             <div class="relative">
-                                <img :src="contact.avatar" class="w-12 h-12 rounded-full border-2 dark:border-gray-700">
+                                <img :src="contact.avatar" class="w-12 h-12 parallelogram-sm border-2 dark:border-gray-700">
                                 <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                             </div>
                             <span class="text-[10px] font-bold truncate max-w-[48px]" x-text="contact.name"></span>
@@ -755,7 +755,7 @@
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === chat.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
                             <div class="relative">
-                                <img :src="chat.avatar || (chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-14 h-14 rounded-full border dark:border-gray-700">
+                                <img :src="chat.avatar || (chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(chat.type === 'group' ? '/img/default-group.png' : (chat.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-14 h-14 parallelogram-sm border dark:border-gray-700">
                                 <template x-if="chat.status === 'online'">
                                     <span class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-gray-900 rounded-full"></span>
                                 </template>
@@ -826,7 +826,7 @@
                                  @touchend="handleChatSwipeEnd()"
                                  class="flex items-center p-4 space-x-4 bg-white dark:bg-gray-900 active:bg-gray-100 dark:active:bg-gray-800 transition-transform duration-200 cursor-pointer relative z-10"
                                  :style="swipingChatId === group.id ? `transform: translateX(${chatSwipeOffset}px)` : ''">
-                             <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 rounded-full border dark:border-gray-700 object-cover">
+                             <img :src="group.avatar || '/img/default-group.png'" @error="$el.src='/img/default-group.png'" class="w-14 h-14 parallelogram-sm border dark:border-gray-700 object-cover">
                             <div class="flex-1 border-b dark:border-gray-800 pb-4">
                                 <div class="flex justify-between items-center">
                                     <span class="font-bold truncate max-w-[150px]" x-text="group.name || 'Unnamed Group'"></span>
@@ -1066,7 +1066,7 @@
         <div x-show="activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn" x-transition>
             <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md overflow-visible relative z-50">
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
-                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 rounded-full cursor-pointer">
+                <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 parallelogram-sm cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
                     <div class="flex items-center space-x-1.5">
                         <p class="font-bold text-sm truncate" :class="activeChat?.verified ? 'text-verified-gold' : ''" x-text="activeChat?.name"></p>
@@ -1180,9 +1180,9 @@
                  <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
-                        <div class="w-8 h-8 rounded-full flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
+                        <div class="w-8 h-8 parallelogram-sm flex-shrink-0 mt-1" :class="{'invisible': !(activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index))}">
                             <template x-if="activeChat && activeChat.type === 'group' && msg.sender !== 'me' && shouldShow(msg, index)">
-                                <img :src="msg.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + msg.author" class="w-full h-full object-cover rounded-full">
+                                <img :src="msg.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + msg.author" class="w-full h-full object-cover parallelogram-sm">
                             </template>
                            </div>
                         <!-- Message Bubble and Meta -->
@@ -1751,7 +1751,7 @@
                 <template x-for="reaction in messageReactions" :key="reaction._id">
                     <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl cursor-pointer" @click="openUserProfile(reaction.user.id); showReactionsModal = false">
                         <div class="flex items-center space-x-3">
-                            <img :src="reaction.user.avatar" class="w-10 h-10 rounded-full object-cover border dark:border-gray-700">
+                            <img :src="reaction.user.avatar" class="w-10 h-10 parallelogram-sm object-cover border dark:border-gray-700">
                             <div>
                                 <p class="font-bold text-sm" x-text="reaction.user.name"></p>
                                 <p class="text-xs text-gray-500" x-text="'@' + reaction.user.username"></p>
@@ -1773,7 +1773,7 @@
             <div class="flex-1 overflow-y-auto p-2">
                 <template x-for="friend in friends" :key="friend.id">
                     <div @click="forwardTo(friend)" class="flex items-center space-x-3 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl cursor-pointer">
-                        <img :src="friend.avatar" class="w-10 h-10 rounded-full object-cover">
+                        <img :src="friend.avatar" class="w-10 h-10 parallelogram-sm object-cover">
                         <span class="font-bold text-sm" x-text="friend.name"></span>
                     </div>
                 </template>
@@ -1836,7 +1836,7 @@
         </div>
         <div class="flex-1 p-4 pb-20"> 
             <div class="flex items-center space-x-3 mb-4">
-                <img :src="viewingPost?.avatar" class="w-10 h-10 rounded-full border border-gray-700">
+                <img :src="viewingPost?.avatar" class="w-10 h-10 parallelogram-sm border border-gray-700">
                 <div>
                     <div class="flex items-center">
                         <span class="font-bold text-sm text-white" x-text="viewingPost?.author"></span>
@@ -1915,7 +1915,7 @@
         </div>
         <div class="absolute top-6 left-0 right-0 p-4 z-20 flex justify-between items-center">
             <div class="flex items-center space-x-3 cursor-pointer" @click.stop="const uid = viewingStory.user.id || viewingStory.user._id; openUserProfile(uid); closeStory()">
-                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 rounded-full border border-white/50 object-cover">
+                <img :src="viewingStory?.user?.avatar" class="w-10 h-10 parallelogram-sm border border-white/50 object-cover">
                 <span class="text-white font-bold text-sm shadow-black drop-shadow-md hover:underline pointer-events-none" x-text="String(viewingStory?.user?.id || viewingStory?.user?._id) === String(user.id || user._id) ? 'Your Story' : viewingStory?.user?.name"></span>
                 <span x-show="viewingStory?.list[viewingStory.index].audience === 'close_friends'" class="bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm border border-white/20">Close Friends</span>
             </div>
@@ -1991,7 +1991,7 @@
                 <template x-for="viewer in viewingStory?.list[viewingStory.index].seenBy" :key="viewer.id">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center space-x-3">
-                            <img :src="viewer.avatar" class="w-10 h-10 rounded-full">
+                            <img :src="viewer.avatar" class="w-10 h-10 parallelogram-sm">
                             <span class="font-bold text-sm" x-text="viewer.name"></span>
                         </div>
                         <i x-show="viewer.liked" class="fa-solid fa-heart text-red-500 text-lg"></i>
@@ -2053,7 +2053,7 @@
             </div>
             <div class="p-6 bg-black flex justify-between items-center space-x-4">
                 <button @click="postStory('public')" class="flex-1 bg-white text-black py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2">
-                    <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-6 h-6 rounded-full object-cover">
+                    <img :src="user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-6 h-6 parallelogram-sm object-cover">
                     <span>Your Story</span>
                 </button>
                 <button @click="if(closeFriends.length === 0) { showCloseFriendsManager = true; } else { postStory('close_friends'); }" class="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 relative">
@@ -2095,7 +2095,7 @@
             <div class="flex-1 overflow-y-auto p-4 space-y-2">
                 <template x-for="friend in friends" :key="friend.id">
                     <div @click="toggleCloseFriend(friend.id)" class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-xl border dark:border-gray-700 cursor-pointer">
-                        <div class="flex items-center space-x-3"><img :src="friend.avatar" class="w-10 h-10 rounded-full"><span class="font-bold text-sm" x-text="friend.name"></span></div>
+                        <div class="flex items-center space-x-3"><img :src="friend.avatar" class="w-10 h-10 parallelogram-sm"><span class="font-bold text-sm" x-text="friend.name"></span></div>
                         <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors" :class="closeFriends.includes(friend.id) ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600'"><i x-show="closeFriends.includes(friend.id)" class="fa-solid fa-check text-white text-xs"></i></div>
                     </div>
                 </template>
@@ -2119,7 +2119,7 @@
                 <template x-for="comment in (viewingComments?.list || [])" :key="comment.id">
                     <div>
                         <div class="flex space-x-3">
-                            <img @click.stop="openUserProfile(comment.user_id)" :src="comment.avatar" class="w-8 h-8 rounded-full object-cover cursor-pointer">
+                            <img @click.stop="openUserProfile(comment.user_id)" :src="comment.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
                             <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                 <div class="flex justify-between items-center gap-2">
                                     <p @click.stop="openUserProfile(comment.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="comment.author"></p>
@@ -2147,7 +2147,7 @@
                         <div x-show="comment.replies && comment.replies.length > 0" class="pl-11 mt-3 space-y-3">
                             <template x-for="reply in comment.replies" :key="reply.id">
                                 <div class="flex space-x-3">
-                                    <img @click.stop="openUserProfile(reply.user_id)" :src="reply.avatar" class="w-8 h-8 rounded-full object-cover cursor-pointer">
+                                    <img @click.stop="openUserProfile(reply.user_id)" :src="reply.avatar" class="w-8 h-8 parallelogram-sm object-cover cursor-pointer">
                                     <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded-2xl rounded-tl-none flex-1">
                                         <div class="flex justify-between items-center gap-2">
                                             <p @click.stop="openUserProfile(reply.user_id)" class="text-xs font-bold cursor-pointer hover:underline" x-text="reply.author"></p>
@@ -2196,7 +2196,7 @@
                 <button @click="replyingToComment = null" class="p-1 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="p-4 border-t dark:border-gray-800 flex items-center space-x-2" :class="replyingToComment ? 'bg-gray-50 dark:bg-gray-800/50' : ''">
-                <img :src="user.avatar" class="w-8 h-8 rounded-full object-cover">
+                <img :src="user.avatar" class="w-8 h-8 parallelogram-sm object-cover">
                 <div class="flex-1 relative min-w-0">
                     <input type="text" x-model="commentInput" @keyup.enter="addComment()" placeholder="Add a comment..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-full py-2 px-4 text-sm focus:ring-1 focus:ring-blue-500" :class="{'opacity-0': isRecordingComment}">
                     <button @click="showCommentStickers = !showCommentStickers" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-yellow-500 transition-colors">
@@ -2235,7 +2235,7 @@
                 </template>
                 <template x-for="liker in likersList" :key="liker.id">
                     <div class="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg cursor-pointer" @click="openUserProfile(liker)">
-                        <img :src="liker.avatar" class="w-10 h-10 rounded-full object-cover">
+                        <img :src="liker.avatar" class="w-10 h-10 parallelogram-sm object-cover">
                         <div class="flex-1">
                             <h4 class="font-semibold text-sm" x-text="liker.name"></h4>
                             <p class="text-xs text-gray-500" x-text="'@' + liker.username"></p>
@@ -2261,7 +2261,7 @@
                 <template x-for="person in filteredConnectionList" :key="person.id">
                     <div class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl">
                         <div @click.stop="openUserProfile(person.id)" class="flex items-center space-x-3 cursor-pointer">
-                            <img :src="person.avatar" class="w-10 h-10 rounded-full object-cover"> 
+                            <img :src="person.avatar" class="w-10 h-10 parallelogram-sm object-cover"> 
                             <div>
                                 <p class="font-bold text-sm hover:underline" x-text="person.name"></p>
                                 <p class="text-xs text-gray-500" x-text="person.dept"></p>
@@ -2610,7 +2610,7 @@
     <div x-show="incomingCall" x-cloak class="fixed inset-0 z-[1000] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn">
         <div class="flex flex-col items-center mb-16">
             <div class="relative">
-                <img :src="incomingCall?.avatar" class="w-32 h-32 rounded-full border-4 border-white/10 shadow-2xl mb-6 object-cover">
+                <img :src="incomingCall?.avatar" class="w-32 h-32 parallelogram border-4 border-white/10 shadow-2xl mb-6 object-cover">
                 <div class="absolute inset-0 rounded-full border-4 border-blue-500 animate-ping opacity-20"></div>
                 <div class="absolute inset-0 rounded-full border-4 border-blue-500 animate-pulse opacity-40"></div>
             </div>
@@ -2682,7 +2682,7 @@
     
         <!-- Header info -->
         <div class="relative z-10 flex flex-col items-center mt-4 lg:mt-10 transition-all duration-500" :class="(callType === 'video' && callStatus === 'Connected') ? 'opacity-0 hover:opacity-100' : ''">
-            <img :src="activeChat?.avatar" class="w-32 h-32 rounded-full border-4 border-white/10 shadow-2xl mb-6 animate-pulse object-cover">
+            <img :src="activeChat?.avatar" class="w-32 h-32 parallelogram border-4 border-white/10 shadow-2xl mb-6 animate-pulse object-cover">
             <h2 class="text-white text-3xl font-black tracking-tight drop-shadow-lg" x-text="activeChat?.name"></h2>
             <p class="text-gray-300 font-medium mt-2 text-lg drop-shadow-md" x-text="callStatus === 'Connected' ? 'Connected • ' + formatRecordingTime(callDuration) : callStatus"></p>
         </div>
@@ -2778,7 +2778,7 @@
          style="top: 80px; right: 16px;"
          :style="{ transform: `translate(${minimizedCallTransform.x}px, ${minimizedCallTransform.y}px)` }"
          class="fixed z-[998] w-64 h-20 bg-white/20 dark:bg-gray-800/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/10 cursor-grab active:cursor-grabbing flex items-center p-3 space-x-3 animate-fadeIn">
-        <img @click.stop="isCallMinimized = false" :src="activeChat?.avatar" class="w-12 h-12 rounded-full object-cover cursor-pointer">
+        <img @click.stop="isCallMinimized = false" :src="activeChat?.avatar" class="w-12 h-12 parallelogram-sm object-cover cursor-pointer">
         <div @click.stop="isCallMinimized = false" class="flex-1 min-w-0 cursor-pointer">
             <p class="font-bold text-sm text-white truncate" x-text="activeChat?.name"></p>
             <p class="text-xs text-gray-200 font-medium" x-text="callStatus === 'Connected' ? formatRecordingTime(callDuration) : callStatus"></p>
@@ -4777,7 +4777,7 @@
                     <div class="flex-1 overflow-y-auto">
                         <div class="p-6 flex flex-col items-center">
                             <div class="relative">
-                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 rounded-full border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
+                                <img @click="viewingPost = { avatar: viewingUser.avatar, media: viewingUser.avatar, author: viewingUser.name, content: 'Profile Picture', time: 'Now', mediaType: 'image' }" :src="viewingUser?.avatar || (viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" @error="$el.src=(viewingUser?.gender === 'female' ? '/img/female.png' : '/img/male.png')" class="w-28 h-28 parallelogram border-4 border-gray-100 dark:border-gray-800 object-cover cursor-pointer">
                                 <template x-if="viewingUser?.online">
                                     <div class="absolute bottom-1 right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-900 rounded-full"></div>
                                 </template>

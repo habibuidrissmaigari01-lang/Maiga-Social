@@ -4463,6 +4463,10 @@ const initMaiga = () => {
         },
         blockActiveChatUser() {
             if (!this.activeChat || this.activeChat.type === 'group') return;
+            if (this.activeChat.is_admin) {
+                this.showToast('Restriction', 'You cannot block an official administrator.', 'error');
+                return;
+            }
             // Ensure viewingUser is set so toggleBlock knows who to block
             this.viewingUser = { id: this.activeChat.id };
             this.toggleBlock();
@@ -5972,9 +5976,14 @@ const initMaiga = () => {
         },
         toggleBlockUser() {
             if (!this.activeChat) return;
-            if (this.isBlocked(this.activeChat.id)) {
+            const isCurrentlyBlocked = this.isBlocked(this.activeChat.id);
+            if (isCurrentlyBlocked) {
                 this.unblockUser(this.activeChat.id);
             } else {
+                if (this.activeChat.is_admin) {
+                    this.showToast('Restriction', 'You cannot block an official administrator.', 'error');
+                    return;
+                }
                 this.blockUser(this.activeChat.id);
             }
         },
@@ -6065,12 +6074,18 @@ const initMaiga = () => {
             });
         },
         isBlocked(userId) {
-            return this.blockedUsers.includes(userId);
+            if (this.user.is_admin) return false; // Admins bypass block logic for moderation
+            return this.blockedUsers.includes(userId?.toString());
         },
         toggleBlock() {
             if (!this.viewingUser) return;
             const userId = this.viewingUser.id;
-            const action = this.isBlocked(userId) ? 'unblock_user' : 'block_user';
+            const isCurrentlyBlocked = this.isBlocked(userId);
+            if (this.viewingUser.is_admin && !isCurrentlyBlocked) {
+                this.showToast('Restriction', 'You cannot block an official administrator.', 'error');
+                return;
+            }
+            const action = isCurrentlyBlocked ? 'unblock_user' : 'block_user';
             
             this.apiFetch(`/api/${action}`, {
                     method: 'POST',
@@ -8270,6 +8285,11 @@ const initMaiga = () => {
             this.openReportModal('reel', reel);
         },
         openReportModal(type, target) {
+             if (target.is_admin || target.role === 'admin') {
+                this.showToast('Access Denied', 'Official administrators cannot be reported.', 'error');
+                return;
+            }
+
             this.reportForm = {
                 title: '', description: '', screenshot: null, preview: null,
                 targetType: type,

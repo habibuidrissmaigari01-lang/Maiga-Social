@@ -1895,6 +1895,11 @@ router.post('/report_message', isAuthenticated, async (req, res) => {
         const message = await Message.findById(message_id).populate('sender');
         if (!message) return res.status(404).json({ error: 'Message not found' });
 
+        // Security: Prevent reporting admins
+        if (message.sender && message.sender.is_admin) {
+            return res.status(403).json({ error: 'You cannot report an administrator.' });
+        }
+
         const report = new Report({
             reporter: req.session.userId,
             reported_user: message.sender?._id,
@@ -1930,6 +1935,12 @@ router.post('/report_user', isAuthenticated, async (req, res) => {
         let screenshotUrl = null;
        const screenshotFile = files.screenshot?.[0] || files.screenshot;
         if (screenshotFile) screenshotUrl = await uploadToR2(screenshotFile, 'reports');
+
+        // Security: Prevent reporting admins
+        const targetUser = await User.findById(user_id);
+        if (targetUser && targetUser.is_admin) {
+            return res.status(403).json({ error: 'You cannot report an administrator.' });
+        }
 
         const report = new Report({
             reporter: req.session.userId,
@@ -2174,6 +2185,11 @@ router.post('/toggle_archive_chat', isAuthenticated, async (req, res) => {
 router.post('/block_user', isAuthenticated, async (req, res) => {
     try {
         const { user_id } = req.body;
+        const targetUser = await User.findById(user_id);
+        if (targetUser && targetUser.is_admin) {
+            return res.status(403).json({ error: 'You cannot block an administrator.' });
+        }
+
         await User.findByIdAndUpdate(req.session.userId, { 
             $addToSet: { blocked_users: user_id } 
         });
