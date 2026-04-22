@@ -1314,7 +1314,7 @@
                 },
                 initSignupsByAccountTypeChart(data) {
                     const ctx = document.getElementById('signupsByAccountTypeChart').getContext('2d');
-                    this.signupsByAccountTypeChart = new Chart(ctx, {
+                    this.signupsByAccountTypeChart = Alpine.raw(new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: data.labels,
@@ -1343,11 +1343,11 @@
                             },
                             plugins: { legend: { position: 'top', labels: { color: this.darkMode ? '#e4e6eb' : '#6b7280' } } }
                         }
-                    });
+                    }));
                 },
                 initAccountTypeChart(data) {
                     const accountCtx = document.getElementById('accountTypeChart').getContext('2d');
-                    this.accountTypeChart = new Chart(accountCtx, {
+                    this.accountTypeChart = Alpine.raw(new Chart(accountCtx, {
                         type: 'pie',
                         data: {
                             labels: ['Maiga Users', 'YSU Users'],
@@ -1371,11 +1371,11 @@
                                 }
                             }
                         }
-                    });
+                    }));
                 },
                 initPostsPerDayChart(data) {
                     const ctx = document.getElementById('postsPerDayChart').getContext('2d');
-                    this.postsPerDayChart = new Chart(ctx, {
+                    this.postsPerDayChart = Alpine.raw(new Chart(ctx, {
                         type: 'bar',
                         data: {
                             labels: data.labels,
@@ -1399,11 +1399,11 @@
                                 legend: { display: false }
                             }
                         }
-                    });
+                    }));
                 },
                 initUserActivityChart(data) {
                     const ctx = document.getElementById('userActivityChart').getContext('2d');
-                    this.userActivityChart = new Chart(ctx, {
+                    this.userActivityChart = Alpine.raw(new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: data.labels,
@@ -1425,7 +1425,7 @@
                             },
                             plugins: { legend: { display: false } }
                         }
-                    });
+                    }));
                 },
                 approvePost(reportId) {
                     this.flaggedPosts = this.flaggedPosts.filter(p => p.report_id !== reportId);
