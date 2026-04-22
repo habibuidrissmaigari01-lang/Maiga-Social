@@ -574,16 +574,16 @@
         
         <div class="p-4 space-y-2 flex-1 flex flex-col overflow-y-auto no-scrollbar">
             <nav class="flex flex-col">
-            <button @click="activeTab = 'home'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'home' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
-                <i class="fa-solid fa-house-chimney text-xl w-8 text-center"></i>
+            <button @click="activeTab === 'home' ? handleHomeRefresh() : activeTab = 'home'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'home' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
+                <i class="fa-solid text-xl w-8 text-center" :class="isRefreshingHome ? 'fa-arrows-rotate fa-spin' : 'fa-house-chimney'"></i>
                 <span class="font-bold">Home</span>
             </button>
             <button @click="activeTab = 'friends'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="activeTab === 'friends' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'">
                 <i class="fa-solid fa-users text-xl w-8 text-center"></i>
                 <span class="font-bold">Friends</span>
             </button>
-            <button @click="activeTab = 'reels'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="[activeTab === 'reels' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300', isLeftSidebarCollapsed ? 'justify-center' : '']">
-                <i class="fa-solid fa-video text-xl w-8 text-center"></i>
+            <button @click="activeTab === 'reels' ? handleReelsRefresh() : activeTab = 'reels'" class="flex items-center space-x-4 w-full p-3 rounded-xl transition-colors" :class="[activeTab === 'reels' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300', isLeftSidebarCollapsed ? 'justify-center' : '']">
+                <i class="fa-solid text-xl w-8 text-center" :class="isLoadingMoreReels ? 'fa-arrows-rotate fa-spin' : 'fa-video'"></i>
                 <span x-show="!isLeftSidebarCollapsed" class="font-bold">Reels</span>
             </button>
             <hr class="border-gray-200 dark:border-gray-800 my-2">
@@ -5030,8 +5030,8 @@
              :style="getIndicatorStyle()"
              style="transition: all 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);"></div>
 
-        <button @click="activeTab = 'home'; $refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-white' : 'text-white/50'">
-            <i class="fa-solid fa-house-chimney text-xl"></i>
+        <button @click="activeTab === 'home' ? handleHomeRefresh() : (activeTab = 'home', $refs.mainContent.scrollTo({top: 0, behavior: 'smooth'}))" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'home' ? 'text-white' : 'text-white/50'">
+            <i class="fa-solid text-xl" :class="isRefreshingHome ? 'fa-arrows-rotate fa-spin' : 'fa-house-chimney'"></i>
             <span class="text-[10px] font-bold mt-1">Home</span>
         </button>
         <button @click="activeTab = 'friends'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'friends' ? 'text-white' : 'text-white/50'">
@@ -5043,8 +5043,8 @@
                 <i class="fa-solid fa-plus text-2xl"></i>
             </button>
         </div>
-        <button @click="activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-white' : 'text-white/50'">
-            <i class="fa-solid fa-video text-xl"></i>
+        <button @click="activeTab === 'reels' ? handleReelsRefresh() : activeTab = 'reels'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'reels' ? 'text-white' : 'text-white/50'">
+            <i class="fa-solid text-xl" :class="isLoadingMoreReels ? 'fa-arrows-rotate fa-spin' : 'fa-video'"></i>
             <span class="text-[10px] font-bold mt-1">Reels</span>
         </button>
         <button @click="activeTab = 'profile'" class="flex-1 flex flex-col items-center py-2 relative z-20" :class="activeTab === 'profile' ? 'text-white' : 'text-white/50'">

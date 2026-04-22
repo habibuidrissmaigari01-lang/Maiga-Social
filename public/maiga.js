@@ -227,6 +227,7 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: localStorage.getItem('maiga_right_sidebar_collapsed') === 'true',
         isLayoutSwapped: localStorage.getItem('maiga_layout_swapped') === 'true',
+        isRefreshingHome: false,
         customWallpaperFile: null,
         pendingPosts: [],
         pendingMessages: [],
@@ -535,6 +536,8 @@ const initMaiga = () => {
         settings: { site_name: 'Maiga Social', maintenance_mode: false, allow_registrations: true },
         adminSearchQuery: '',
         adminFilter: 'all',
+        isRefreshingMetrics: false,
+        storageMetrics: { totalSize: 0, fileCount: 0 },
 
         // Utility Methods
         formatLastSeen(date) {
@@ -591,6 +594,14 @@ const initMaiga = () => {
         formatNumber(num) {
             if (num === null || num === undefined || Number.isNaN(Number(num))) return '0';
             return Number(num).toLocaleString();
+        },
+        formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
         },
         getMockData(url) { return null; },
         getChatWallpaperStyle() {
@@ -1790,6 +1801,8 @@ const initMaiga = () => {
 
             const signupStats = await this.apiFetch('/api/admin/get_weekly_signups');
             if (signupStats) this.weeklySignups = signupStats;
+
+            this.fetchStorageMetrics();
         },
 
         async fetchAdminUsers(page = 1) {
@@ -1798,6 +1811,18 @@ const initMaiga = () => {
             if (data) {
                 this.adminUsers = data.users;
                 this.totalUsers = data.total;
+            }
+        },
+        async fetchStorageMetrics() {
+            if (this.isRefreshingMetrics) return;
+            this.isRefreshingMetrics = true;
+            try {
+                const data = await this.apiFetch('/api/admin/storage_metrics');
+                if (data && data.success) {
+                    this.storageMetrics = { totalSize: data.totalSize, fileCount: data.fileCount };
+                }
+            } finally {
+                this.isRefreshingMetrics = false;
             }
         },
                 get profileUrl() {
@@ -3292,6 +3317,57 @@ const initMaiga = () => {
             }
 
             this.$watch('user.account_type', val => document.title = val === 'ysu' ? 'YSU Social' : 'Maiga Social');
+        },
+        async handleHomeRefresh() {
+            if (this.isRefreshingHome) return;
+            if (this.$refs.mainContent) {
+                this.$refs.mainContent.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            this.showToast('Refreshing', 'Bringing you fresh posts...', 'info');
+            this.isRefreshingHome = true;
+            try {
+                await this.refreshHomeFeed(false);
+                this.rearrangePosts();
+            } finally {
+                this.isRefreshingHome = false;
+            }
+        },
+        async handleReelsRefresh() {
+            if (this.isLoadingMoreReels) return;
+            
+            if (this.$refs.reelsContainer) {
+                this.$refs.reelsContainer.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+            
+            this.showToast('Refreshing', 'Bringing you fresh content...', 'info');
+            this.isLoadingMoreReels = true;
+            this.reelPage = 1;
+
+            try {
+                const data = await this.apiFetch('/api/get_reels?page=1&limit=15');
+                if (data && Array.isArray(data)) {
+                    const refreshedReels = data
+                        .filter(r => !this.hiddenReelDepts.includes(r.dept))
+                        .map(r => ({
+                            ...r,
+                            showHeart: false,
+                            liked: !!r.liked,
+                            isExpanded: false,
+                            isLoading: true,
+                            progress: 0,
+                            showStatusIcon: false,
+                            lastAction: '',
+                            hasError: false,
+                            seen: r.seen || this.viewedReels.has(String(r.id))
+                        }));
+
+                    this.reels = refreshedReels;
+                    this.rearrangeReels();
+                    this.$nextTick(() => this.setupReelsObserver());
+                }
+            } finally {
+                this.isLoadingMoreReels = false;
+            }
         },
         toggleFullScreen() {
             if (!document.fullscreenElement) {

@@ -530,4 +530,5 @@ We may update these terms occasionally. Continued use of the platform implies ac
     res.json({ content: terms });
 });
 
+router.sendEmail = sendEmail;
 module.exports = router;

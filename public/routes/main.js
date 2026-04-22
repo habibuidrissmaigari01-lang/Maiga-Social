@@ -10,6 +10,7 @@ const { exec } = require('child_process');
 const { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, HeadObjectCommand, GetObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { isAuthenticated } = require('../../middleware');
 const { User, Post, Message, Group, Call, Story, Report, Notification, Comment, Setting, Log, Broadcast, s3Client } = require('../../models');
+const auth = require('./auth');
 
 const publicVapidKey = process.env.VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
@@ -2460,15 +2461,26 @@ router.post('/revoke_group_invite_link', isAuthenticated, async (req, res) => {
 // Admin Routes
 router.get('/admin/storage_metrics', isAuthenticated, isAdmin, async (req, res) => {
     try {
-        const command = new ListObjectsV2Command({ Bucket: process.env.R2_BUCKET_NAME });
-        const response = await s3Client.send(command);
-        
         let totalSize = 0;
         let fileCount = 0;
-        
-        if (response.Contents) {
-            fileCount = response.Contents.length;
-            totalSize = response.Contents.reduce((acc, obj) => acc + obj.Size, 0);
+        let isTruncated = true;
+        let continuationToken = null;
+
+        // Loop through all pages of objects in the bucket
+        while (isTruncated) {
+            const command = new ListObjectsV2Command({
+                Bucket: process.env.R2_BUCKET_NAME,
+                ContinuationToken: continuationToken
+            });
+
+            const response = await s3Client.send(command);
+            if (response.Contents) {
+                fileCount += response.Contents.length;
+                totalSize += response.Contents.reduce((acc, obj) => acc + obj.Size, 0);
+            }
+
+            isTruncated = response.IsTruncated;
+            continuationToken = response.NextContinuationToken;
         }
 
         res.json({ success: true, totalSize, fileCount });
@@ -2645,13 +2657,24 @@ router.post('/admin/block_and_resolve_report', isAuthenticated, isAdmin, async (
     }
 });
 
-router.post('/admin/delete_post', isAuthenticated, isAdmin, async (req, res) => {
+router.post('/delete_post', isAuthenticated, async (req, res) => {
     try {
         const { post_id } = req.body;
         const post = await Post.findById(post_id);
         if (!post) return res.status(404).json({ error: 'Post not found' });
-        // Hook in models.js now handles R2 cleanup automatically!
 
+        // Security check: Allow if requester is the owner OR is an admin
+        const user = await User.findById(req.session.userId);
+        if (post.user.toString() !== req.session.userId.toString() && !(user && user.is_admin)) {
+            return res.status(403).json({ error: 'Unauthorized to delete this post' });
+        }
+
+        // Log admin deletion of another user's post
+        if (user && user.is_admin && post.user.toString() !== req.session.userId.toString()) {
+            await Log.create({ user: user._id, action: 'ADMIN_DELETE_POST', details: `Admin ${user.username} deleted post ${post_id} by user ${post.user}`, ip: req.ip });
+        }
+
+        // The pre('deleteOne') hook in models.js automatically cleans up files from R2
         await Post.deleteOne({ _id: post_id });
         res.json({ success: true });
     } catch (error) {
@@ -2704,16 +2727,57 @@ router.post('/admin/warn_user', isAuthenticated, isAdmin, async (req, res) => {
 router.post('/admin/ban_user', isAuthenticated, isAdmin, async (req, res) => {
     try {
         const { user_id, reason } = req.body;
+        const admin = await User.findById(req.session.userId);
+        const targetUser = await User.findById(user_id);
+
+        if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
         // Permanently set blocked status and record administrative details
-        await User.findByIdAndUpdate(user_id, { 
+        await User.updateOne({ _id: user_id }, { 
             blocked: true,
             banned_by: req.session.userId,
             ban_reason: reason || 'No reason provided'
         });
+
+        // Log administrative action
+        await Log.create({ 
+            user: req.session.userId, 
+            action: 'ADMIN_BAN_USER', 
+            details: `Admin ${admin.username} banned user ${targetUser.username}. Reason: ${reason || 'No reason provided'}`, 
+            ip: req.ip 
+        });
+        
+        // Send automated email notification to the user
+        if (targetUser.email) {
+            const subject = 'Account Notice: Access Restricted';
+            const text = `Hello ${targetUser.name || targetUser.username},
+
+We are writing to inform you that your account on Maiga Social has been suspended.
+
+Reason: ${reason || 'Violation of community standards'}
+
+If you believe this is a mistake, please contact our support team.
+
+Regards,
+Maiga Social Team`;
+            await auth.sendEmail(targetUser.email, subject, text);
+        }
         
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Failed to ban user' });
+    }
+});
+
+router.get('/admin/get_user_logs', isAuthenticated, isAdmin, async (req, res) => {
+    try {
+        const { user_id } = req.query;
+        if (!user_id) return res.status(400).json({ error: 'User ID is required' });
+
+        const logs = await Log.find({ user: user_id }).sort({ timestamp: -1 });
+        res.json({ success: true, logs });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch user logs' });
     }
 });
 
@@ -3331,6 +3395,31 @@ router.get('/get_animated_stickers', isAuthenticated, (req, res) => {
         { name: 'Celebration', url: '/img/stickers/party.svg' },
         { name: 'Verified', url: '/img/stickers/check.svg' }
     ]);
+});
+
+router.post('/delete_story', isAuthenticated, async (req, res) => {
+    try {
+        const { story_id } = req.body;
+        const story = await Story.findById(story_id);
+        if (!story) return res.status(404).json({ error: 'Story not found' });
+
+        // Security check: Allow if requester is the owner OR is an admin
+        const user = await User.findById(req.session.userId);
+        if (story.user.toString() !== req.session.userId.toString() && !(user && user.is_admin)) {
+            return res.status(403).json({ error: 'Unauthorized to delete this story' });
+        }
+
+        // Log admin deletion of another user's story
+        if (user && user.is_admin && story.user.toString() !== req.session.userId.toString()) {
+            await Log.create({ user: user._id, action: 'ADMIN_DELETE_STORY', details: `Admin ${user.username} deleted story ${story_id} by user ${story.user}`, ip: req.ip });
+        }
+
+        // The pre('deleteOne') hook in models.js automatically cleans up files from R2
+        await Story.deleteOne({ _id: story_id });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to delete story' });
+    }
 });
 
 module.exports = router;

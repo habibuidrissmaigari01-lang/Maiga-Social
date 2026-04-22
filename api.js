@@ -85,7 +85,7 @@ app.use((req, res, next) => {
         "default-src 'self'; " +
        `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com ${cdnSources}; ` +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
-        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co; ` +
+        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co https://www.svgrepo.com; ` +
         `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
         `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io ${r2Domain} https://api.qrserver.com wss:; ` +
@@ -512,7 +512,9 @@ const requireLogin = (req, res, next) => {
     if (req.session.userId) {
         next();
     } else {
-        res.redirect('/'); 
+        // Append a query param so index.html can detect an expired session 
+        // and clear localStorage.getItem('maiga_session_active')
+        res.redirect('/?session_expired=1'); 
     }
 };
 
@@ -550,14 +552,18 @@ app.use(async (req, res, next) => {
     next();
 });
 
+// Handle root route BEFORE express.static to manage the redirect loop
+app.get('/', (req, res) => {
+    // If user is already logged in, don't show the login page
+    if (req.session.userId) {
+        return res.redirect('/home');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Serve static assets ONLY from the public folder
 // This ensures api.js, models.js, and .env are NOT accessible via browser
 app.use(express.static(path.join(__dirname, 'public')));
-
-// Fallback for root route
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 
 // --- Generic Error Handling ---
 app.use((err, req, res, next) => {
