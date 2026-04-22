@@ -2275,11 +2275,13 @@ router.get('/get_notifications', isAuthenticated, async (req, res) => {
             }
         }
 
+        const nObj = n.toObject();
         return {
-            ...n.toObject(),
+            ...nObj,
             id: n._id.toString(), // Ensure Alpine.js can track the ID
             content: message || 'New activity on your account',
             trigger_user_id: n.trigger_user?._id || n.trigger_user,
+            avatar: n.trigger_user?.avatar || (n.type === 'system' ? 'https://api.dicebear.com/7.x/identicon/svg?seed=System' : null),
             time: formatTime(n.created_at)
         };
     });

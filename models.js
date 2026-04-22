@@ -498,7 +498,12 @@ baseNotificationSchema.post('save', function(doc) {
                 }
             }
 
-            const notificationPayload = { ...populatedDoc.toJSON(), content: content };
+            const docJson = populatedDoc.toJSON();
+            const notificationPayload = { 
+                ...docJson, 
+                content: content,
+                avatar: docJson.trigger_user?.avatar || (docJson.type === 'system' ? 'https://api.dicebear.com/7.x/identicon/svg?seed=System' : null)
+            };
             ioInstance.to(populatedDoc.user.toString()).emit('new_notification', notificationPayload);
         }).catch(err => {
             console.error("Error populating notification for socket emit:", err);

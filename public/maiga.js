@@ -177,6 +177,7 @@ const initMaiga = () => {
         // Core App State
         user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', is_verified: false, account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
         friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
+        postsObserver: null,
         isKeyboardOpen: false,
         chatStarFilter: false,
         isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
@@ -877,8 +878,8 @@ const initMaiga = () => {
         getStoryRingClass(userId) {
             if (!this.hasUnviewedStory(userId)) return '';
             return userId == this.user.id 
-                ? 'p-0.5 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram-sm' 
-                : 'p-0.5 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram-sm';
+                ? 'p-0.5 bg-gradient-to-br from-purple-500 to-blue-500 parallelogram-sm story-ring-glow' 
+                : 'p-0.5 bg-gradient-to-br from-blue-400 to-teal-400 parallelogram-sm story-ring-glow';
         },
         shouldShow(msg, index) {
             if (index === 0) return true;
@@ -2540,6 +2541,17 @@ const initMaiga = () => {
                 }
             });
 
+            // Initialize Posts Observer to track unread feed items
+            this.postsObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const postId = entry.target.dataset.postId;
+                        const post = this.posts.find(p => String(p.id) === String(postId));
+                        if (post) post.seen = true;
+                    }
+                });
+            }, { threshold: 0.3 });
+
             this.socket.on('disconnect', () => { this.isSocketConnected = false; });
             this.socket.on('connect_error', () => { this.isSocketConnected = false; });
 
@@ -2962,8 +2974,13 @@ const initMaiga = () => {
 
             
             // Auto-scroll to top when switching to home
-            this.$watch('activeTab', (val) => {
+            this.$watch('activeTab', (val, oldVal) => {
                 if (this.isMessaging) this.isMessaging = false;
+
+                // Auto-rearrange when switching back to main feeds
+                if (val === 'reels' && oldVal !== 'reels') this.rearrangeReels();
+                if (val === 'home' && oldVal !== 'home') this.rearrangePosts();
+
                 if (val === 'home') {
                     this.$refs.mainContent?.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -3142,7 +3159,7 @@ const initMaiga = () => {
                     this.user.total_posts_count = initData.total_posts_count || 0;
                     this.myPosts = initData.myPosts || [];
                     this.editUser = { ...this.user };
-                    this.posts = initData.posts;
+                    this.posts = initData.posts.map(p => ({...p, seen: false}));
                     this.chats = initData.chats;
                     this.groups = initData.groups;
                     this.notifications = initData.notifications;
@@ -5555,6 +5572,33 @@ const initMaiga = () => {
                 .then(data => {
                     if (Array.isArray(data)) this.savedPostList = data;
                 }); // Fixed: savedPosts getter was not using savedPostList
+        },
+        rearrangeReels() {
+            if (!this.reels || this.reels.length === 0) return;
+            // Sort: unwatched (seen: false) at the top
+            this.reels = [...this.reels].sort((a, b) => {
+                if (!!a.seen === !!b.seen) return 0;
+                return a.seen ? 1 : -1;
+            });
+            if (this.activeTab === 'reels' && this.$refs.reelsContainer) {
+                this.$nextTick(() => {
+                    this.$refs.reelsContainer.scrollTop = 0;
+                    if (this.reels.length > 0) this.activeReelId = String(this.reels[0].id);
+                });
+            }
+        },
+        rearrangePosts() {
+            if (!this.posts || this.posts.length === 0) return;
+            // Sort: unseen posts at the top
+            this.posts = [...this.posts].sort((a, b) => {
+                if (!!a.seen === !!b.seen) return 0;
+                return a.seen ? 1 : -1;
+            });
+            if (this.activeTab === 'home' && this.$refs.mainContent) {
+                this.$nextTick(() => {
+                    this.$refs.mainContent.scrollTop = 0;
+                });
+            }
         },
         fetchCallHistory() {
             this.apiFetch('/api/get_call_history')
@@ -8101,7 +8145,7 @@ const initMaiga = () => {
             
             return this.apiFetch(url)
                 .then(data => {
-                    if (data) this.posts = data;
+                    if (data) this.posts = data.map(p => ({...p, seen: false}));
                 }).finally(() => {
                 if (!withAnimation) return;
                 this.isRefreshing = false;
@@ -8124,7 +8168,7 @@ const initMaiga = () => {
                     if (data && data.length > 0) {
                         // Filter out duplicates that might occur due to server-side randomization
                         const newPosts = data.filter(newP => !this.posts.some(existingP => existingP.id === newP.id));
-                        this.posts = [...this.posts, ...newPosts];
+                        this.posts = [...this.posts, ...newPosts.map(p => ({...p, seen: false}))];
                         this.hasMorePosts = data.length === 20; // limit is 20 in main.js
                     } else {
                         this.hasMorePosts = false;
