@@ -227,6 +227,7 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: localStorage.getItem('maiga_right_sidebar_collapsed') === 'true',
         isLayoutSwapped: localStorage.getItem('maiga_layout_swapped') === 'true',
+        get lsPrefix() { return this.user.account_type === 'ysu' ? 'ysu_' : 'maiga_'; },
         isRefreshingHome: false,
         customWallpaperFile: null,
         pendingPosts: [],
@@ -2517,9 +2518,10 @@ const initMaiga = () => {
             // --- PWA Force Update Logic ---
             if ('serviceWorker' in navigator) {
                 const appType = this.user.account_type || 'maiga';
+                const swScope = appType === 'ysu' ? '/ysu' : '/home';
                 
                 // Register and handle updates automatically
-                navigator.serviceWorker.register(`/sw.js?app=${appType}`);
+                navigator.serviceWorker.register(`/sw.js?app=${appType}`, { scope: swScope });
 
                 // Detect when the new service worker has activated and taken control
                 let refreshing = false;

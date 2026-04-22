@@ -88,7 +88,7 @@ app.use((req, res, next) => {
         `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co https://www.svgrepo.com; ` +
         `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io ${r2Domain} https://api.qrserver.com wss:; ` +
+        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://*.turnix.io ${r2Domain} https://api.qrserver.com wss:; ` +
         "frame-src 'self' https://accounts.google.com https://www.facebook.com https://www.google.com; " +
         "worker-src 'self' blob:; " +
         "manifest-src 'self'; " +
@@ -145,25 +145,54 @@ const mongoConnection = mongoose.connect(MONGO_URI, {
     connectTimeoutMS: 10000,
 });
 
-app.use(session({
+const maigaSession = session({
+    name: 'maiga.sid',
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    rolling: true, // Renew session on each request
+    rolling: true,
     store: MongoStore.create({
         mongoUrl: MONGO_URI,
-        collectionName: 'sessions',
-        ttl: 60 * 60 * 24 * 7, // 1 week in seconds
-        stringify: false,
-        autoRemove: 'interval'
+        collectionName: 'sessions_maiga',
+        ttl: 60 * 60 * 24 * 7
     }),
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 7 // Persist for 1 week
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        path: '/' // Root path for Maiga
     }
-}));
+});
+
+const ysuSession = session({
+    name: 'ysu.sid',
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    store: MongoStore.create({
+        mongoUrl: MONGO_URI,
+        collectionName: 'sessions_ysu',
+        ttl: 60 * 60 * 24 * 7
+    }),
+    cookie: {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+        path: '/ysu' // Path specific cookie for YSU
+    }
+});
+
+app.use((req, res, next) => {
+    const isYsu = req.path.startsWith('/ysu') || 
+                  req.query.account_type === 'ysu' || 
+                  (req.body && req.body.account_type === 'ysu');
+
+    if (isYsu) return ysuSession(req, res, next);
+    return maigaSession(req, res, next);
+});
 
 app.use(passport.initialize());
 app.use(passport.session());

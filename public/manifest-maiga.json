@@ -4,7 +4,7 @@
   "description": "Connect with your campus community.",
   "id": "maiga-social-pwa",
   "start_url": "/home",
-  "scope": "/",
+  "scope": "/home",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#667eea",
