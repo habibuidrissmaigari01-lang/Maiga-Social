@@ -983,6 +983,7 @@ const initMaiga = () => {
         activeChat: null,
         showMemberOptionsFor: null,
         isAddingGroupMembers: false,
+        isProfileReminderHidden: localStorage.getItem('maiga_hide_profile_reminder') === 'true',
         isAddingMembers: false,
         membersToAdd: [],
         addMemberSearchQuery: '',
@@ -2492,18 +2493,13 @@ const initMaiga = () => {
                 const appType = this.user.account_type || 'maiga';
                 
                 // Register and handle updates automatically
-                navigator.serviceWorker.register(`/sw.js?app=${appType}`).then(reg => {
-                    // Check for updates immediately on load
-                    reg.update();
-                    
-                    // Check for updates whenever the tab is focused
-                    window.addEventListener('focus', () => reg.update());
-                });
+                navigator.serviceWorker.register(`/sw.js?app=${appType}`);
 
                 // Detect when the new service worker has activated and taken control
                 let refreshing = false;
+                const oldController = navigator.serviceWorker.controller;
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (refreshing) return;
+                    if (refreshing || !oldController) return;
                     refreshing = true;
                     // Visual Notification
                     this.showToast('App Updated', 'Installing the latest version... Excellence is arriving.', 'success');
@@ -3242,6 +3238,13 @@ const initMaiga = () => {
                     this.isLoading = false;
                     this.showSkeletons = false;
                     this.dataLoaded = true; // Set flag to true after all critical data is loaded
+
+                    // Welcome Logic for newly registered users
+                    if (localStorage.getItem('maiga_just_registered') === 'true') {
+                        localStorage.removeItem('maiga_just_registered');
+                        this.showToast('Welcome!', `Welcome to the community, ${this.user.name.split(' ')[0]}!`, 'success');
+                        this.showGuideOverlay = true;
+                    }
                 }, 500);
             }
 
@@ -4319,6 +4322,14 @@ const initMaiga = () => {
             this.sendMessage(null, 'sticker', sticker);
             this.showStickerPicker = false;
             this.isSendingMessage = false;
+             },
+        get isProfileIncomplete() {
+            if (!this.user || this.user.id === 0) return false;
+            const bio = this.user.bio || '';
+            const avatar = this.user.avatar || '';
+            const hasBio = bio.trim().length > 0;
+            const isDefaultAvatar = avatar.includes('img/male.png') || avatar.includes('img/female.png') || avatar.includes('dicebear.com');
+            return !hasBio || isDefaultAvatar;
         },
         handleSwipeStart(e, msgId) { // Ensure msgId is string for comparison
             this.swipeStart.x = e.touches[0].clientX;

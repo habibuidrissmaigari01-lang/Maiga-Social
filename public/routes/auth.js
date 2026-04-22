@@ -8,7 +8,7 @@ const FacebookStrategy = require('passport-facebook').Strategy;
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { exec } = require('child_process');
-const { User, Otp, Setting, Log } = require('../../models');
+const { User, Otp, Setting, Log, Notification } = require('../../models');
 
 // --- Passport Google Strategy ---
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -277,7 +277,20 @@ router.post('/register', [
 
         await user.save();
         await Otp.deleteOne({ _id: record._id });
-        res.json({ success: true, message: 'Registration successful' });
+
+        // Create welcome notification for the new user
+        await Notification.create({
+            user: user._id,
+            type: 'system',
+            content: 'Welcome to Maiga Social! We are excited to have you join our community. Excellence is arriving.',
+            is_read: false
+        });
+
+        // Auto-login after registration
+        req.session.userId = user._id.toString();
+        req.session.save(() => {
+            res.json({ success: true, message: 'Registration successful' });
+        });
     } catch (err) {
         res.status(400).json({ message: 'Registration failed', error: err.message });
     }

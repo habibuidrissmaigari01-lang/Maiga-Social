@@ -76,10 +76,10 @@ app.use((req, res, next) => {
         "default-src 'self'; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
-        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com; ` +
-        `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co; ` +
+        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co; ` +
+        `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io ${r2Domain} wss:; ` +
+        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://*.turnix.io ${r2Domain} https://api.qrserver.com wss:; ` +
         "frame-src 'self' https://accounts.google.com https://www.facebook.com https://www.google.com; " +
         "worker-src 'self' blob:; " +
         "manifest-src 'self'; " +
@@ -520,7 +520,7 @@ app.get(['/ysu', '/ysu.html'], (req, res) => {
 
 // NEW: Admin panel route with authentication and admin check
 app.get('/admin', isAuthenticated, isAdmin, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+    res.sendFile(path.join(__dirname, 'public', 'monitor.html'));
 });
 
 // NEW: Middleware to restrict direct access to sensitive files

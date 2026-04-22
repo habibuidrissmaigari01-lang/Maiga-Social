@@ -48,29 +48,6 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
         .squircle { border-radius: 2rem !important; }
-
-        .bg-mesh {
-            position: fixed;
-            inset: 0;
-            z-index: -2;
-            background-color: #f1f5f9;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.05) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(203, 213, 225, 0.5) 0px, transparent 50%);
-        }
-        .dark .bg-mesh {
-            background-color: #020617;
-            background-image: radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.1) 0px, transparent 50%), radial-gradient(at 0% 100%, rgba(15, 23, 42, 0.8) 0px, transparent 50%);
-        }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-        }
-        .dark .glass-panel {
-            background: rgba(30, 41, 59, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .squircle { border-radius: 2rem !important; }
     </style>
 </head>
 <body class="min-h-screen lg:flex bg-gray-50 dark:bg-gray-900"
@@ -675,7 +652,7 @@
                             <template x-for="item in filteredRecentMedia" :key="item.url">
                                 <div class="relative aspect-square rounded-lg overflow-hidden group cursor-pointer border dark:border-gray-700" @click="window.open(item.url, '_blank')">
                                     <template x-if="item.type === 'video'"><video :src="item.url" class="w-full h-full object-cover"></video></template>
-                                    <template x-if="item.type !== 'video'"><img :src="item.url" class="w-full h-full object-cover"></img</template>
+                                    <template x-if="item.type !== 'video'"><img :src="item.url" class="w-full h-full object-cover"></template>
                                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1">
                                         <p class="text-[8px] text-white font-black truncate" x-text="item.author"></p>
                                     </div>
@@ -983,7 +960,8 @@
         const CSRF_TOKEN = 'mock-csrf-token';
         document.addEventListener('alpine:init', () => {
             Alpine.data('adminData', () => ({
-                darkMode: false,
+                 darkMode: localStorage.getItem('theme') === 'dark' || (localStorage.getItem('theme') === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches),
+                appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
                 isSideMenuOpen: false,
                 showUserOptionsModal: false,
                 showUserProfileModal: false,

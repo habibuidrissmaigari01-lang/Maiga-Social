@@ -558,7 +558,7 @@
                 },
                 init() {
                     this.applyTheme();
-                    if (localStorage.getItem('maiga_session_active') === 'true') {
+                    if (localStorage.getItem('maiga_session_active') === 'true' && navigator.onLine) {
                         window.location.replace('/home');
                         return;
                     }
@@ -678,8 +678,11 @@
                             showMessage('Redirecting to YSU Social...', 'success');
                             setTimeout(() => { window.location.href = '/home'; }, 1500);
                         } else {
-                            showMessage('Registration successful! Please login.', 'success');
-                            setTimeout(() => { this.view = 'login'; this.currentStep = 0; }, 2000);
+                            localStorage.setItem('maiga_session_active', 'true');
+                            localStorage.setItem('maiga_last_account_type', 'ysu');
+                            localStorage.setItem('maiga_just_registered', 'true');
+                            showMessage('Registration successful! Redirecting...', 'success');
+                            setTimeout(() => { window.location.href = '/home'; }, 1500);
                         }
                     } catch (error) {
                         showMessage(error.message, 'error');
@@ -1436,18 +1439,15 @@
 
             // Register Service Worker for YSU
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js?app=ysu').then(reg => {
-                    reg.update();
-                });
+                navigator.serviceWorker.register('/sw.js?app=ysu');
 
                 let refreshing = false;
+                const oldController = navigator.serviceWorker.controller;
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    if (refreshing) return;
+                    // Only reload if we were already being controlled by a service worker (an update)
+                    if (refreshing || !oldController) return;
                     refreshing = true;
-                    // Visual feedback on login page
-                    showMessage('Updating app to latest version...', 'success');
-                    // Delay reload so user can see the message
-                    setTimeout(() => window.location.reload(), 1500);
+                    window.location.reload();
                 });
             }
             if (!isStandalone) { // Show popup if not in standalone mode
