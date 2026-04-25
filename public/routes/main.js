@@ -221,7 +221,7 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                     status: other.online ? 'online' : 'offline',
                     gender: other.gender,
                     verified: other.is_verified,
-                    lastMsg: (m.media_type === 'text' ? m.content : `Sent a ${m.media_type}`),
+                    lastMsg: prefix + (m.media_type === 'text' ? m.content : `<i>Sent a ${m.media_type}</i>`),
                     time: formatTime(m.createdAt),
                     lastMsgTimestamp: m.createdAt
                 });

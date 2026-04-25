@@ -98,11 +98,21 @@ const initMaiga = () => {
                 window.google.accounts.id.initialize({ client_id: this.googleClientId, callback: this.handleGoogleLoginCallback.bind(this) });
             }
             if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', () => {
-                    // Threshold: if viewport height shrinks by more than 15%, keyboard is likely open
+                const updateViewport = () => {
                     this.isKeyboardOpen = window.visualViewport.height < window.innerHeight * 0.85;
-                });
+                    this.viewportHeight = window.visualViewport.height;
+                };
+                window.visualViewport.addEventListener('resize', updateViewport);
+                window.visualViewport.addEventListener('scroll', updateViewport);
             }
+            this.$watch('isKeyboardOpen', (isOpen) => {
+                if (isOpen && this.activeChat) {
+                    setTimeout(() => {
+                        const container = document.getElementById('messageContainer');
+                        if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                    }, 300); // Wait for keyboard animation to settle
+                }
+            });
             // Listen for ringtone triggers from Service Worker
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.addEventListener('message', (event) => {
@@ -153,6 +163,9 @@ const initMaiga = () => {
             if (savedRecents) {
                 this.recentlyUsedStickers = JSON.parse(savedRecents);
             }
+            this.$watch('newMessage', (val) => {
+                if (val.length === 950 && navigator.vibrate) navigator.vibrate(50);
+            });
             this.initVisibilityListener();
             window.addEventListener('focus', () => this.checkClipboardForOtp?.());
             
@@ -227,6 +240,7 @@ const initMaiga = () => {
         isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
         isRightSidebarCollapsed: localStorage.getItem('maiga_right_sidebar_collapsed') === 'true',
         isLayoutSwapped: localStorage.getItem('maiga_layout_swapped') === 'true',
+        viewportHeight: window.innerHeight,
         get lsPrefix() { return this.user.account_type === 'ysu' ? 'ysu_' : 'maiga_'; },
         isRefreshingHome: false,
         customWallpaperFile: null,
@@ -235,6 +249,8 @@ const initMaiga = () => {
         activeReelId: null,
         syncState: { active: false, current: 0, total: 0 },
         iceTimeoutTimer: null,
+        showJumpToBottom: false,
+        unreadMessagesWhileScrolledUp: 0,
         isNetworkBlocked: false,
         confirmModal: {
             show: false,
@@ -595,6 +611,20 @@ const initMaiga = () => {
         formatNumber(num) {
             if (num === null || num === undefined || Number.isNaN(Number(num))) return '0';
             return Number(num).toLocaleString();
+        },
+        handleChatScroll(el) {
+            // Show button if user scrolls up more than 200px from the bottom
+            const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+            this.showJumpToBottom = distanceFromBottom > 200;
+            if (!this.showJumpToBottom) {
+                this.unreadMessagesWhileScrolledUp = 0;
+            }
+        },
+        jumpToLatest() {
+            const container = document.getElementById('messageContainer');
+            if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+            this.showJumpToBottom = false;
+            this.unreadMessagesWhileScrolledUp = 0;
         },
         formatBytes(bytes, decimals = 2) {
             if (!+bytes) return '0 Bytes';
@@ -2613,6 +2643,11 @@ const initMaiga = () => {
                 const chatId = data.group_id ? data.group_id.toString() : data.sender_id.toString();
                 this.chatMessages[chatId] = [...(this.chatMessages[chatId] || []), formattedMsg];
 
+                // Increment unread count for jump button if user is scrolled up in this chat
+                if (this.showJumpToBottom && this.activeChat && this.activeChat.id.toString() === chatId) {
+                    this.unreadMessagesWhileScrolledUp++;
+                }
+
                 // Smart scroll: Only scroll if user is already near the bottom
                 this.$nextTick(() => {
                     const container = document.getElementById('messageContainer');
@@ -2995,7 +3030,10 @@ const initMaiga = () => {
             });
 
              // Watch for changes to create post fields to save draft
-            this.$watch('newPostContent', () => this.saveCreatePostDraft());
+            this.$watch('newPostContent', (val) => {
+                if (val.length === 950 && navigator.vibrate) navigator.vibrate(50);
+                this.saveCreatePostDraft();
+            });
             this.$watch('newPostFeeling', () => this.saveCreatePostDraft());
             this.$watch('postBgStyleIndex', () => this.saveCreatePostDraft());
 
@@ -3109,6 +3147,12 @@ const initMaiga = () => {
                     localStorage.setItem('maiga_active_chat_id', newChat.id);
                     this.markAsRead(newChat);
                     this.fetchMessages(newChat, true);
+                    // Auto-focus input on chat open
+                    this.$nextTick(() => {
+                        this.$refs.messageInput?.focus();
+                    });
+                    this.showJumpToBottom = false;
+                    this.unreadMessagesWhileScrolledUp = 0;
                 } else {
                     localStorage.removeItem('maiga_active_chat_id');
                 }
@@ -4067,7 +4111,7 @@ const initMaiga = () => {
             this.chatMessages[this.activeChat.id] = [...(this.chatMessages[this.activeChat.id] || []), messagePayload];
             this.$nextTick(() => {
                 const container = document.getElementById('messageContainer');
-                if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+                if (container) container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
             });
 
             // Update chat list preview with pending state

@@ -486,6 +486,15 @@
         .share-pop-anim {
             animation: share-pop 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .animate-shake {
+            animation: shake 0.2s ease-in-out 0s 2;
+        }
         
     </style>
 </head>
@@ -690,7 +699,9 @@
     <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
     <div class="pb-28 lg:pb-12">
     <!-- Messaging Overlay (now also for desktop chat windows) -->
-    <div x-show="isMessaging" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
+    <div x-show="isMessaging" 
+         :style="isMessaging && window.innerWidth < 1024 ? { height: viewportHeight + 'px' } : {}"
+         x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
         <!-- List View -->
         <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
@@ -1069,7 +1080,7 @@
 
         <!-- Single Chat View -->
         <div x-show="activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn" x-transition>
-            <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md overflow-visible relative z-50">
+            <div class="p-3 flex items-center space-x-3 border-b dark:border-gray-800 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md overflow-visible sticky top-0 z-[60]">
                 <button @click="activeChat = null; showChatOptions = false" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
                 <img @click="openChatProfile()" :src="activeChat?.avatar || (activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" @error="$el.src=(activeChat?.type === 'group' ? '/img/default-group.png' : (activeChat?.gender === 'female' ? '/img/female.png' : '/img/male.png'))" class="w-10 h-10 parallelogram-sm cursor-pointer">
                 <div @click="openChatProfile()" class="flex-1 cursor-pointer min-w-0">
@@ -1181,7 +1192,7 @@
                 </div>
             </div>
             
-            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4 chat-wallpaper" :style="getChatWallpaperStyle()">
+            <div id="messageContainer" @scroll="handleChatScroll($el)" class="flex-1 overflow-y-auto p-4 space-y-4 chat-wallpaper min-h-0" :style="getChatWallpaperStyle()">
                  <template x-for="(msg, index) in (chatMessages[activeChat?.id] || [])" :key="msg.id">
                     <div class="flex items-start space-x-3" :class="msg.sender === 'me' ? 'flex-row-reverse space-x-reverse' : ''">
                         <!-- Avatar -->
@@ -1246,6 +1257,18 @@
                         </div>
                     </div>
                 </template>
+            </div>
+
+            <!-- Jump to Latest Button -->
+            <div x-show="showJumpToBottom" x-transition class="absolute bottom-20 left-1/2 -translate-x-1/2 z-[60]">
+                <button @click="jumpToLatest()" class="bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all border border-white/20 relative">
+                    <i class="fa-solid fa-chevron-down"></i>
+                    <span>Jump to Latest</span>
+                    <!-- Unread Message Badge -->
+                    <template x-if="unreadMessagesWhileScrolledUp > 0">
+                        <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full shadow-md animate-bounce border-2 border-white dark:border-gray-900" x-text="unreadMessagesWhileScrolledUp"></span>
+                    </template>
+                </button>
             </div>
 
 
@@ -1374,19 +1397,19 @@
                 </div>
                 <button @click="replyingTo = null" class="p-1 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-center space-x-2 relative" @paste="handlePaste($event)">
+           <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-end space-x-2 relative" @paste="handlePaste($event)">
                 <button @click="showChatOptions = !showChatOptions" class="p-2 text-blue-600 transition-transform disabled:text-gray-400" :class="showChatOptions ? 'rotate-45' : ''" :disabled="isBlocked(activeChat?.id)"><i class="fa-solid fa-circle-plus text-2xl"></i></button> 
                 <div class="flex-1 relative">
-                    <textarea x-model="newMessage" 
+                    <textarea x-ref="messageInput" x-model="newMessage" 
                               @input="$el.style.height = ''; $el.style.height = Math.min($el.scrollHeight, 150) + 'px'; sendTypingSignal()" 
                               @keyup.ctrl.enter="sendMessage()" 
                               maxlength="1000"
-                              rows="1" placeholder="Message..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none overflow-y-auto" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording}" style="min-height: 2.5rem; max-height: 150px;"></textarea>
+                              rows="1" placeholder="Message..." class="w-full bg-gray-100 dark:bg-gray-800 border-none rounded-2xl py-2.5 pl-4 pr-10 text-sm focus:ring-1 focus:ring-blue-500 transition-all resize-none overflow-y-auto" :disabled="isBlocked(activeChat?.id)" :class="{'opacity-0': isRecording, 'ring-2 ring-red-500': newMessage.length > 950}" style="min-height: 2.5rem; max-height: 150px;"></textarea>
                     <button @click="showStickerPicker = !showStickerPicker" class="absolute right-3 top-2.5 text-gray-400 hover:text-yellow-500 transition-colors" :disabled="isBlocked(activeChat?.id)">
                         <i class="fa-solid fa-face-smile text-xl"></i>
                     </button>
                     <div x-show="newMessage.length > 0" class="absolute right-3 bottom-1.5 pointer-events-none">
-                        <span class="text-[8px] font-bold" :class="newMessage.length > 950 ? 'text-red-500' : 'text-gray-400'" x-text="newMessage.length + '/1000'"></span>
+                        <span class="text-[8px] font-bold" :class="[newMessage.length > 950 ? 'text-red-500' : 'text-gray-400', newMessage.length >= 1000 ? 'animate-shake' : '']" x-text="newMessage.length + '/1000'"></span>
                     </div>
                     <div x-show="isRecording" x-cloak class="absolute inset-0 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-between px-4 pointer-events-none">
                         <canvas id="chat-record-waveform" class="w-20 h-6"></canvas>
@@ -1825,8 +1848,13 @@
 
     <!-- Full Screen Post View -->
     <div x-show="viewingPost" x-cloak class="fixed inset-0 z-[700] bg-black/95 flex flex-col animate-fadeIn overflow-y-auto"
-         @touchstart="touchStartY = $event.changedTouches[0].screenY"
-         @touchend="if($event.changedTouches[0].screenY - touchStartY > 80) viewingPost = null"
+         @touchstart="touchStartY = $event.changedTouches[0].screenY; postHoldTimer = setTimeout(() => { selectedPostForMenu = viewingPost; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
+         @touchmove="clearTimeout(postHoldTimer)"
+         @touchend="clearTimeout(postHoldTimer); if($event.changedTouches[0].screenY - touchStartY > 80) viewingPost = null"
+         @mousedown="postHoldTimer = setTimeout(() => { selectedPostForMenu = viewingPost; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
+         @mouseup="clearTimeout(postHoldTimer)"
+         @mouseleave="clearTimeout(postHoldTimer)"
+         @contextmenu.prevent
     >
         <div class="p-4 flex justify-between items-center sticky top-0 z-10 bg-black/50 backdrop-blur-md">
             <div class="flex items-center space-x-2">
@@ -1954,7 +1982,7 @@
         </div>
         
         <!-- Story Reply & Reactions -->
-        <div class="absolute bottom-0 left-0 right-0 p-4 z-30 bg-gradient-to-t from-black/90 to-transparent" x-show="viewingStory?.user?.id !== user.id">
+        <div class="absolute bottom-0 left-0 right-0 p-4 z-30 bg-gradient-to-t from-black/90 to-transparent" x-show="viewingStory && String(viewingStory.user?.id) !== String(user.id)">
             <div class="flex flex-col space-y-4">
                  <div class="flex justify-between px-2">
                     <button @click="sendStoryReply('🔥')" class="text-3xl hover:scale-125 transition-transform">🔥</button>
@@ -3109,11 +3137,6 @@
         <!-- Feed -->
         <template x-for="post in homePosts" :key="post.id" x-show="!showSkeletons">
             <div @click="viewingPost = post" 
-                 @mousedown="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
-                 @mouseup="clearTimeout(postHoldTimer)"
-                 @mouseleave="clearTimeout(postHoldTimer)"
-                 @touchstart="postHoldTimer = setTimeout(() => { selectedPostForMenu = post; showPostOptions = true; if(navigator.vibrate) navigator.vibrate(50); }, 600)"
-                 @touchend="clearTimeout(postHoldTimer)"
                  @contextmenu.prevent
                  x-transition:enter="transition ease-out duration-500"
                  x-transition:enter-start="opacity-0 translate-y-4"
@@ -4495,7 +4518,7 @@
              @mousedown="startCreatePostDrag($event)" @mousemove.window="handleCreatePostDrag($event)" @mouseup.window="stopCreatePostDrag()">
             <button @click="isCreatingPost = false" class="text-gray-500 font-bold p-2">Cancel</button>
             <h3 class="font-black" x-text="isUploadingPost ? 'Uploading...' : 'Create Post'"></h3>
-            <button @click="createPost()" :disabled="isUploadingPost || isUploadingReel" class="bg-blue-600 text-white px-6 py-2 rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all">
+            <button @click="createPost()" :disabled="isUploadingPost || isUploadingReel || newPostContent.length > 1000" class="bg-blue-600 text-white px-6 py-2 rounded-2xl font-black shadow-lg shadow-blue-200 dark:shadow-none active:scale-95 transition-all disabled:opacity-50">
                 <template x-if="isUploadingPost || isUploadingReel"><i class="fa-solid fa-spinner fa-spin mr-2"></i></template>
                 Post
             </button>
@@ -4510,13 +4533,13 @@
         <div class="flex-1 flex flex-col min-h-[120px] rounded-3xl transition-all duration-500 overflow-hidden"
              :style="postBgStyleIndex !== -1 ? `background: ${textStoryStyles[postBgStyleIndex].background}; justify-content: center; align-items: center; padding: 2rem;` : ''">
             <textarea x-model="newPostContent" maxlength="1000" 
-                      class="w-full bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-bold transition-all duration-500" 
-                      :class="postBgStyleIndex !== -1 ? 'text-center text-3xl' : 'text-left'"
+                      class="w-full bg-transparent border-none text-xl resize-none focus:ring-0 placeholder-gray-300 dark:placeholder-gray-700 font-bold transition-all duration-500 rounded-2xl" 
+                      :class="[postBgStyleIndex !== -1 ? 'text-center text-3xl' : 'text-left', newPostContent.length > 950 ? 'ring-4 ring-red-500/20' : '']"
                       :style="postBgStyleIndex !== -1 ? `color: ${textStoryStyles[postBgStyleIndex].color};` : ''"
                       :placeholder="'What\'s on your mind, ' + (user.nickname || user.name.split(' ')[0]) + '?'"></textarea>
         </div>
         <div class="flex justify-end px-2 py-1">
-            <span class="text-[10px] font-bold" :class="newPostContent.length > 900 ? 'text-red-500' : 'text-gray-400'" x-text="(1000 - newPostContent.length) + ' characters remaining'"></span>
+            <span class="text-[10px] font-bold" :class="[newPostContent.length > 950 ? 'text-red-500' : 'text-gray-400', newPostContent.length >= 1000 ? 'animate-shake' : '']" x-text="(1000 - newPostContent.length) + ' characters remaining'"></span>
         </div>
         
         <!-- Post Background Color Picker -->

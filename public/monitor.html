@@ -1717,7 +1717,9 @@ this.loadInitialData();
                         fetch('/api/admin/get_reports').then(r => r.json()).then(d => this.reports = d),
                         fetch('/api/admin/get_blocked_user_details').then(r => r.json()).then(d => this.recentBans = d.slice(0, 5)),
                         this.fetchSystemHealth(),
-                        this.fetchErrorLogs()
+                        this.fetchErrorLogs(),
+                        this.fetchStorageMetrics(),
+                        this.fetchRecentMedia()
                     ]);
                 },
                 fetchUsers() {
