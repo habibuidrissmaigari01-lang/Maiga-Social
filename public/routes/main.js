@@ -215,6 +215,10 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
             if (!m.sender || !m.receiver || !m.sender._id || !m.receiver._id) return;
             const other = m.sender._id.toString() === userId.toString() ? m.receiver : m.sender;
             const otherId = other._id.toString();
+            
+            const isMe = m.sender._id.toString() === userId.toString();
+            const prefix = isMe ? '<span class="text-blue-600 dark:text-blue-400 font-bold">You:</span> ' : '';
+
             if (!processedChats.has(otherId)) {
                 processedChats.set(otherId, {
                     id: other._id, name: other.name, avatar: other.avatar,
@@ -2461,6 +2465,9 @@ router.post('/revoke_group_invite_link', isAuthenticated, async (req, res) => {
 // Admin Routes
 router.get('/admin/storage_metrics', isAuthenticated, isAdmin, async (req, res) => {
     try {
+        if (!process.env.R2_BUCKET_NAME) {
+            return res.json({ success: true, totalSize: 0, fileCount: 0, error: 'Bucket name missing in env' });
+        }
         let totalSize = 0;
         let fileCount = 0;
         let isTruncated = true;
