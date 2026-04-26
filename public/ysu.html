@@ -15,6 +15,10 @@
     <link rel="apple-touch-startup-image" media="screen and (device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_15_Pro_portrait.png">
     <link rel="apple-touch-startup-image" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
     <link rel="apple-touch-startup-image" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_13_mini_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_11_Pro_Max_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="img/splash/iPhone_11_portrait.png">
+    <link rel="apple-touch-startup-image" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" href="img/splash/iPhone_SE_portrait.png">
 
     <meta name="description" content="Create an account or log into Maiga Social. Connect with friends and the community. Share photos, videos, and stories, send secure messages, and stay informed with the latest news updates.">
     <!-- Open Graph / Social Media Tags -->
@@ -155,11 +159,11 @@
             <!-- Progress Bar (Hidden for Login) -->
             <div id="regProgress" x-show="view === 'register'" x-cloak>
                 <div class="flex justify-between text-xs font-bold text-indigo-600 mb-2 uppercase tracking-wider">
-                    <span x-text="`Step ${currentStep} of 7`"></span>
-                    <span x-text="Math.round((currentStep / 7) * 100) + '%'"></span>
+                    <span x-text="`Step ${currentStep} of 8`"></span>
+                    <span x-text="Math.round((currentStep / 8) * 100) + '%'"></span>
                 </div>
                 <div class="w-full bg-gray-100 dark:bg-gray-800 h-2 rounded-full overflow-hidden mb-6">
-                    <div class="progress-fill bg-indigo-600 h-full rounded-full shadow-sm" :style="`width: ${Math.round((currentStep / 7) * 100)}%` "></div>
+                    <div class="progress-fill bg-indigo-600 h-full rounded-full shadow-sm" :style="`width: ${Math.round((currentStep / 8) * 100)}%` "></div>
                 </div>
             </div>
 
@@ -240,8 +244,8 @@
             <!-- REGISTER STEP 3: Username -->
             <div id="reg-3" class="step-content" :class="{ 'active': view === 'register' && currentStep === 3 }" x-show="view === 'register' && currentStep === 3">
                 <button type="button" @click="currentStep = 2" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
-                <h2 class="text-2xl font-bold text-gray-800 mb-1">Choose a username</h2>
-                <p class="text-gray-500 text-sm mb-6">Your unique username will be public.</p>
+                <h2 class="text-2xl font-bold text-gray-800 mb-1">Username & Department</h2>
+                <p class="text-gray-500 text-sm mb-6">Choose a unique username and select your department.</p>
                 <div class="space-y-4">
                     <div class="relative">
                         <input type="text" name="username" id="username" placeholder="Username" 
@@ -258,6 +262,27 @@
                         </div>
                     </div>
                     <div id="username-suggestions" class="text-xs text-gray-500 -mt-2 px-1"></div>
+                    
+                    <select name="dept" x-model="registration.dept" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 bg-white">
+                        <option value="">Select Department</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Mathematics">Mathematics</option>
+                        <option value="Physics">Physics</option>
+                        <option value="Chemistry">Chemistry</option>
+                        <option value="Biology">Biology</option>
+                        <option value="Geography">Geography</option>
+                        <option value="Economics">Economics</option>
+                        <option value="Political Science">Political Science</option>
+                        <option value="Sociology">Sociology</option>
+                        <option value="Accounting">Accounting</option>
+                        <option value="Business Administration">Business Administration</option>
+                        <option value="Public Administration">Public Administration</option>
+                        <option value="Law">Law</option>
+                        <option value="English">English</option>
+                        <option value="History">History</option>
+                        <option value="Education">Education</option>
+                    </select>
+
                     <button type="button" @click="nextStep(4, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
@@ -265,9 +290,36 @@
                 </div>
             </div>
 
-            <!-- REGISTER STEP 4: Gender -->
+            <!-- REGISTER STEP 4: School Verification -->
             <div id="reg-4" class="step-content" :class="{ 'active': view === 'register' && currentStep === 4 }" x-show="view === 'register' && currentStep === 4">
                 <button type="button" @click="currentStep = 3" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+                <h2 class="text-2xl font-bold text-gray-800 mb-1">School Verification</h2>
+                <p class="text-gray-500 text-sm mb-6">Enter your academic identification details.</p>
+                <div class="space-y-4">
+                    <div class="relative">
+                        <input type="text" name="matrix_no" x-model="registration.matrix_no" 
+                               @input.debounce.500ms="checkAvailability('matrix_no', $event.target.value)"
+                               placeholder="Matrix Number (e.g. YSU/CSC/12/001)" 
+                               class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400 transition-colors"
+                               :class="matrix_noStatus === 'taken' ? 'border-red-500 shadow-[0_0_10px_rgba(239,44,44,0.2)]' : (matrix_noStatus === 'available' ? 'border-green-500 shadow-[0_0_10px_rgba(34,197,94,0.3)]' : '')">
+                        <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                            <i x-show="matrix_noStatus === 'checking'" class="fa-solid fa-spinner fa-spin text-gray-400"></i>
+                            <i x-show="matrix_noStatus === 'available'" class="fa-solid fa-check-circle text-green-500"></i>
+                            <i x-show="matrix_noStatus === 'taken'" class="fa-solid fa-times-circle text-red-500"></i>
+                        </div>
+                    </div>
+                    
+                    <input type="text" name="jamb_no" x-model="registration.jamb_no" placeholder="JAMB Number (10 digits + 2 letters)" maxlength="12" class="w-full p-3 border-2 border-gray-100 rounded-xl outline-none focus:border-indigo-400">
+                    <button type="button" @click="nextStep(5, $event)" class="btn-primary mt-4">Next</button>
+                    <div class="text-center mt-4">
+                        <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REGISTER STEP 5: Gender -->
+            <div id="reg-5" class="step-content" :class="{ 'active': view === 'register' && currentStep === 5 }" x-show="view === 'register' && currentStep === 5">
+                <button type="button" @click="currentStep = 4" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">What's your gender?</h2>
                 <p class="text-gray-500 text-sm mb-6">Specify your gender as per official documents.</p>
                 <div class="space-y-4">
@@ -277,16 +329,16 @@
                         <option value="female">Female</option>
                         <option value="other">Other</option>
                     </select>
-                    <button type="button" @click="nextStep(5, $event)" class="btn-primary mt-4">Next</button>
+                    <button type="button" @click="nextStep(6, $event)" class="btn-primary mt-4">Next</button>
                     <div class="text-center mt-4">
                         <a href="#" @click.prevent="view = 'login'" class="text-indigo-600 text-sm font-medium">Back to Login</a>
                     </div>
                 </div>
             </div>
 
-            <!-- REGISTER STEP 5: Mobile / Email -->
-            <div id="reg-5" class="step-content" :class="{ 'active': view === 'register' && currentStep === 5 }" x-show="view === 'register' && currentStep === 5">
-                <button type="button" @click="currentStep = 4" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <!-- REGISTER STEP 6: Mobile / Email -->
+            <div id="reg-6" class="step-content" :class="{ 'active': view === 'register' && currentStep === 6 }" x-show="view === 'register' && currentStep === 6">
+                <button type="button" @click="currentStep = 5" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 id="contactTitle" class="text-2xl font-bold text-gray-800 mb-1">Contact Details</h2>
                 <p id="contactSub" class="text-rose-500 text-[10px] font-black uppercase mb-6 tracking-widest">Both mobile number and email are required.</p>
                 <div class="space-y-4">
@@ -318,9 +370,9 @@
                 </div>
             </div>
 
-            <!-- REGISTER STEP 6: OTP -->
-            <div id="reg-6" class="step-content" :class="{ 'active': view === 'register' && currentStep === 6 }" x-show="view === 'register' && currentStep === 6">
-                <button type="button" @click="currentStep = 5" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <!-- REGISTER STEP 7: OTP -->
+            <div id="reg-7" class="step-content" :class="{ 'active': view === 'register' && currentStep === 7 }" x-show="view === 'register' && currentStep === 7">
+                <button type="button" @click="currentStep = 6" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Verify your account</h2>
                 <p class="text-gray-500 text-sm mb-6">Enter the 6-digit verification code.</p>
                 <div id="checkEmailAnim" class="hidden flex flex-col items-center justify-center space-y-2 mb-6">
@@ -349,9 +401,9 @@
                 </div>
             </div>
 
-            <!-- REGISTER STEP 7: Password -->
-            <div id="reg-7" class="step-content" :class="{ 'active': view === 'register' && currentStep === 7 }" x-show="view === 'register' && currentStep === 7">
-                <button type="button" @click="currentStep = 6" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
+            <!-- REGISTER STEP 8: Password -->
+            <div id="reg-8" class="step-content" :class="{ 'active': view === 'register' && currentStep === 8 }" x-show="view === 'register' && currentStep === 8">
+                <button type="button" @click="currentStep = 7" class="mb-2 text-gray-400 hover:text-indigo-600 transition-all hover:-translate-x-1"><i class="fa-solid fa-arrow-left"></i></button>
                 <h2 class="text-2xl font-bold text-gray-800 mb-1">Enter a strong password</h2>
                 <p class="text-gray-500 text-sm mb-6">Choose a secure password to protect your account.</p>
                 <div class="space-y-4">
@@ -529,6 +581,7 @@
                currentStep: 0,
                 theme: localStorage.getItem('theme') || 'system',
                 usernameStatus: '',
+                matrix_noStatus: '',
                 phoneStatus: '',
                 emailStatus: '',
                 otpTimer: 0,
@@ -536,6 +589,7 @@
                 countdownTimer: null,
                  registration: { 
                     first_name: '', surname: '', birthday: '', username: '', 
+                    dept: '', matrix_no: '', jamb_no: '',
                     gender: '', phone: '', email: '', password: '', 
                     confirmPassword: '', terms: false 
                 },
@@ -568,7 +622,7 @@
                 async checkClipboardForOtp() {
  // Trigger if we are on registration step 6 or forgot password OTP page
                     const isForgotOtp = document.getElementById('page-forgot-otp')?.classList.contains('active');
-                    if (this.currentStep !== 6 && !isForgotOtp) return;
+                    if (this.currentStep !== 7 && !isForgotOtp) return;
 
                     try {
                         const text = await navigator.clipboard.readText();
@@ -673,16 +727,14 @@
                         if (!response.ok) throw new Error(result.message || 'An error occurred.');
 
                         if (this.view === 'login') {
-                            localStorage.setItem('maiga_session_active', 'true');
-                            localStorage.setItem('maiga_last_account_type', 'ysu');
+                            localStorage.setItem('ysu_session_active', 'true');
                             showMessage('Redirecting to YSU Social...', 'success');
-                            setTimeout(() => { window.location.href = '/home'; }, 1500);
+                            setTimeout(() => { window.location.href = '/ysu/home'; }, 1500);
                         } else {
-                            localStorage.setItem('maiga_session_active', 'true');
-                            localStorage.setItem('maiga_last_account_type', 'ysu');
+                            localStorage.setItem('ysu_session_active', 'true');
                             localStorage.setItem('maiga_just_registered', 'true');
                             showMessage('Registration successful! Redirecting...', 'success');
-                            setTimeout(() => { window.location.href = '/home'; }, 1500);
+                            setTimeout(() => { window.location.href = '/ysu/home'; }, 1500);
                         }
                     } catch (error) {
                         showMessage(error.message, 'error');
@@ -693,7 +745,7 @@
                 },
                 nextStep(s, e) {
                     if (s > this.currentStep && this.currentStep > 0 && !validateStep(this.currentStep)) return;
-                    if (s === 6 && this.currentStep === 5) { this.sendRegistrationOTP(e); return; }
+                    if (s === 7 && this.currentStep === 6) { this.sendRegistrationOTP(e); return; }
                     this.currentStep = s;
                     window.currentStep = s; // Sync global variable
                     this.saveAuthProgress();
@@ -723,8 +775,8 @@
                     }).then(async res => {
                         const data = await res.json();
                         if (data.success || res.status === 429) { 
-                            this.currentStep = 6;
-                            window.currentStep = 6;
+                            this.currentStep = 7;
+                            window.currentStep = 7;
                             this.saveAuthProgress(true); 
                             this.startTimer(data.remaining || 180); 
                         } else showMessage(data.message, 'error');
@@ -756,7 +808,7 @@
                                     const input = document.querySelector(`[name="${key.replace('[]', '\\[\\]')}"]`);
                                     if (input) input.value = state.data[key];
                                 });
-                                if (this.currentStep === 6) {
+                                if (this.currentStep === 7) {
                                     const remaining = Math.max(0, Math.floor(180 - (Date.now() - state.otpTimestamp) / 1000));
                                     if (remaining > 0) this.startTimer(remaining);
                                 }
@@ -805,7 +857,7 @@
         }
 
         // Corrected Registration OTP Logic
-        const regOtpBoxes = document.querySelectorAll('#otp-inputs .otp-box');
+        const regOtpBoxes = document.querySelectorAll('#reg-7 .otp-box');
         regOtpBoxes.forEach((box, index) => {
             box.addEventListener('input', (e) => {
                 if (e.target.value.length === 1) {
@@ -880,7 +932,7 @@
         }
 
         async function verifyOTP() {
-            const btn = document.querySelector('#reg-6 .btn-primary');
+            const btn = document.querySelector('#reg-7 .btn-primary');
             if (!btn) return;
             const originalBtnHtml = btn.innerHTML;
 
@@ -911,7 +963,7 @@
 
                 if (response.ok && result.success) {
                     showMessage(result.message, 'success');
-                    nextStep(7); // Proceed to the next registration step (password)
+                    nextStep(8); // Proceed to the next registration step (password)
                 } else {
                     showMessage(result.message || 'OTP verification failed.', 'error');
                     applyShake(btn);
@@ -1014,12 +1066,40 @@
             if (!stepEl) return true;
 
             // Skip generic validation for OTP step as verifyOTP handles its own validation
-            if (step === 6) {
+            if (step === 7) {
                 return true;
             }
 
-            // Special validation for Contact Step (Step 5)
-            if (step === 5) {
+            // Special validation for School Verification (Step 4)
+            if (step === 4) {
+                const matrix = stepEl.querySelector('input[name="matrix_no"]')?.value.trim();
+                const jamb = stepEl.querySelector('input[name="jamb_no"]')?.value.trim();
+                if (!matrix || !jamb) {
+                    showMessage('Both Matrix No and JAMB Number are required.', 'error');
+                    return false;
+                }
+
+                const matrixRegex = /^[A-Z0-9]+\/[A-Z]+\/\d{2}\/\d{3}$/;
+                if (!matrixRegex.test(matrix)) {
+                    showMessage('Matrix Number format invalid. (Expected: U/DEPT/YY/###)', 'error');
+                    return false;
+                }
+
+                const alpine = Alpine.$data(document.getElementById('authCard'));
+                if (alpine.matrix_noStatus === 'taken') {
+                    showMessage('This Matrix Number is already registered.', 'error');
+                    return false;
+                }
+
+                const jambRegex = /^\d{10}[a-zA-Z]{2}$/;
+                if (!jambRegex.test(jamb)) {
+                    showMessage('JAMB Number format invalid. (Required: 10 digits followed by 2 letters)', 'error');
+                    return false;
+                }
+            }
+
+            // Special validation for Contact Step (Step 6)
+            if (step === 6) {
                 const phone = stepEl.querySelector('input[name="phone"]');
                 const email = stepEl.querySelector('input[name="reg_email"]');
                 if (!phone.value.trim() && !email.value.trim()) {
@@ -1053,8 +1133,8 @@
             }
 
             // If moving to OTP step, request OTP from backend first
-            if (step === 6 && currentStep === 5) {
-                const btn = document.querySelector('#reg-5 .btn-primary');
+            if (step === 7 && currentStep === 6) {
+                const btn = document.querySelector('#reg-6 .btn-primary');
                 const originalBtnHtml = btn.innerHTML;
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2 text-white"></i> Sending...';
@@ -1149,9 +1229,9 @@
 
         function updateProgress() {
             if (currentStep === 0) return;
-            const percent = Math.round((currentStep / 7) * 100);
+            const percent = Math.round((currentStep / 8) * 100);
             document.getElementById('progressFill').style.width = percent + '%';
-            document.getElementById('stepCounter').innerText = `Step ${currentStep} of 7`;
+            document.getElementById('stepCounter').innerText = `Step ${currentStep} of 8`;
             document.getElementById('percentLabel').innerText = percent + '%';
         }
 
@@ -1307,7 +1387,7 @@
                 } else {
                     localStorage.removeItem('saved_identity');
                 }
-            } else if (activePageId === 'reg-7') {
+            } else if (activePageId === 'reg-8') {
                 const otpInputs = document.querySelectorAll('#otp-inputs input');
                 data.otp = Array.from(otpInputs).map(i => i.value).join('');
                 // Frontend Password Enforcement
@@ -1418,7 +1498,7 @@
                 if (currentStep > 0 && currentStep < 7) {
                     e.preventDefault();
                     // If on OTP step, trigger verifyOTP instead of just moving next
-                    if (currentStep === 6) {
+                    if (currentStep === 7) {
                         verifyOTP();
                     } else {
                         nextStep(currentStep + 1);
@@ -1432,14 +1512,12 @@
             const popup = document.getElementById('welcomePopup');
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
 
-            if (isStandalone) {
-                if(popup) popup.classList.add('hidden');
-            } else {
-            }
+            // Removed auto-hide for standalone mode to ensure YSU can be installed 
+            // even if Maiga Social is already present on the device.
 
             // Register Service Worker for YSU
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js?app=ysu');
+                navigator.serviceWorker.register('/sw.js?app=ysu', { scope: '/ysu/' });
 
                 let refreshing = false;
                 const oldController = navigator.serviceWorker.controller;
@@ -1450,12 +1528,11 @@
                     window.location.reload();
                 });
             }
-            if (!isStandalone) { // Show popup if not in standalone mode
-                setTimeout(() => {
-                    if(popup) popup.classList.remove('hidden');
-                    localStorage.setItem('installPopupShown', Date.now().toString());
-                }, 1000);
-            }
+            
+            setTimeout(() => {
+                if(popup) popup.classList.remove('hidden');
+                localStorage.setItem('ysu_install_popup_shown', Date.now().toString());
+            }, 1000);
         });
         function toggleFullScreen() {
             if (!document.fullscreenElement) {

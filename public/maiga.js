@@ -17,6 +17,10 @@ const captureLog = (type, args) => {
     if (consoleBuffer.length > MAX_LOGS) consoleBuffer.shift();
 };
 
+// --- APP ISOLATION ENGINE ---
+const CURRENT_APP = window.location.pathname.startsWith('/ysu') ? 'ysu' : 'maiga';
+const APP_PREFIX = CURRENT_APP + '_';
+
 ['log', 'warn', 'error', 'info'].forEach(type => {
     const original = console[type];
     console[type] = (...args) => {
@@ -147,19 +151,19 @@ const initMaiga = () => {
                 const size = value === 'small' ? '14px' : value === 'medium' ? '16px' : '18px';
                 document.documentElement.style.fontSize = size;
             });
-            this.$watch('showChatShadows', (value) => localStorage.setItem('maiga_chat_shadows', value));
-            this.$watch('wallpaperBlur', (value) => localStorage.setItem('maiga_chat_wallpaper_blur', value));
-            this.$watch('selectedBubbleColor', (value) => localStorage.setItem('maiga_chat_bubble_color', value));
-            this.$watch('selectedChatFont', (value) => localStorage.setItem('maiga_chat_font', value));
-            this.$watch('selectedWallpaper', (value) => localStorage.setItem('maiga_chat_wallpaper', value));
-            this.$watch('wallpaperBrightness', (value) => localStorage.setItem('maiga_chat_wallpaper_brightness', value));
-            this.$watch('wallpaperContrast', (value) => localStorage.setItem('maiga_chat_wallpaper_contrast', value));
+            this.$watch('showChatShadows', (value) => localStorage.setItem(APP_PREFIX + 'chat_shadows', value));
+            this.$watch('wallpaperBlur', (value) => localStorage.setItem(APP_PREFIX + 'chat_wallpaper_blur', value));
+            this.$watch('selectedBubbleColor', (value) => localStorage.setItem(APP_PREFIX + 'chat_bubble_color', value));
+            this.$watch('selectedChatFont', (value) => localStorage.setItem(APP_PREFIX + 'chat_font', value));
+            this.$watch('selectedWallpaper', (value) => localStorage.setItem(APP_PREFIX + 'chat_wallpaper', value));
+            this.$watch('wallpaperBrightness', (value) => localStorage.setItem(APP_PREFIX + 'chat_wallpaper_brightness', value));
+            this.$watch('wallpaperContrast', (value) => localStorage.setItem(APP_PREFIX + 'chat_wallpaper_contrast', value));
             this.arAssets.hat.src = 'https://img.icons8.com/color/96/party-hat.png'; // Reliable online URL
             this.loadSavedWallpaper();
             this.arAssets.background.src = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1080&auto=format&fit=crop';
             // Load recently used stickers from local storage
-            this.$watch('isMessageSoundEnabled', (val) => val !== undefined && localStorage.setItem('maiga_msg_sound', val));
-            const savedRecents = localStorage.getItem('recent_stickers');
+            this.$watch('isMessageSoundEnabled', (val) => val !== undefined && localStorage.setItem(APP_PREFIX + 'msg_sound', val));
+            const savedRecents = localStorage.getItem(APP_PREFIX + 'recent_stickers');
             if (savedRecents) {
                 this.recentlyUsedStickers = JSON.parse(savedRecents);
             }
@@ -175,7 +179,7 @@ const initMaiga = () => {
             }); // Fixed: Missing semicolon
 
             // Show guide overlay for new users
-            if (!localStorage.getItem('guide_shown')) {
+            if (!localStorage.getItem(APP_PREFIX + 'guide_shown')) {
                 this.showGuideOverlay = true;
             }
 
@@ -188,12 +192,16 @@ const initMaiga = () => {
         },
         installPrompt: null,
         // Core App State
-        user: { id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', is_verified: false, account_type: localStorage.getItem('maiga_last_account_type') || 'maiga', followerIds: [], followingIds: [], total_posts_count: 0 },
-        friends: JSON.parse(localStorage.getItem('maiga_friends_cache') || '[]'),
+        user: { 
+            id: 0, name: '', username: '', nickname: '', avatar: '', banner: '', gender: 'male', 
+            is_verified: false, account_type: CURRENT_APP, 
+            followerIds: [], followingIds: [], total_posts_count: 0, matrix_no: '', jamb_no: '' 
+        },
+        friends: JSON.parse(localStorage.getItem(APP_PREFIX + 'friends_cache') || '[]'),
         postsObserver: null,
         isKeyboardOpen: false,
         chatStarFilter: false,
-        isMessageSoundEnabled: localStorage.getItem('maiga_msg_sound') !== 'false',
+        isMessageSoundEnabled: localStorage.getItem(APP_PREFIX + 'msg_sound') !== 'false',
         groupSearchQuery: '',
         showChatMenu: false,
         showReactionsModal: false,
@@ -224,24 +232,24 @@ const initMaiga = () => {
         hasFlashlight: false,
         isFlashOn: false,
         isAutoExpanding: false,
-        dataSaverMode: localStorage.getItem('maiga_data_saver') === 'true',
-        hiddenReelDepts: JSON.parse(localStorage.getItem('maiga_hidden_depts') || '[]'),
+        dataSaverMode: localStorage.getItem(APP_PREFIX + 'data_saver') === 'true',
+        hiddenReelDepts: JSON.parse(localStorage.getItem(APP_PREFIX + 'hidden_depts') || '[]'),
         avatarFileToUpload: null,
         avatarOriginalFile: null,
         bannerFile: null,
         showMsgInfo: false,
         messageInfoData: { delivered_at: null, read_details: [] },
         groupActivityData: [],
-        theme: localStorage.getItem('theme') || 'system',
+        theme: localStorage.getItem(APP_PREFIX + 'theme') || 'system',
         darkMode: false,
-        appFontSize: localStorage.getItem('maiga_app_font_size') || 'small',
-        showChatShadows: localStorage.getItem('maiga_chat_shadows') !== 'false',
-        isFullScreen: localStorage.getItem('maiga_fullscreen') === 'true',      
-        isLeftSidebarCollapsed: localStorage.getItem('maiga_sidebar_collapsed') === 'true',
-        isRightSidebarCollapsed: localStorage.getItem('maiga_right_sidebar_collapsed') === 'true',
-        isLayoutSwapped: localStorage.getItem('maiga_layout_swapped') === 'true',
+        appFontSize: localStorage.getItem(APP_PREFIX + 'app_font_size') || 'small',
+        showChatShadows: localStorage.getItem(APP_PREFIX + 'chat_shadows') !== 'false',
+        isFullScreen: localStorage.getItem(APP_PREFIX + 'fullscreen') === 'true',      
+        isLeftSidebarCollapsed: localStorage.getItem(APP_PREFIX + 'sidebar_collapsed') === 'true',
+        isRightSidebarCollapsed: localStorage.getItem(APP_PREFIX + 'right_sidebar_collapsed') === 'true',
+        isLayoutSwapped: localStorage.getItem(APP_PREFIX + 'layout_swapped') === 'true',
         viewportHeight: window.innerHeight,
-        get lsPrefix() { return this.user.account_type === 'ysu' ? 'ysu_' : 'maiga_'; },
+        get lsPrefix() { return APP_PREFIX; },
         isRefreshingHome: false,
         customWallpaperFile: null,
         pendingPosts: [],
@@ -260,11 +268,11 @@ const initMaiga = () => {
             confirmAction: () => {}
         },
         activeTab: (function() {
-            if (!sessionStorage.getItem('maiga_session_initialized')) {
-                sessionStorage.setItem('maiga_session_initialized', 'true');
+            if (!sessionStorage.getItem(APP_PREFIX + 'session_initialized')) {
+                sessionStorage.setItem(APP_PREFIX + 'session_initialized', 'true');
                 return 'home'; // Force home on first visit/login
             }
-            return localStorage.getItem('maiga_active_tab') || 'home';
+            return localStorage.getItem(APP_PREFIX + 'active_tab') || 'home';
         })(),
         activeMessageTab: 'all',
         isLoading: true,
@@ -282,6 +290,9 @@ const initMaiga = () => {
             birthday: '',
             username: '',
             gender: '',
+            dept: '',
+            matrix_no: '',
+            jamb_no: '',
             phone: '',
             email: '',
             password: '',
@@ -339,13 +350,13 @@ const initMaiga = () => {
             });
             if (res?.success) {
                 this.showToast('Verified', 'Code verified successfully.', 'success');
-                this.currentStep = 3;
+                this.currentStep = 3; // Move to Personal Info
             } else { 
                 this.showToast('Error', res?.message || 'Invalid code', 'error'); 
             }
         },
         async register() {
-            if (this.passwordScore < 3) {
+            if (this.passwordScore < 2) {
                 return this.showToast('Error', 'Please choose a stronger password', 'error');
             }
             if (this.registration.password !== this.registration.confirmPassword) {
@@ -400,7 +411,7 @@ const initMaiga = () => {
         isStoryLoading: false,
         drafts: {},
         toasts: [],
-        recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
+        recentSearches: JSON.parse(localStorage.getItem(APP_PREFIX + 'recent_searches') || '[]'),
 
         // Feature Lists
         posts: [],
@@ -2014,7 +2025,6 @@ const initMaiga = () => {
         newPostContent: '',
         homeSearchQuery: '',
         isSearchFocused: false,
-        recentSearches: ['Exam Timetable', 'Library', 'Sports'],
         isCallChatOpen: false,
         showSocialLinkModal: false,
         isCallMinimized: false,
@@ -2038,7 +2048,8 @@ const initMaiga = () => {
                     await this.apiFetch('/api/logout');
 
                     // Clear local application storage
-                    localStorage.removeItem('maiga_session_active');
+                    localStorage.removeItem(APP_PREFIX + 'session_active');
+                    localStorage.removeItem('maiga_session_active'); // Legacy cleanup
                     localStorage.clear();
 
                     // Force clear browser cache storage (Service Worker caches)
@@ -2048,7 +2059,7 @@ const initMaiga = () => {
                     }
 
                     // Redirect to YSU login if account_type is 'ysu', otherwise to default Maiga login
-                    window.location.replace(this.user.account_type === 'ysu' ? 'ysu.html' : 'index.html');
+                    window.location.replace(CURRENT_APP === 'ysu' ? '/ysu.html' : '/index.html');
                 }
             );
         },
@@ -2237,7 +2248,8 @@ const initMaiga = () => {
             const deltaY = touchY - this.pullStartY;
 
             let scrollEl = this.$refs.mainContent;
-            if (this.activeTab === 'reels') scrollEl = this.$refs.reelsContainer;
+            if (this.isMessaging && !this.activeChat) scrollEl = this.$refs.messageList;
+            else if (this.activeTab === 'reels') scrollEl = this.$refs.reelsContainer;
 
             // Prevent tab swiping if interacting with horizontal scroll areas (like stories)
             if (e.target.closest('[data-no-swipe]') || e.target.closest('.no-scrollbar') || e.target.closest('.overflow-x-auto')) return;
@@ -2383,7 +2395,8 @@ const initMaiga = () => {
         privacySettings: {
             privateAccount: false,
             activityStatus: true,
-            location: true
+            location: true,
+ showMaigaContent: true
         },
         passwordForm: { current: '', new: '', confirm: '' },
         editUser: {},
@@ -2547,8 +2560,8 @@ const initMaiga = () => {
         async mainInit() {
             // --- PWA Force Update Logic ---
             if ('serviceWorker' in navigator) {
-                const appType = this.user.account_type || 'maiga';
-                const swScope = appType === 'ysu' ? '/ysu' : '/home';
+                const appType = CURRENT_APP;
+                const swScope = appType === 'ysu' ? '/ysu/' : '/home';
                 
                 // Register and handle updates automatically
                 navigator.serviceWorker.register(`/sw.js?app=${appType}`, { scope: swScope });
@@ -2567,8 +2580,8 @@ const initMaiga = () => {
             }
 
             // Prevent back button to login page
-            history.pushState(null, null, location.href);
-            window.onpopstate = function () {
+            if (this.activeTab !== 'home') history.pushState(null, null, location.href);
+            window.onpopstate = () => {
                 history.go(1);
             };
 
@@ -3004,13 +3017,13 @@ const initMaiga = () => {
 
             // Watch for sidebar changes
             this.$watch('isLeftSidebarCollapsed', (value) => {
-                localStorage.setItem('maiga_sidebar_collapsed', value);
+                localStorage.setItem(APP_PREFIX + 'sidebar_collapsed', value);
             });
             this.$watch('isRightSidebarCollapsed', (value) => {
-                localStorage.setItem('maiga_right_sidebar_collapsed', value);
+                localStorage.setItem(APP_PREFIX + 'right_sidebar_collapsed', value);
             });
             this.$watch('isLayoutSwapped', (value) => {
-                localStorage.setItem('maiga_layout_swapped', value);
+                localStorage.setItem(APP_PREFIX + 'layout_swapped', value);
             });
 
             // Watch for user profile modal closure
@@ -3103,7 +3116,10 @@ const initMaiga = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(value)
-                });
+            }).then(() => {
+                // Refresh all data to apply new filters immediately
+                this.refreshAllData();
+            });
             }, { deep: true });
 
             this.$watch('selectedLanguage', (value) => {
@@ -3144,7 +3160,7 @@ const initMaiga = () => {
                 // Load draft for the new chat
                 this.newMessage = newChat ? (this.drafts[newChat.id] || '') : '';
                 if (newChat) {
-                    localStorage.setItem('maiga_active_chat_id', newChat.id);
+                    localStorage.setItem(APP_PREFIX + 'active_chat_id', newChat.id);
                     this.markAsRead(newChat);
                     this.fetchMessages(newChat, true);
                     // Auto-focus input on chat open
@@ -3154,7 +3170,7 @@ const initMaiga = () => {
                     this.showJumpToBottom = false;
                     this.unreadMessagesWhileScrolledUp = 0;
                 } else {
-                    localStorage.removeItem('maiga_active_chat_id');
+                    localStorage.removeItem(APP_PREFIX + 'active_chat_id');
                 }
             });
 
@@ -3185,7 +3201,7 @@ const initMaiga = () => {
             
             // Load tab-specific data when switching tabs
             this.$watch('activeTab', (newTab) => {
-                localStorage.setItem('maiga_active_tab', newTab);
+                localStorage.setItem(APP_PREFIX + 'active_tab', newTab);
                 if (newTab === 'saved' && this.savedPostList.length === 0) {
                     this.fetchSavedPosts();
                 }
@@ -3213,9 +3229,7 @@ const initMaiga = () => {
                 };
                 window.addEventListener('click', triggerFs);
             }
-            document.addEventListener('fullscreenchange', () => {
-                this.isFullScreen = !!document.fullscreenElement;
-            });
+
             this.editUser = { ...this.user };
             
             try {
@@ -3252,13 +3266,13 @@ const initMaiga = () => {
                 this.loadCreatePostDraft();
 
                 // Restore viewing user profile if it was open before refresh
-                const savedViewingUser = localStorage.getItem('maiga_viewing_user_id');
+                const savedViewingUser = localStorage.getItem(APP_PREFIX + 'viewing_user_id');
                 if (savedViewingUser) {
                     this.openUserProfile(savedViewingUser);
                 }
 
                 // Restore active chat after lists are loaded
-                const savedChatId = localStorage.getItem('maiga_active_chat_id');
+                const savedChatId = localStorage.getItem(APP_PREFIX + 'active_chat_id');
                 if (savedChatId) {
                     const chat = this.chats.find(c => c.id == savedChatId) || this.groups.find(g => g.id == savedChatId);
                     if (chat) this.activeChat = chat;
@@ -3278,7 +3292,7 @@ const initMaiga = () => {
                 this.apiFetch('/api/get_stories').then(d => { this.processStories(Array.isArray(d) ? d : []); incrementProgress(); });
                 this.apiFetch('/api/get_notifications').then(d => { this.notifications = d?.notifications || []; incrementProgress(); });
                 this.apiFetch(`/api/friends/suggestions?page=${this.friendsPage}&limit=${this.friendsLimit}`).then(data => { 
-                    if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem('maiga_friends_cache', JSON.stringify(data.users)); } incrementProgress();
+                    if (data && Array.isArray(data.users)) { this.friends = data.users; this.hasMoreFriends = data.hasMore; localStorage.setItem(APP_PREFIX + 'friends_cache', JSON.stringify(data.users)); } incrementProgress();
                 });
 
                 this.apiFetch('/api/get_muted_chats').then(d => { if (Array.isArray(d)) this.mutedChats = d; incrementProgress(); });
@@ -3330,6 +3344,7 @@ const initMaiga = () => {
                     // Welcome Logic for newly registered users
                     if (localStorage.getItem('maiga_just_registered') === 'true') {
                         localStorage.removeItem('maiga_just_registered');
+                        localStorage.setItem(APP_PREFIX + 'just_registered', 'true');
                         this.showToast('Welcome!', `Welcome to the community, ${this.user.name.split(' ')[0]}!`, 'success');
                         this.showGuideOverlay = true;
                     }
@@ -3344,7 +3359,7 @@ const initMaiga = () => {
             // Setup cryptography - Fix for phone/non-secure context
             if (window.isSecureContext && window.crypto && window.crypto.subtle) {
                 try {
-                    await this.crypto.init(this);
+                    await this.crypto.init(this, DB_NAME);
                     
                     // Update CSRF tokens for any pending posts in IndexedDB
                     await this.crypto.refreshPendingTokens(CSRF_TOKEN);
@@ -5876,7 +5891,7 @@ const initMaiga = () => {
         },
         openAddMembers() {
             this.isAddingGroupMembers = true;
-            this.showGroupInfo = false; // Fixed: addMembersToGroup route was missing
+            this.showGroupInfo = false; 
             this.membersToAdd = [];
             this.isAddingMembers = false; // Reset flag
             this.addMemberSearchQuery = '';
@@ -6263,13 +6278,12 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) {
-            if (this.isBlocked(userId)) {
-                this.blockedUsers = this.blockedUsers.filter(id => id !== userId);
-                        this.showToast('Success', 'User unblocked.');
-            } else {
-                this.blockedUsers.push(userId);
-                        this.showToast('Success', 'User blocked.');
-            }
+                    if (isCurrentlyBlocked) {
+                        this.blockedUsers = this.blockedUsers.filter(id => id !== userId);
+                    } else {
+                        this.blockedUsers.push(userId);
+                    }
+                    this.showToast('Success', `User ${isCurrentlyBlocked ? 'unblocked' : 'blocked'}.`, 'success');
                 }
             });
         },
@@ -6321,7 +6335,9 @@ const initMaiga = () => {
             if (input) input.value = '';
         },
         viewStory(stories, user = null) {
-            this.viewingStory = { list: stories, index: 0, user: user || this.user };
+            // Ensure the user object in viewingStory has a string ID for consistent template comparison
+            const storyUser = user ? { ...user, id: user.id.toString() } : { ...this.user, id: this.user.id.toString() };
+            this.viewingStory = { list: stories, index: 0, user: storyUser };
             if (this.viewingStory.user.id !== this.user.id) {
                 const currentStory = this.viewingStory.list[this.viewingStory.index];
                 if (!currentStory.seenBy) {
@@ -6355,13 +6371,15 @@ const initMaiga = () => {
         startStoryProgress() {
             clearInterval(this.storyTimer);
             this.handleStoryMusic();
+            const currentStory = this.viewingStory?.list[this.viewingStory.index];
+            // Auto-advance faster (2.5s) if it's a short text-only story (< 50 chars), otherwise 5s
+            const segmentDuration = (currentStory?.type === 'image' && currentStory?.content && currentStory?.content.length < 50) ? 2500 : 5000;
+            
             this.storyProgress = 0;
             this.storyTimer = setInterval(() => {
                 if (!this.viewingStory || this.isPaused || this.isStoryLoading) return; // Pause when loading
                 this.storyProgress += 1;
-                // Duration for story segment is 5 seconds
-                const segmentDuration = 5000; // ms
-                if (this.storyProgress * 50 >= segmentDuration) { // 50ms interval * progress value
+                if (this.storyProgress * 50 >= segmentDuration) { 
                     if (this.viewingStory.index < this.viewingStory.list.length - 1) {
                         this.viewingStory.index++;
                         this.storyProgress = 0;
@@ -7236,6 +7254,7 @@ const initMaiga = () => {
             
             const formData = new FormData();
             formData.append('media', fileToUpload);
+            formData.append('content', this.newStoryContent);
             formData.append('type', type);
             formData.append('audience', 'public');
             formData.append('has_music', this.tempStory?.hasMusic ? 1 : 0);

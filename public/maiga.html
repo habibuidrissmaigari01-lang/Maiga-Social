@@ -22,6 +22,20 @@
     <link rel="apple-touch-startup-image" id="splash-14-pl" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_Plus_portrait.png">
     <link rel="apple-touch-startup-image" id="splash-14-p" media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="img/splash/iPhone_14_portrait.png">
 
+    <script>
+        // Immediate PWA Branding Synchronization
+        (function() {
+            const isYsu = window.location.pathname.startsWith('/ysu');
+            if (isYsu) {
+                document.title = 'YSU Social';
+                // Select by ID to ensure we target the correct tags
+                document.getElementById('app-icon').href = '/img/ysu.png';
+                document.getElementById('apple-icon').href = '/img/ysu.png';
+                document.getElementById('app-manifest').href = '/manifest-ysu.json';
+            }
+        })();
+    </script>
+
     <link rel="manifest" id="app-manifest" href="manifest-maiga.json">
     <link rel="service-worker" href="sw.js">
     <link rel="stylesheet" href="/vendor/font-awesome.css">
@@ -567,7 +581,7 @@
            :class="isLeftSidebarCollapsed ? 'w-24' : 'w-[280px]'"
            :style="isLayoutSwapped ? 'order: 3' : 'order: 1'">
         <div class="p-6 flex items-center justify-center border-b dark:border-gray-800">
-            <img src="img/logo.png" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
+            <img :src="user.account_type === 'ysu' ? 'img/ysu.png' : 'img/logo.png'" class="w-10 h-10 mr-2 logo-grayscale floating-logo">
             <span class="amazing-logo text-2xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
         </div>
         <div @click="activeTab = 'profile'" class="p-4 flex items-center space-x-4 border-b dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
@@ -663,12 +677,15 @@
 
     <!-- Top Navigation -->
     <header class="sticky top-0 flex-none px-4 flex justify-between items-center z-[100] transition-all duration-300"
-            :class="hasScrolled ? 'py-1.5 glass-header-scrolled' : 'py-3 bg-white dark:bg-gray-900 border-b dark:border-gray-800'">
+            :class="[hasScrolled ? 'py-1.5 glass-header-scrolled' : 'py-3 bg-white dark:bg-gray-900 border-b dark:border-gray-800', (isMessaging || viewingStory) ? 'lg:flex hidden' : 'flex']">
         <div class="flex items-center space-x-3">
             <button @click="isSideMenuOpen = true" class="p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800 lg:hidden"><i class="fa-solid fa-bars text-xl"></i></button>
             <div class="flex items-center lg:hidden text-gray-800 dark:text-gray-200 transition-all duration-300" :class="hasScrolled ? 'scale-90 origin-left' : 'scale-100'">
-                <img src="img/logo.png" class="w-7 h-7 sm:w-10 sm:h-10 mr-2 logo-grayscale floating-logo shrink-0">
+                <img :src="user.account_type === 'ysu' ? 'img/ysu.png' : 'img/logo.png'" class="w-7 h-7 sm:w-10 sm:h-10 mr-2 logo-grayscale floating-logo shrink-0">
                 <span class="amazing-logo text-xl sm:text-4xl" x-text="user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social'"></span>
+                <template x-if="user.account_type === 'ysu' && !privacySettings.showMaigaContent">
+                    <span title="Isolation Mode: You are only seeing activity from the YSU community." class="ml-2 bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm animate-pulse border border-white/20 cursor-help">YSU ONLY</span>
+                </template>
             </div>
             <span class="text-xl font-bold hidden lg:block" x-text="activeTab.charAt(0).toUpperCase() + activeTab.slice(1)"></span>
         </div>
@@ -696,12 +713,12 @@
     </div>
 
     <!-- Scrollable Content -->
-    <div class="flex-1 overflow-y-auto scroll-smooth" @scroll.self="handleScroll($el)" x-ref="mainContent">
+    <div class="flex-1 overflow-y-auto scroll-smooth" :class="(isMessaging || viewingStory) ? 'lg:block hidden' : 'block'" @scroll.self="handleScroll($el)" x-ref="mainContent">
     <div class="pb-28 lg:pb-12">
     <!-- Messaging Overlay (now also for desktop chat windows) -->
     <div x-show="isMessaging" 
          :style="isMessaging && window.innerWidth < 1024 ? { height: viewportHeight + 'px' } : {}"
-         x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700">
+         x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700 overscroll-contain">
         <!-- List View -->
         <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
@@ -752,7 +769,7 @@
                 </div>
             </div>
             <!-- Added padding-bottom to ensure the last chat items aren't hidden behind the fixed bottom nav on mobile -->
-            <div class="flex-1 overflow-y-auto pb-24 lg:pb-0">
+            <div x-ref="messageList" class="flex-1 overflow-y-auto pb-24 lg:pb-0">
                 <!-- All Chats -->
                 <div x-show="activeMessageTab === 'all'">
                     <template x-for="chat in sortedChats" :key="chat.id">
@@ -1386,15 +1403,14 @@
                             Reset Theme to Default
                         </button>
                     </div>
-                </div>
-            </div>
+               
 
             <!-- Reply Preview Banner -->
             <div x-show="replyingTo" x-transition class="px-4 py-2 bg-gray-50 dark:bg-gray-800/50 border-t dark:border-gray-800 flex justify-between items-center">
-                <div class="text-xs border-l-4 border-blue-500 pl-2">
-                    <p class="font-bold text-blue-600">Replying to <span x-text="replyingTo?.sender === 'me' ? 'Yourself' : activeChat?.name"></span></p>
-                    <p class="text-gray-500 dark:text-gray-400 truncate max-w-[200px]" x-text="replyingTo?.content"></p>
-                </div>
+                    <div class="text-xs border-l-4 border-blue-500 pl-2">
+                        <p class="font-bold text-blue-600">Replying to <span x-text="replyingTo?.sender === 'me' ? 'Yourself' : activeChat?.name"></span></p>
+                        <p class="text-gray-500 dark:text-gray-400 truncate max-w-[200px]" x-text="replyingTo?.content"></p>
+                    </div>
                 <button @click="replyingTo = null" class="p-1 text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
             </div>
            <div class="p-3 bg-white dark:bg-gray-900 border-t dark:border-gray-800 flex items-end space-x-2 relative" @paste="handlePaste($event)">
@@ -1921,7 +1937,10 @@
             </template>
             <div class="flex justify-between items-center text-gray-400 px-2">
                 <div class="flex space-x-8">
-                    <button @click.stop="viewingPost.liked = !viewingPost.liked; viewingPost.likes += viewingPost.liked ? 1 : -1" :class="viewingPost?.liked ? 'text-rose-500' : ''" class="flex items-center space-x-2"><i class="fa-solid fa-heart" :class="viewingPost?.liked ? '' : 'fa-regular'"></i> <span class="text-sm font-bold" x-text="viewingPost?.likes"></span></button>
+                    <button @click.stop="setReaction(viewingPost, 'like')" class="flex items-center space-x-2 transition-all duration-300 active:scale-125" :class="[getReactionColor(viewingPost?.myReaction), viewingPost?.isAnimatingLike ? 'scale-110' : 'scale-100']">
+                        <i class="text-xl transition-transform" :class="[getReactionIcon(viewingPost?.myReaction), viewingPost?.isAnimatingLike ? 'animate-spring' : '']"></i>
+                        <span class="text-sm font-bold" x-text="viewingPost?.likes"></span>
+                    </button>
                     <button class="flex items-center space-x-2"><i class="fa-regular fa-comment"></i> <span class="text-sm font-bold">12</span></button>
                     <button @click.stop="viewingPost.shares++" class="flex items-center space-x-2"><i class="fa-solid fa-share-nodes"></i> <span class="text-sm font-bold" x-text="viewingPost?.shares"></span></button>
                 </div>
@@ -1982,7 +2001,7 @@
         </div>
         
         <!-- Story Reply & Reactions -->
-        <div class="absolute bottom-0 left-0 right-0 p-4 z-30 bg-gradient-to-t from-black/90 to-transparent" x-show="viewingStory && String(viewingStory.user?.id) !== String(user.id)">
+        <div class="absolute bottom-0 left-0 right-0 p-4 pb-10 md:pb-6 z-30 bg-gradient-to-t from-black/90 via-black/40 to-transparent mb-[env(safe-area-inset-bottom)]" x-show="viewingStory && String(viewingStory.user?.id || viewingStory.user?._id) !== String(user.id)">
             <div class="flex flex-col space-y-4">
                  <div class="flex justify-between px-2">
                     <button @click="sendStoryReply('🔥')" class="text-3xl hover:scale-125 transition-transform">🔥</button>
@@ -1997,7 +2016,7 @@
                     <input type="text" x-model="replyContent" 
                            @focus="isPaused = true" 
                            @blur="isPaused = false"
-                           @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Send message..." class="flex-1 bg-transparent border border-white/50 rounded-full py-3 px-5 text-white placeholder-gray-300 focus:ring-0 focus:border-white text-sm backdrop-blur-sm" :class="{'opacity-0': isRecordingStoryReply}">
+                           @keyup.enter="sendStoryReply(replyContent); replyContent = ''" placeholder="Reply to story..." class="flex-1 bg-white/10 border border-white/30 rounded-full py-3 px-5 text-white placeholder-white/60 focus:ring-1 focus:ring-white/50 focus:border-white text-sm backdrop-blur-md" :class="{'opacity-0': isRecordingStoryReply}">
                     <button @click="toggleStoryLike()" class="text-white p-2">
                         <i class="fa-heart text-2xl transition-colors" :class="didILikeThisStory() ? 'fa-solid text-red-500' : 'fa-regular'"></i>
                     </button>
@@ -3622,8 +3641,8 @@
                 </template>
                 <div class="mt-4 flex justify-between items-center text-gray-500 dark:text-gray-400 px-1">
                     <div class="flex space-x-6">
-                        <button @click.stop="setReaction(post, 'heart')" class="flex items-center space-x-1.5 transition-colors active:scale-125" :class="getReactionColor(post.myReaction)">
-                            <i class="text-xl" :class="getReactionIcon(post.myReaction)"></i>
+                        <button @click.stop="setReaction(post, 'like')" class="flex items-center space-x-1.5 transition-all duration-300 active:scale-125" :class="[getReactionColor(post.myReaction), post.isAnimatingLike ? 'scale-110' : 'scale-100']">
+                            <i class="text-xl transition-transform" :class="[getReactionIcon(post.myReaction), post.isAnimatingLike ? 'animate-spring' : '']"></i>
                             <span class="text-xs font-bold" x-text="post.likes"></span>
                         </button>
                         <button @click.stop="openComments(post, 'post')" class="flex items-center space-x-1.5"><i class="fa-regular fa-comment"></i> <span class="text-xs font-bold" x-text="post.comments || 0"></span></button>
@@ -3877,6 +3896,30 @@
                     <div @click="openFollowerList('followers')" class="text-center flex-1 p-4 border-r dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-l-xl"><p class="font-black text-lg" x-text="user.followerIds.length"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Followers</p></div>
                     <div @click="openFollowerList('following')" class="text-center flex-1 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-r-xl"><p class="font-black text-lg" x-text="user.followingIds.length"></p><p class="text-[9px] text-gray-500 font-bold uppercase tracking-wider">Following</p></div>
                 </div>
+
+                <!-- YSU Discovery Settings Section -->
+                <template x-if="user.account_type === 'ysu'">
+                    <div class="mt-6 bg-white dark:bg-gray-800 rounded-3xl shadow-sm border dark:border-gray-700 overflow-hidden">
+                        <div class="p-4 border-b dark:border-gray-800 flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                                <h3 class="text-xs font-black uppercase tracking-widest text-gray-500">Discovery Settings</h3>
+                            </div>
+                            <i class="fa-solid fa-globe-africa text-gray-300 text-xs"></i>
+                        </div>
+                        <div class="p-5">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1 pr-4">
+                                    <p class="font-black text-sm text-gray-800 dark:text-white">Connect with Maiga Community</p>
+                                    <p class="text-[10px] text-gray-500 font-medium leading-tight mt-1">When off, your activities are only visible to YSU students, and you will only see YSU content.</p>
+                                </div>
+                                <div @click="privacySettings.showMaigaContent = !privacySettings.showMaigaContent" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer shrink-0" :class="privacySettings.showMaigaContent ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-gray-700'">
+                                    <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="privacySettings.showMaigaContent ? 'left-7' : 'left-1'"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
 
                 <!-- Tabs in Profile -->
                 <div class="flex border-b dark:border-gray-800 mt-6">
@@ -4195,6 +4238,19 @@
                         <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="privacySettings.location ? 'left-7' : 'left-1'"></div>
                     </div>
                 </div>
+
+                <!-- YSU Specific Discovery Toggle -->
+                <template x-if="user.account_type === 'ysu'">
+                    <div class="flex items-center justify-between pt-4 border-t dark:border-gray-800">
+                        <div>
+                            <p class="font-bold text-sm">Connect with Maiga Community</p>
+                            <p class="text-xs text-gray-500">Access public posts and reels from Maiga Social users.</p>
+                        </div>
+                        <div @click="privacySettings.showMaigaContent = !privacySettings.showMaigaContent" class="w-12 h-6 rounded-full relative transition-colors cursor-pointer" :class="privacySettings.showMaigaContent ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'">
+                            <div class="w-4 h-4 bg-white rounded-full absolute top-1 transition-all" :class="privacySettings.showMaigaContent ? 'left-7' : 'left-1'"></div>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
     </main>
@@ -4845,8 +4901,10 @@
                                 </div>
                             </div>
                             <div class="flex space-x-3 mt-3 w-full px-4">
-                                <button @click="toggleBlock()" class="flex-1 py-2 rounded-xl font-bold text-xs transition-colors bg-gray-100 dark:bg-gray-800" x-text="isBlocked(viewingUser?.id) ? 'Unblock' : 'Block'"></button>
-                                <button @click="reportUser(viewingUser)" class="flex-1 bg-red-50 text-red-600 dark:bg-red-900/20 py-2 rounded-xl font-bold text-xs">Report</button>
+ <button @click="toggleBlock()" 
+                                        class="flex-1 py-2 rounded-xl font-bold text-xs transition-all active:scale-95" 
+                                        :class="isBlocked(viewingUser?.id) ? 'bg-red-50 text-red-600 dark:bg-red-900/20 border border-red-200 dark:border-red-800' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'"
+                                        x-text="isBlocked(viewingUser?.id) ? 'Unblock Account' : 'Block User'"></button>                                <button @click="reportUser(viewingUser)" class="flex-1 bg-red-50 text-red-600 dark:bg-red-900/20 py-2 rounded-xl font-bold text-xs">Report</button>
                             </div>
                             <div x-show="viewingUser?.is_admin" class="mt-4">
                                 <span class="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-black uppercase shadow-lg shadow-blue-500/30">Official Admin</span>

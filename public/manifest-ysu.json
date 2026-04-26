@@ -3,8 +3,8 @@
   "short_name": "YSU",
   "description": "The official social platform for YSU students.",
   "id": "ysu-social-pwa",
-  "start_url": "/ysu",
-  "scope": "/",
+  "start_url": "/ysu.html",
+  "scope": "/ysu/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#008000",
@@ -12,12 +12,26 @@
     {
       "src": "img/ysu.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "img/ysu.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "img/ysu.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "img/ysu.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

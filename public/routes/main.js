@@ -172,19 +172,63 @@ const parseForm = (req) => {
 
 // --- Routes ---
 
+// Automated Join Notification Logic
+// Note: This logic should be called in your registration completion handler (typically in auth.js)
+const notifyDepartmentJoin = async (newUser, io) => {
+    try {
+        if (newUser.account_type !== 'ysu' || !newUser.dept) return;
+
+        // Find all other YSU students in the same department
+        const colleagues = await User.find({
+            account_type: 'ysu',
+            dept: newUser.dept,
+            _id: { $ne: newUser._id }
+        });
+
+        if (colleagues.length === 0) return;
+
+        const notifications = colleagues.map(c => ({
+            user: c._id,
+            type: 'system',
+            content: `🎓 A new student, ${newUser.name}, has joined the ${newUser.dept} department! Say hello!`,
+            is_read: false
+        }));
+
+        await Notification.insertMany(notifications);
+
+        // Emit to all colleagues via Socket.io
+        notifications.forEach(n => {
+            io.to(n.user.toString()).emit('new_notification', n);
+        });
+    } catch (err) {
+        console.error('Dept Join Notification Error:', err);
+    }
+};
+
 router.get('/get_init_data', isAuthenticated, async (req, res) => {
     try {
         const userId = req.session.userId;
+        const user = await User.findById(userId);
+
+        // Determine if we need to filter for YSU-only content
+        let accountFilter = {};
+        if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            accountFilter = { user: { $in: ysuUserIds } };
+        }
         
         // Fetch all critical data in parallel on the server
-        const [user, posts, chats, groups, connections, followersData, trending, notifications, postsCount, myPosts] = await Promise.all([
-            User.findById(userId),
-            Post.find({ media_type: { $ne: 'video' } }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
+        const [posts, chats, groups, connections, followersData, trending, notifications, postsCount, myPosts] = await Promise.all([
+            Post.find({ media_type: { $ne: 'video' }, ...accountFilter }).populate('user', 'name first_name surname avatar is_verified').sort({ createdAt: -1 }).limit(20),
             Message.find({ $or: [{ sender: userId }, { receiver: userId }] }).sort({ createdAt: -1 }).populate('sender receiver', 'name avatar online gender is_verified'),
             Group.find({ 'members.user': userId }),
             User.findById(userId).populate('following', 'name avatar username online dept gender'),
             User.find({ following: userId }).select('name first_name surname avatar username online dept gender'),
-            Post.aggregate([{ $match: { createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, content: { $regex: /#/ } } }]), // Simplified trending logic
+            Post.aggregate([{ $match: { 
+                createdAt: { $gte: new Date(Date.now() - 7*24*60*60*1000) }, 
+                content: { $regex: /#/ },
+                ...(accountFilter.user ? { user: { $in: accountFilter.user.$in } } : {})
+            } }]),
             Notification.find({ user: userId }).populate('trigger_user', 'name avatar').sort({ created_at: -1 }).limit(10),
             Post.countDocuments({ user: userId }),
             Post.find({ user: userId, media_type: { $ne: 'video' } }).sort({ createdAt: -1 }).limit(12)
@@ -251,7 +295,8 @@ router.get('/get_init_data', isAuthenticated, async (req, res) => {
                 id: user._id, name: user.name, username: user.username, nickname: user.nickname, account_type: user.account_type,
                 avatar: user.avatar || (user.gender === 'female' ? '/img/female.png' : '/img/male.png'),
                 dept: user.dept, bio: user.bio, is_verified: user.is_verified,
-                is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following
+                is_admin: user.is_admin, followerIds: user.followers, followingIds: user.following,
+                matrix_no: user.matrix_no, jamb_no: user.jamb_no // User can always see their own
             },
             posts: posts.map(p => ({ id: p._id, user_id: p.user?._id, author: p.user?.full_name || 'Deleted User', avatar: p.user?.avatar || (p.user?.gender === 'female' ? 'img/female.png' : 'img/male.png'), verified: p.user?.is_verified, content: p.content, media: p.media, time: formatTime(p.createdAt), likes: (p.likes || []).length, link_preview: p.link_preview })),
             myPosts: myPosts.map(p => ({ id: p._id, content: p.content, media: p.media, media_type: p.media_type, time: formatTime(p.createdAt), likes: (p.likes || []).length, views: p.views || 0, author: user.name, avatar: user.avatar, verified: user.is_verified })),
@@ -419,8 +464,20 @@ router.get('/get_posts', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = 20; // Increased from 10 to 20 posts per page for better scrolling experience
         const skip = (page - 1) * limit;
+        const user = await User.findById(req.session.userId);
         
-        const baseQuery = { media_type: { $ne: 'video' } };
+        let baseQuery = { media_type: { $ne: 'video' } };
+        const isYsuIsolated = user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false;
+
+        // Apply YSU isolation if enabled
+        if (isYsuIsolated) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            baseQuery.user = { $in: ysuUserIds };
+        } else if (user.account_type === 'maiga') {
+            // Maiga users should not see YSU-only content
+            baseQuery.is_ysu_only = { $ne: true };
+        }
+
         if (req.query.hashtag) {
             baseQuery.content = { $regex: new RegExp('#' + req.query.hashtag, 'i') };
         }
@@ -501,6 +558,8 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
     const feeling = Array.isArray(fields.feeling) ? fields.feeling[0] : fields.feeling;
     const mediaFiles = files.media ? (Array.isArray(files.media) ? files.media : [files.media]) : [];
 
+    const user = await User.findById(req.session.userId);
+
     let mediaUrls = [];
     let firstMime = null;
     if (mediaFiles.length > 0) {
@@ -520,6 +579,7 @@ router.post('/create_post', isAuthenticated, async (req, res) => {
         media_type: firstMime ? (firstMime.startsWith('video') ? 'video' : 
                                 (firstMime.startsWith('audio') ? 'audio' : 'image')) : null,
         feeling: feeling,
+        is_ysu_only: (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false)
     });
 
     // Generate link preview if a URL is present in the content
@@ -755,9 +815,12 @@ router.get('/get_groups', isAuthenticated, async (req, res) => {
 
 router.get('/get_profile', isAuthenticated, async (req, res) => {
     try {
+        const requester = await User.findById(req.session.userId);
         const user = await User.findById(req.query.user_id)
             .select('-push_subscription -public_key');
         if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const isSelfOrAdmin = req.session.userId.toString() === user._id.toString() || requester.is_admin;
 
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
@@ -772,6 +835,8 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
             avatar: user.avatar,
             bio: user.bio,
             dept: user.dept,
+            matrix_no: isSelfOrAdmin ? user.matrix_no : undefined,
+            jamb_no: isSelfOrAdmin ? user.jamb_no : undefined,
             online: user.online,
             last_seen: user.last_seen,
             is_admin: user.is_admin,
@@ -801,10 +866,19 @@ router.get('/get_profile', isAuthenticated, async (req, res) => {
 
 router.get('/get_most_active_users', isAuthenticated, async (req, res) => {
     try {
+        const user = await User.findById(req.session.userId);
         const lastMonth = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Last 30 days
 
+        let matchStage = { createdAt: { $gte: lastMonth } };
+
+        // Apply YSU isolation if enabled
+        if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            matchStage.user = { $in: ysuUserIds };
+        }
+
         const activeUsers = await Post.aggregate([
-            { $match: { createdAt: { $gte: lastMonth } } },
+            { $match: matchStage },
             { $group: { _id: '$user', post_count: { $sum: 1 } } },
             { $sort: { post_count: -1 } },
             { $limit: 10 },
@@ -1440,8 +1514,19 @@ router.get('/get_reels', isAuthenticated, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 10;
         const skip = (page - 1) * limit;
+        const user = await User.findById(req.session.userId);
         
-        const query = { media_type: 'video' };
+        let query = { media_type: 'video' };
+
+        // Apply YSU isolation if enabled
+        if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            query.user = { $in: ysuUserIds };
+        } else if (user.account_type === 'maiga') {
+            // Maiga users should not see YSU-only content
+            query.is_ysu_only = { $ne: true };
+        }
+
         if (req.query.user_id) {
             if (mongoose.Types.ObjectId.isValid(req.query.user_id)) {
                 query.user = req.query.user_id;
@@ -1537,10 +1622,18 @@ router.get('/friends/suggestions', isAuthenticated, async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const suggestions = await User.find({ 
+
+    let suggestionsQuery = { 
         _id: { $nin: [req.session.userId, ...user.following] },
         blocked: false 
-    }).skip(skip).limit(limit + 1).select('name username avatar dept online gender'); // Fetch one extra to check for more
+    };
+
+    // If YSU isolated, only suggest other YSU users
+    if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+        suggestionsQuery.account_type = 'ysu';
+    }
+
+    const suggestions = await User.find(suggestionsQuery).skip(skip).limit(limit + 1).select('name username avatar dept online gender');
     res.json({
         users: suggestions.slice(0, limit).map(u => ({ id: u._id, name: u.name, username: u.username, avatar: u.avatar, dept: u.dept, online: u.online, gender: u.gender })),
         hasMore: suggestions.length > limit
@@ -1672,6 +1765,7 @@ router.post('/create_story', isAuthenticated, async (req, res) => {
         if (!mediaFile) return res.status(400).json({ error: 'Media file is required' });
 
         const mediaUrl = await uploadToR2(mediaFile, 'stories');
+        const content = Array.isArray(fields.content) ? fields.content[0] : fields.content;
         const audience = Array.isArray(fields.audience) ? fields.audience[0] : fields.audience;
         const type = Array.isArray(fields.type) ? fields.type[0] : fields.type;
         const has_music = Array.isArray(fields.has_music) ? fields.has_music[0] : fields.has_music;
@@ -1680,6 +1774,7 @@ router.post('/create_story', isAuthenticated, async (req, res) => {
         const story = new Story({
             user: req.session.userId,
             media: mediaUrl,
+            content: content || null,
             type: type || (mediaFile.mimetype.startsWith('video') ? 'video' : 'image'),
             audience: audience || 'public',
             has_music: has_music === 'true' || has_music === '1',
@@ -1737,11 +1832,17 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
         
         // Calculate the timestamp for 24 hours ago
         const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        let storyQuery = { createdAt: { $gte: yesterday } };
+
+        // Apply YSU isolation if enabled
+        if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            storyQuery.user = { $in: ysuUserIds };
+        }
         
         // Fetch all recent stories
-        const stories = await Story.find({
-            createdAt: { $gte: yesterday }
-        }).populate('user', 'name avatar close_friends')
+        const stories = await Story.find(storyQuery).populate('user', 'name avatar close_friends')
           .sort({ createdAt: -1 }); // Sort newest to oldest so it starts from the latest update
 
         // Show all stories to everyone
@@ -1753,6 +1854,7 @@ router.get('/get_stories', isAuthenticated, async (req, res) => {
             first_name: s.user.first_name || s.user.name?.split(' ')[0] || 'User',
             avatar: s.user.avatar,
             media: s.media,
+            content: s.content,
             type: s.type,
             view_count: s.view_count || 0,
             has_music: s.has_music,
@@ -2068,7 +2170,8 @@ router.get('/admin/get_users', isAuthenticated, async (req, res) => {
 
         res.json({ users: users.map(u => ({
             id: u._id, name: u.name, email: u.email, dept: u.dept, avatar: u.avatar,
-            online: u.online, blocked: u.blocked, is_verified: u.is_verified, account_type: u.account_type
+            online: u.online, blocked: u.blocked, is_verified: u.is_verified, account_type: u.account_type,
+            matrix_no: u.matrix_no, jamb_no: u.jamb_no
         })), total });
     } catch (error) { res.status(500).json({ error: 'Failed' }); }
 });
@@ -3196,12 +3299,22 @@ router.post('/unlink_facebook', isAuthenticated, async (req, res) => {
 
 router.get('/get_trending', isAuthenticated, async (req, res) => {
     try {
+        const user = await User.findById(req.session.userId);
         // Aggregate hashtags from posts created in the last 7 days
         const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const posts = await Post.find({ 
+
+        let query = { 
             createdAt: { $gte: lastWeek },
             content: { $regex: /#/ } 
-        }, 'content');
+        };
+
+        // Apply YSU isolation to trending calculation
+        if (user.account_type === 'ysu' && user.privacy_settings?.showMaigaContent === false) {
+            const ysuUserIds = await User.find({ account_type: 'ysu' }).distinct('_id');
+            query.user = { $in: ysuUserIds };
+        }
+
+        const posts = await Post.find(query, 'content');
 
         const counts = {};
         posts.forEach(p => {

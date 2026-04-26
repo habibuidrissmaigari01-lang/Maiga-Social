@@ -53,7 +53,9 @@ const requiredEnvVars = [
     { name: 'R2_S3_API_URL', value: process.env.R2_S3_API_URL },
     { name: 'R2_PUBLIC_URL', value: R2_PUBLIC_URL },
     { name: 'BREVO_API_KEY', value: process.env.BREVO_API_KEY },
-    { name: 'SENDER_EMAIL', value: process.env.SENDER_EMAIL }
+    { name: 'SENDER_EMAIL', value: process.env.SENDER_EMAIL },
+    { name: 'BACKEND_URL', value: process.env.BACKEND_URL },
+    { name: 'SERVICE_ID', value: process.env.SERVICE_ID }
 ];
 
 const missingVars = requiredEnvVars.filter(v => !v.value);
@@ -63,7 +65,7 @@ if (missingVars.length > 0) {
 }
 
 // --- Middleware ---
-app.set('trust proxy', 1); // Required for secure cookies on Railway
+app.set('trust proxy', 1); // Required for secure cookies on Render/Railway
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -71,6 +73,7 @@ app.use(express.urlencoded({ extended: true }));
 // --- Content Security Policy Middleware ---
 app.use((req, res, next) => {
     const r2Domain = R2_PUBLIC_URL ? new URL(R2_PUBLIC_URL).hostname : '';
+    const backendDomain = process.env.BACKEND_URL ? new URL(process.env.BACKEND_URL).host : '';
      
     // Identify admin requests to provide a slightly more flexible policy
     const isAdminRequest = req.path.startsWith('/admin') || req.path.includes('monitor.html');
@@ -83,12 +86,12 @@ app.use((req, res, next) => {
     res.setHeader(
         "Content-Security-Policy",
         "default-src 'self'; " +
-       `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com ${cdnSources}; ` +
+       `script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: https://apis.google.com https://connect.facebook.net https://www.googletagmanager.com https://static.cloudflareinsights.com https://www.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com ${backendDomain} ${cdnSources}; ` +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; " +
-        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co https://www.svgrepo.com; ` +
-        `media-src 'self' data: blob: ${r2Domain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
+        `img-src 'self' data: blob: https://*.googleusercontent.com https://*.facebook.com ${r2Domain} ${backendDomain} https://api.dicebear.com https://images.unsplash.com https://img.icons8.com https://user-images.githubusercontent.com https://api.qrserver.com https://placehold.co https://www.svgrepo.com; ` +
+        `media-src 'self' data: blob: ${r2Domain} ${backendDomain} https://assets.mixkit.co https://actions.google.com https://www.soundhelix.com; ` +
         "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; " +
-        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://*.turnix.io ${r2Domain} https://api.qrserver.com wss:; ` +
+        `connect-src 'self' https://*.google.com https://*.facebook.com https://*.google-analytics.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://*.turnix.io ${r2Domain} ${backendDomain} https://api.qrserver.com wss:; ` +
         "frame-src 'self' https://accounts.google.com https://www.facebook.com https://www.google.com; " +
         "worker-src 'self' blob:; " +
         "manifest-src 'self'; " +
@@ -181,12 +184,12 @@ const ysuSession = session({
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 1000 * 60 * 60 * 24 * 7,
-        path: '/ysu' // Path specific cookie for YSU
+        path: '/' // Shared path, isolation handled by name (ysu.sid) and middleware
     }
 });
 
 app.use((req, res, next) => {
-    const isYsu = req.path.startsWith('/ysu') || 
+    const isYsu = req.path.startsWith('/ysu/') || req.path === '/ysu' || req.path === '/ysu.html' ||
                   req.query.account_type === 'ysu' || 
                   (req.body && req.body.account_type === 'ysu');
 
@@ -541,21 +544,23 @@ const requireLogin = (req, res, next) => {
     if (req.session.userId) {
         next();
     } else {
-        // Append a query param so index.html can detect an expired session 
-        // and clear localStorage.getItem('maiga_session_active')
-        res.redirect('/?session_expired=1'); 
+        // Determine correct portal for redirect
+        const isYsu = req.path.startsWith('/ysu');
+        res.redirect(isYsu ? '/ysu.html?session_expired=1' : '/?session_expired=1'); 
     }
 };
 
 // Intercept app routes to check session and serve the shell
-app.get(['/maiga.html', '/maiga', '/home'], requireLogin, (req, res) => {
-    // Adjusted path to find the HTML in the public subfolder
-    res.sendFile(path.join(__dirname, 'public', 'maiga.html'));
-});
+app.get(['/maiga.html', '/maiga', '/home', '/ysu/home'], requireLogin, (req, res) => {
+    const isYsuPath = req.path.startsWith('/ysu');
+    const sessionIsYsu = req.session.cookie.path === '/ysu';
 
-// Explicit route for YSU portal (Always accessible without login)
-app.get(['/ysu', '/ysu.html'], (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'ysu.html'));
+    // If user has a YSU session but hits Maiga URL, redirect to YSU home
+    if (!isYsuPath && sessionIsYsu) return res.redirect('/ysu/home');
+    // If user has a Maiga session but hits YSU URL, redirect to Maiga home
+    if (isYsuPath && !sessionIsYsu) return res.redirect('/home');
+
+    res.sendFile(path.join(__dirname, 'public', 'maiga.html'));
 });
 
 // NEW: Admin panel route with authentication and admin check

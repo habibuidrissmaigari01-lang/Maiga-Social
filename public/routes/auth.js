@@ -226,13 +226,15 @@ router.post('/register', [
     body('first_name').trim().notEmpty().withMessage('First name required'),
     body('surname').trim().notEmpty().withMessage('Surname required'), // Added account_type validation
     body('otp').notEmpty().withMessage('OTP required'),
-    body('account_type').optional().isIn(['maiga', 'ysu']).withMessage('Invalid account type')
+    body('account_type').optional().isIn(['maiga', 'ysu']).withMessage('Invalid account type'),
+    body('matrix_no').optional().matches(/^[A-Z0-9]+\/[A-Z]+\/\d{2}\/\d{3}$/).withMessage('Invalid Matrix Number format'),
+    body('jamb_no').optional().matches(/^\d{10}[a-zA-Z]{2}$/).withMessage('Invalid JAMB Number format')
 ], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ message: errors.array()[0].msg });
 
     try {
-        const { username, email, password, first_name, surname, birthday, gender, phone, otp, account_type } = req.body;
+        const { username, email, password, first_name, surname, birthday, gender, phone, otp, account_type, matrix_no, jamb_no, dept } = req.body;
         
         // SECURITY: Verify that the email/phone provided matches the one verified via OTP
         const providedIdentity = (email || phone).toLowerCase();
@@ -258,9 +260,30 @@ router.post('/register', [
         const existingUser = await User.findOne({ $or: [{ username }, { email }] });
         if (existingUser) return res.status(400).json({ message: 'Username or email already exists' });
 
+        // Academic verification and uniqueness check
+        if (account_type === 'ysu') {
+            const cleanMatrix = matrix_no?.trim().toUpperCase();
+            const cleanJamb = jamb_no?.trim().toUpperCase();
+
+            if (!cleanMatrix || !cleanJamb) {
+                return res.status(400).json({ message: 'Academic verification details (Matrix No & JAMB No) are required.' });
+            }
+
+            // Check for duplicates
+            const existingAcademic = await User.findOne({ $or: [{ matrix_no: cleanMatrix }, { jamb_no: cleanJamb }] });
+            if (existingAcademic) return res.status(400).json({ message: 'Matrix or JAMB number already registered.' });
+            
+            // Re-assign cleaned values
+            req.body.matrix_no = cleanMatrix;
+            req.body.jamb_no = cleanJamb;
+        }
+
         const user = new User({
             name: (first_name + ' ' + surname).trim(), account_type: account_type || 'maiga', // Set account_type
-            username, email, password, birthday, gender, phone
+            username, email, password, birthday, gender, phone,
+            matrix_no: account_type === 'ysu' ? matrix_no : undefined,
+            jamb_no: account_type === 'ysu' ? jamb_no : undefined,
+            dept
         });
         
         // Auto-follow existing admins
@@ -361,6 +384,16 @@ router.get('/check_username', async (req, res) => {
         }
 
         res.json({ available: !user, suggestions });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Database check failed' });
+    }
+});
+
+router.get('/check_matrix_no', async (req, res) => {
+    try {
+        const { matrix_no } = req.query;
+        const user = await User.findOne({ matrix_no });
+        res.json({ available: !user });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Database check failed' });
     }

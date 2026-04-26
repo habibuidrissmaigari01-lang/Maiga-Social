@@ -9,9 +9,10 @@ const MAIGA_DB_CONFIG = {
     ]
 };
 
-async function openMaigaDB() {
+async function openMaigaDB(dbName = null) {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(MAIGA_DB_CONFIG.name, MAIGA_DB_CONFIG.version);
+        const name = dbName || MAIGA_DB_CONFIG.name;
+        const request = indexedDB.open(name, MAIGA_DB_CONFIG.version);
 
         request.onblocked = () => {
             console.warn("Database upgrade blocked by another tab. Please close other instances of this app.");

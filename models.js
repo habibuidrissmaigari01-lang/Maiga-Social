@@ -62,6 +62,8 @@ const userSchema = new mongoose.Schema({
     },
     bio: String,
     dept: String,
+    matrix_no: { type: String, unique: true, sparse: true },
+    jamb_no: { type: String, unique: true, sparse: true },
     account_type: { type: String, default: 'maiga' }, // 'maiga' or 'ysu'
     followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -136,6 +138,8 @@ userSchema.virtual('full_name').get(function() {
 userSchema.index({ online: 1 });
 userSchema.index({ account_type: 1 });
 userSchema.index({ name: 'text', username: 'text' });
+userSchema.index({ matrix_no: 1 }, { unique: true, sparse: true });
+userSchema.index({ jamb_no: 1 }, { unique: true, sparse: true });
 userSchema.index({ blocked: 1 });
 userSchema.index({ gender: 1, avatar: 1 });
 userSchema.index({ blocked: 1, username: 1 }); // For admin search
@@ -412,6 +416,7 @@ groupSchema.index({ 'members.user': 1 });
 const storySchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     media: [String],
+    content: String,
     type: String,
     views: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

@@ -47,14 +47,14 @@ const API_CACHE_NAME = 'maiga-api-cache-v1';
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
 
-const CACHE_NAME = `${APP_TYPE}-offline-v5`;
+const CACHE_NAME = `${APP_TYPE}-offline-v6`; // Bump version for clean state
 const OFFLINE_URL = '/offline.html';
-const DB_NAME = 'maiga_crypto';
+const DB_NAME = APP_TYPE === 'ysu' ? 'ysu_crypto' : 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
 
 // Helper: Check IndexedDB for persistent session marker
 async function openDB() {
-  return openMaigaDB();
+  return openMaigaDB(DB_NAME);
 }
 
 async function isSessionPersistent() {
