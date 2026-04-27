@@ -47,7 +47,7 @@ const API_CACHE_NAME = 'maiga-api-cache-v1';
 const urlParams = new URL(self.location).searchParams;
 const APP_TYPE = urlParams.get('app') || 'maiga'; 
 
-const CACHE_NAME = `${APP_TYPE}-offline-v6`; // Bump version for clean state
+const CACHE_NAME = `${APP_TYPE}-offline-v7`; // Bump to v7 for immediate update
 const OFFLINE_URL = '/offline.html';
 const DB_NAME = APP_TYPE === 'ysu' ? 'ysu_crypto' : 'maiga_crypto';
 const STORE_NAME = 'pending_messages';
@@ -270,11 +270,17 @@ self.addEventListener('fetch', (event) => {
 
   // 2. Handle Static Assets (CSS, JS, Images)
   if (isLocalAsset && !isApi) {
+    // Optimization: Do not dynamically cache HTML files or the root path during fetch.
+    // These are entry points where authentication redirects happen.
+    const isHtml = event.request.url.endsWith('.html') || 
+                   event.request.url === self.location.origin + '/' ||
+                   !event.request.url.split('/').pop().includes('.');
+
     event.respondWith(
        fetch(event.request)
         .then(async (response) => {
-          // Success: Update the cache with the fresh version and return the response
-          if (response && response.ok) {
+          // Only cache successful, non-redirected, non-HTML assets.
+          if (response && response.ok && !response.redirected && !isHtml) {
             const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, response.clone());
             return response;

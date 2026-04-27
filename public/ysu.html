@@ -612,8 +612,14 @@
                 },
                 init() {
                     this.applyTheme();
-                    if (localStorage.getItem('maiga_session_active') === 'true' && navigator.onLine) {
-                        window.location.replace('/home');
+
+                    // Prevent Redirect Loop: Use the correct ysu_session_active key and check for errors
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const isAuthError = urlParams.has('session_expired') || urlParams.has('logout');
+                    if (isAuthError) localStorage.removeItem('ysu_session_active');
+
+                    if (localStorage.getItem('ysu_session_active') === 'true' && navigator.onLine && !isAuthError) {
+                        window.location.replace('/ysu/home');
                         return;
                     }
                     window.addEventListener('focus', () => this.checkClipboardForOtp());

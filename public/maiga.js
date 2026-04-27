@@ -37,7 +37,7 @@ function extractUrl(text) {
 }
 
 // Automatically switch between local and production backend
-const API_BASE_URL = (function() {
+const API_BASE_URL = window.API_BASE_URL || (function() {
     const host = window.location.hostname;
     return (host === 'localhost' || host === '127.0.0.1') ? 'http://localhost:3000' : '';
 })();
@@ -447,9 +447,6 @@ const initMaiga = () => {
             );
         },
         starredMessages: [],
-        archivedChats: [],
-        mutedChats: [],
-        pinnedChats: [],
         forumTopics: [],
         musicTracks: [],
         animatedStickers: [],
@@ -2034,12 +2031,6 @@ const initMaiga = () => {
                 'Log Out', 
                 'Are you sure you want to sign out of Maiga Social? You will need to sign in again to access your messages and feed.',
                 async () => {
-                    // Clear PWA Session Marker
-                    if ('caches' in window) {
-                        const cache = await caches.open(`${this.user.account_type || 'maiga'}-offline-v5`);
-                        await cache.delete('/auth-session-active');
-                    }
-
                     // Clear Persistent IDB Marker
                     if (this.crypto && this.crypto.db) {
                         await this.crypto._set('persistent_session', false);
@@ -2203,11 +2194,6 @@ const initMaiga = () => {
         createPostOffset: { x: 0, y: 0 },
         createPostStart: { x: 0, y: 0 },
         isCreatePostDragging: false,
-        posts: [],
-        reels: [],
-        groups: [],
-        chats: [],
-        mutedChats: [],
         mediaPreviewUrl: null,
         mediaPreviewFile: null,
         mediaPreviewType: null,
@@ -2216,24 +2202,9 @@ const initMaiga = () => {
         pendingRemoteDescription: null,
         pendingIceCandidates: [],
         currentCallId: null,
-        archivedChats: [],
         activeHashtag: null,
-        page: 1,
-        isLoadingMore: false,
-        searchResults: [],
-        searchPostsResults: [],
-        searchReelsResults: [],
-        toasts: [],
-        searchSuggestions: [],
         recentSearches: JSON.parse(localStorage.getItem('maiga_recent_searches') || '[]'),
         reportForm: { title: '', description: '', screenshot: null, preview: null, targetType: '', targetId: null, targetUserId: null, priority: 'low' },
-        // Pull to Refresh
-        pullStartY: 0,
-        pullDistance: 0,
-        isOffline: !navigator.onLine,
-        isSocketConnected: false,
-        isRefreshing: false,
-        hasMoreFriends: false,
         isPulling: false,
         handlePullStart(e) {
             this.touchStartX = e.touches[0].clientX;

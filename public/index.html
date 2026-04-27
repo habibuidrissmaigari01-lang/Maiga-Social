@@ -563,7 +563,13 @@
                 },
                 init() {
                     this.applyTheme();
-                    if (localStorage.getItem('maiga_session_active') === 'true' && navigator.onLine) {
+
+                    // Prevent Redirect Loop: If returning from an expired session or logout, clear local state
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const isAuthError = urlParams.has('session_expired') || urlParams.has('logout');
+                    if (isAuthError) localStorage.removeItem('maiga_session_active');
+
+                    if (localStorage.getItem('maiga_session_active') === 'true' && navigator.onLine && !isAuthError) {
                         window.location.replace('/home');
                         return;
                     }

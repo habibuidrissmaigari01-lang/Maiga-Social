@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
+const fs = require('fs');
 const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const { DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
@@ -65,10 +66,27 @@ if (missingVars.length > 0) {
 }
 
 // --- Middleware ---
-app.set('trust proxy', 1); // Required for secure cookies on Render/Railway
+app.set('trust proxy', 1); // Required for secure cookies on Render
+
+// Header Debugging Middleware: View headers in Render Logs
+app.use((req, res, next) => {
+    console.log(`[DEBUG] Incoming ${req.method} to ${req.url}`);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    next();
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// --- Cache Control for Auth Routes ---
+// This prevents browsers and proxies from caching redirects or login pages
+app.use(['/', '/index.html', '/ysu.html', '/api/login', '/api/register', '/api/logout'], (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    next();
+});
 
 // --- Content Security Policy Middleware ---
 app.use((req, res, next) => {
