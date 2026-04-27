@@ -15,8 +15,9 @@ export default {
         // Determine if this is an API or Socket.io request that needs proxying
         // We now also proxy app routes and sensitive files so the backend can enforce access control
         const isProxyRequest = 
-            path === '/' ||
-            path === '/index.html' ||
+            path === '/' || // Root path
+            path === '/index.html' || // Maiga login/register page
+            path === '/ysu.html' || // YSU login/register page
             path.startsWith('/api') || 
             path.startsWith('/socket.io') || 
             request.headers.get('Upgrade') === 'websocket' ||
@@ -57,7 +58,7 @@ export default {
                     method: request.method,
                     headers: headers,
                     body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null,
-                    redirect: 'follow'
+                    redirect: 'manual'
                 });
 
                 const response = await fetch(backendRequest);
