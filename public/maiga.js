@@ -852,16 +852,6 @@ const initMaiga = () => {
             { name: 'Brightness', value: 'brightness(1.2)' },
             { name: 'Invert', value: 'invert(1)' },
         ],
-        drawings: [],
-        // State from x-init moved here
-        isDrawing: false,
-        activeTool: 'brush', // 'brush' or 'eraser'
-        currentPath: [],
-        brushColor: '#ffffff',
-        brushSize: 5,
-        editorTextOpacity: 1,
-        editorTextRotation: 0,
-
         selectMusic(track) {
             if (this.musicPickerSource === 'camera') {
                 this.cameraMusic = track;
@@ -4282,6 +4272,25 @@ const initMaiga = () => {
             this.sendMessage(null, this.mediaPreviewType, null, this.mediaPreviewFile);
             this.closeMediaPreview();
         },
+        // Function to handle pasting content into the message input
+        handlePaste(event) {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    event.preventDefault(); // Prevent default text paste
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        this.mediaPreviewType = 'image';
+                        this.mediaPreviewFile = file;
+                        const reader = new FileReader();
+                        reader.onload = (e) => { this.mediaPreviewUrl = e.target.result; };
+                        reader.readAsDataURL(file);
+                        this.showToast('Image Detected', 'Pasted image ready to send.', 'info');
+                    }
+                    return;
+                }
+            }
+        },
         async toggleDisappearingMode() {
             if (!this.activeChat) return;
             const type = this.activeChat.type === 'group' ? 'group' : 'user'; // Ensure activeChat.id is string
@@ -4799,6 +4808,8 @@ const initMaiga = () => {
         },
     closeComments() {
         this.viewingComments = null;
+        this.replyingToComment = null;
+        this.commentInput = '';
         // Automatically resume video playback for visible elements
         this.$nextTick(() => {
             document.querySelectorAll('video').forEach(v => {
@@ -4823,6 +4834,7 @@ const initMaiga = () => {
         addComment(contentOrBlob = null, type = 'text') {
             if ((!this.commentInput.trim() && !contentOrBlob) || !this.viewingComments) return;
             
+            const originalInput = this.commentInput;
             const formData = new FormData(); formData.append('post_id', this.viewingComments.id.toString()); // Ensure ID is string
             if (this.replyingToComment) {
                 formData.append('parent_comment_id', this.replyingToComment.id);
@@ -4835,7 +4847,7 @@ const initMaiga = () => {
                 formData.append('content', contentOrBlob);
                 formData.append('media_type', 'sticker');
             } else {
-                formData.append('content', this.commentInput);
+                formData.append('content', originalInput);
                 formData.append('media_type', 'text');
             }
 
@@ -4848,16 +4860,17 @@ const initMaiga = () => {
             })
             .then(data => {
                 if (data && data.success) { // Optimistic Update for instant feedback
+                    const contentToDisplay = (type === 'text' ? originalInput : (data.content || (type === 'sticker' ? contentOrBlob : 'Sent a voice note')));
                     const newComment = {
-                        id: data.comment_id,
+                        id: data.comment_id || Date.now().toString(),
                         user_id: this.user.id,
-                        content: data.content,
+                        content: contentToDisplay,
                         media: data.media,
                         media_type: data.media_type,
                         created_at: new Date().toISOString(),
                         author: this.user.name,
                         avatar: this.user.avatar,
-                        text: data.content,
+                        text: contentToDisplay,
                         time: 'Just now',
                         replies: [],
                         parent_comment_id: this.replyingToComment ? this.replyingToComment.id : null
@@ -4889,6 +4902,7 @@ const initMaiga = () => {
             })
             .finally(() => {
                 this.commentInput = '';
+                this.replyingToComment = null;
                 this.replyingToComment = null;
                 this.isSendingComment = false;
             });
@@ -6369,6 +6383,7 @@ const initMaiga = () => {
             }
             this.viewingStory = null;
             this.showSeenList = false;
+            this.showStoryShareOptions = false;
         },
         // Safe helper to calculate progress bar width without crashing when viewingStory is null
         getStoryProgressStyle(idx) {

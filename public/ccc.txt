@@ -1,1 +1,1 @@
-Check the Google Cloud Console redirect URI settings to ensure they exactly match the new proxied URL. and in my login page i want you to restore my grid logo for each login page logo.png for index.html and ysu.png for ysu.png
+Check the CSS in maiga.html to see if there are any conflicting z-index values between the modals and the navigation bar.

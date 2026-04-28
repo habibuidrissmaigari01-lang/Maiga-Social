@@ -321,11 +321,22 @@ router.post('/register', [
 
 router.post('/login', loginLimiter, async (req, res) => {
     try {
-      const { login_identity, login_password, remember_me, account_type } = req.body;
-        const identity = login_identity.trim().toLowerCase();
+        const { login_identity, login_password, account_type } = req.body;
+
+        // Safety: Prevent crash if fields are missing
+        if (!login_identity || typeof login_identity !== 'string') {
+            return res.status(400).json({ message: 'Valid identity is required.' });
+        }
+
+        if (!login_password) {
+            return res.status(400).json({ message: 'Password is required.' });
+        }
+
+        const identity = login_identity.toString().trim().toLowerCase();
         const user = await User.findOne({ $or: [{ email: identity }, { username: identity }] }).select('+password');
         
-        if (!user || !(await bcrypt.compare(login_password, user.password))) {
+        // Safety: Ensure user has a password (some social accounts might not)
+        if (!user || !user.password || !(await bcrypt.compare(login_password, user.password))) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
@@ -333,39 +344,41 @@ router.post('/login', loginLimiter, async (req, res) => {
         const crossPortalSetting = await Setting.findOne({ key: 'allow_cross_portal_login' });
         const allowCrossPortal = crossPortalSetting ? crossPortalSetting.value : false;
 
-        // Enforce account isolation if not permitted (Admins are always allowed)
-        if (!allowCrossPortal && !user.is_admin && account_type && user.account_type !== account_type) {
-            const correctUrl = user.account_type === 'ysu' ? 'ysu.html' : 'index.html';
-            return res.status(403).json({ 
-                message: `Access Denied. This account is registered for ${user.account_type === 'ysu' ? 'YSU' : 'Maiga'} Social.`,
-                redirect: correctUrl 
-            });
-        }
-
         // Enforce account isolation: users can only login through their respective registration portal
-        if (account_type && user.account_type !== account_type) {
+        if (!allowCrossPortal && !user.is_admin && account_type && user.account_type !== account_type) {
             const portalName = user.account_type === 'ysu' ? 'YSU Social' : 'Maiga Social';
-            return res.status(403).json({ message: `Access Denied. This account is registered for ${portalName}. Please login via the correct portal.` });
+            const redirectUrl = user.account_type === 'ysu' ? 'ysu.html' : 'index.html';
+            return res.status(403).json({ 
+                message: `Access Denied. This account is registered for ${portalName}.`,
+                redirect: redirectUrl 
+            });
         }
 
         // Regenerate the session to prevent session fixation and clear any previous user state
         req.session.regenerate(async (err) => {
             if (err) return res.status(500).json({ message: 'Session error' });
 
-            // Every login is persistent by default to support PWA installations.
-            // The long-lived duration is handled by the default config in api.js.
+            // Use another try-catch here because this callback is outside the main flow
+            try {
+                req.session.userId = user._id.toString();
+                user.online = true;
+                await user.save();
 
-            req.session.userId = user._id.toString();
-            user.online = true;
-            await user.save();
-
-            // Explicitly save the session before sending the response to ensure consistency
-            req.session.save(saveErr => {
-                if (saveErr) return res.status(500).json({ message: 'Session save failed' });
-                res.json({ message: 'Login successful' });
-            });
+                // Explicitly save the session before sending the response to ensure consistency
+                req.session.save(saveErr => {
+                    if (saveErr) {
+                        console.error('Session save error:', saveErr);
+                        return res.status(500).json({ message: 'Session save failed' });
+                    }
+                    res.json({ message: 'Login successful' });
+                });
+            } catch (innerErr) {
+                console.error('Error in session callback:', innerErr);
+                res.status(500).json({ message: 'Server error during finalization.' });
+            }
         });
     } catch (err) {
+        console.error('Login error:', err);
         res.status(500).json({ message: 'Server error' });
     }
 });

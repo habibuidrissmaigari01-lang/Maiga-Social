@@ -13,7 +13,6 @@
     <link href="/css/main.css" rel="stylesheet">
      <link rel="icon" id="app-icon" type="image/png" sizes="48x48" href="img/logo.png">
      <link rel="apple-touch-icon" id="apple-icon" sizes="180x180" href="img/logo.png">
-     <meta name="mobile-web-app-capable" content="yes">
      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <!-- iOS Splash Screens -->
@@ -1854,6 +1853,7 @@
         <div class="bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-2xl w-80 animate-fadeIn">
             <h3 class="font-bold text-lg mb-4">Schedule Message</h3>
             <p class="text-xs text-gray-500 mb-2">Message will be sent automatically at the selected time.</p>
+            <textarea x-model="newMessage" placeholder="Type your message here..." class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm mb-3 focus:ring-1 focus:ring-blue-500 resize-none h-24 dark:text-white"></textarea>
             <input type="datetime-local" x-model="scheduledTime" class="w-full bg-gray-100 dark:bg-gray-700 border-none rounded-xl p-3 text-sm mb-4 focus:ring-1 focus:ring-blue-500">
             <div class="flex space-x-3">
                 <button @click="isSchedulingMessage = false" class="flex-1 py-2 rounded-xl font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
@@ -1960,7 +1960,7 @@
          @contextmenu.prevent
     >
         <audio x-ref="storyAudio" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" loop></audio>
-        <div class="flex space-x-1 p-2 pt-4 absolute top-0 left-0 right-0 z-20">
+        <div class="flex space-x-1 p-2 pt-2 absolute left-0 right-0 z-20" style="top: calc(0.5rem + env(safe-area-inset-top, 0px));">
             <template x-for="(story, idx) in viewingStory?.list" :key="idx">
                 <div class="h-1 bg-white/30 flex-1 rounded-full overflow-hidden"><div class="h-full bg-white transition-all duration-100 ease-linear" :style="getStoryProgressStyle(idx)"></div></div>
             </template>
@@ -2117,7 +2117,7 @@
         </div>
 
         <!-- Story Share/Options Modal -->
-        <div x-show="showStoryShareOptions" @click.away="showStoryShareOptions = false" x-cloak class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-3xl z-40 p-4 animate-slideUp" @click.stop>
+        <div x-show="showStoryShareOptions" @click.away="showStoryShareOptions = false" x-cloak class="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-3xl z-[850] p-4 animate-slideUp" @click.stop>
             <div class="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4"></div>
             <button @click="shareStoryAsPost()" class="w-full flex items-center space-x-4 p-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl">
                 <i class="fa-solid fa-plus-square text-blue-500 w-6 text-center"></i>
@@ -3255,7 +3255,7 @@
         </template>
 
         <!-- Smooth Infinite Scroll Footer for Posts -->
-        <div x-show="isLoadingMore" class="p-10 flex flex-col items-center justify-center animate-fadeIn">
+        <div x-show="isLoadingMore" class="p-10 pb-20 flex flex-col items-center justify-center animate-fadeIn">
             <div class="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-3"></div>
             <p class="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] animate-pulse">
                 Fetching Excellence
@@ -3263,14 +3263,14 @@
         </div>
 
         <!-- Load More Button (Appears when not currently loading and more posts exist) -->
-        <div x-show="!isLoadingMore && hasMorePosts && posts.length > 0" x-cloak class="p-8 flex justify-center">
+        <div x-show="!isLoadingMore && hasMorePosts && posts.length > 0" x-cloak class="p-8 pb-20 flex justify-center">
             <button @click="loadMorePosts()" class="bg-white dark:bg-gray-800 border-2 border-blue-600 text-blue-600 px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-lg active:scale-95">
                 Load More Post
             </button>
         </div>
 
         <!-- All Caught Up Message -->
-        <div x-show="!hasMorePosts && posts.length > 0" x-cloak class="p-12 text-center animate-fadeIn">
+        <div x-show="!hasMorePosts && posts.length > 0" x-cloak class="p-12 pb-24 text-center animate-fadeIn">
             <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 mb-4 shadow-sm border border-blue-100 dark:border-blue-800/30">
                 <i class="fa-solid fa-check text-xl"></i>
             </div>
@@ -3279,18 +3279,11 @@
             <button @click="$refs.mainContent.scrollTo({top: 0, behavior: 'smooth'})" class="mt-6 text-blue-600 text-xs font-black uppercase hover:underline tracking-widest">Back to top</button>
         </div>
 
-        <!-- Loading Spinner for Load More Posts -->
-        <div x-show="isLoadingMore" x-cloak class="flex justify-center items-center py-4">
-            <div class="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-full shadow-sm border dark:border-gray-700">
-                <i class="fa-solid fa-spinner fa-spin text-blue-600 text-lg"></i>
-                <span class="text-sm font-bold text-gray-600 dark:text-gray-300">Loading more posts...</span>
-            </div>
-        </div>
     </main>
 
     <!-- MAIN VIEW: REELS -->
     <!-- Increased bottom offset from 65px to 80px to account for larger bottom navs and safe area insets -->
-   <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[80px] left-0 right-0 bg-black z-40 flex justify-center items-center lg:relative lg:inset-auto lg:w-full lg:h-full lg:bg-gray-100 dark:lg:bg-gray-900 lg:py-6 lg:z-0" x-cloak>
+   <main x-show="activeTab === 'reels'" @keydown.window.prevent.arrow-up="scrollReel(-1)" @keydown.window.prevent.arrow-down="scrollReel(1)" class="fixed inset-0 top-[57px] bottom-[88px] left-0 right-0 bg-black z-40 flex justify-center items-center lg:relative lg:inset-auto lg:w-full lg:h-full lg:bg-gray-100 dark:lg:bg-gray-900 lg:py-6 lg:z-0" x-cloak>
         <div x-ref="reelsContainer" 
               class="h-full w-full lg:w-[420px] lg:h-[750px] lg:rounded-[3rem] overflow-y-scroll snap-y snap-mandatory no-scrollbar lg:shadow-2xl touch-pan-y lg:border-x dark:border-gray-800" 
              x-init="setupReelsObserver()" 
@@ -3487,7 +3480,7 @@
             </template>
 
             <!-- Global Reels Infinite Scroll Indicator (Outside Loop) -->
-            <div x-show="isLoadingMoreReels" class="h-full w-full shrink-0 snap-start flex flex-col items-center justify-center bg-black lg:rounded-2xl">
+            <div x-show="isLoadingMoreReels" class="h-full w-full shrink-0 snap-start flex flex-col items-center justify-center bg-black lg:rounded-2xl pb-10">
                 <div class="w-12 h-12 border-4 border-white/10 border-t-blue-600 rounded-full animate-spin mb-4"></div>
                 <p class="text-white text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">
                     Next Reel Loading
@@ -5026,35 +5019,6 @@
                     <div class="text-center py-10 text-gray-500 text-sm">No recent session data found.</div>
                 </template>
             </div>
-
-            <!-- MAIN VIEW: SECURITY CHECK (Moved inside center container) -->
-    <main x-show="activeTab === 'security'" class="animate-fadeIn">
-        <div class="p-4 flex items-center bg-white dark:bg-gray-900 border-b dark:border-gray-800 sticky top-0 z-50">
-            <button @click="activeTab = 'settings'" class="mr-4 text-gray-600 dark:text-gray-300"><i class="fa-solid fa-arrow-left"></i></button>
-            <h3 class="font-black text-xl">Security Check</h3>
-        </div>
-        <div class="p-4 space-y-4">
-            <p class="text-xs text-gray-500 px-2 font-medium">Review devices where you're currently logged in.</p>
-            <div class="space-y-2">
-                <template x-for="session in loginSessions" :key="session.id">
-                    <div class="bg-white dark:bg-gray-800 p-4 rounded-2xl flex items-center justify-between shadow-sm border dark:border-gray-700">
-                        <div class="flex items-center space-x-4">
-                            <div class="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center text-gray-500">
-                                <i class="fa-solid" :class="session.device.toLowerCase().includes('phone') ? 'fa-mobile-screen' : 'fa-desktop'"></i>
-                            </div>
-                            <div>
-                                <p class="font-bold text-sm" x-text="session.browser + ' on ' + session.device"></p>
-                                <p class="text-[10px] text-gray-500" x-text="session.location + ' • ' + session.ip"></p>
-                                <p class="text-[9px] text-blue-600 font-bold uppercase mt-1" x-text="'Last active: ' + new Date(session.last_active).toLocaleString()"></p>
-                            </div>
-                        </div>
-                        <button class="text-xs font-bold text-red-500 hover:underline">Log Out</button>
-                    </div>
-                </template>
-            </div>
-        </div>
-    </main>
-
         </div>
     </div>
 
@@ -5105,7 +5069,7 @@
     </div>
 
     <!-- Bottom Nav -->
-    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-blue-600/90 backdrop-blur-xl border-t border-white/10 flex justify-around items-center pt-2 pb-6 z-[350] shadow-2xl lg:hidden">
+    <nav x-show="!isMessaging || !activeChat" x-transition class="fixed bottom-0 left-0 right-0 bg-blue-600/90 backdrop-blur-xl border-t border-white/10 flex justify-around items-center pt-2 z-[350] shadow-2xl lg:hidden" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));">
         <!-- Fluid Indicator Bar -->
         <div class="absolute top-0 h-1 bg-white rounded-full z-10"
              :style="getIndicatorStyle()"

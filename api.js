@@ -571,7 +571,7 @@ const requireLogin = (req, res, next) => {
 // Intercept app routes to check session and serve the shell
 app.get(['/maiga.html', '/maiga', '/home', '/ysu/home'], requireLogin, (req, res) => {
     const isYsuPath = req.path.startsWith('/ysu');
-    const sessionIsYsu = req.session.cookie.path === '/ysu';
+    const sessionIsYsu = req.cookies && req.cookies['ysu.sid'];
 
     // If user has a YSU session but hits Maiga URL, redirect to YSU home
     if (!isYsuPath && sessionIsYsu) return res.redirect('/ysu/home');
