@@ -527,7 +527,7 @@
     <script>
         const API_BASE_URL = ''; // Use relative path so it works on any IP
 
-        var currentStep = 0; // Declare globally for script access
+         var currentStep = 0; // Declare globally for iOS/Safari compatibility
 
         function authComponent() {
             return {
@@ -671,7 +671,7 @@
                     if (s > this.currentStep && this.currentStep > 0 && !validateStep(this.currentStep)) return;
                     if (s === 6 && this.currentStep === 5) { this.sendRegistrationOTP(e); return; }
                     this.currentStep = s;
-                    window.currentStep = s; // Sync global variable
+                    window.currentStep = s; // Keep global variable in sync
                     this.saveAuthProgress();
                 },
                 async sendForgotOTP(e) {
@@ -1261,7 +1261,7 @@
         // Prevent form submission on Enter key for intermediate registration steps
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
-                if (currentStep > 0 && currentStep < 7) {
+                if (typeof currentStep !== 'undefined' && currentStep > 0 && currentStep < 7) {
                     e.preventDefault();
                     // If on OTP step, trigger verifyOTP instead of just moving next
                     if (currentStep === 6) {

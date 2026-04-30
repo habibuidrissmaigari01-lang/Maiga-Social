@@ -62,6 +62,11 @@ const requiredEnvVars = [
 const missingVars = requiredEnvVars.filter(v => !v.value);
 
 if (missingVars.length > 0) {
+    console.error('CRITICAL ERROR: Missing required environment variables:');
+    missingVars.forEach(v => console.error(` - ${v.name}`));
+    console.error('The server cannot start without these. Please check your .env file or hosting dashboard.');
+    // Optionally, you can keep the exit if these are truly mandatory
+    // but now you will see WHY it crashed in your logs.
     process.exit(1);
 }
 

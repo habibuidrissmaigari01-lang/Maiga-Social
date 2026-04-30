@@ -27,10 +27,13 @@
             const isYsu = window.location.pathname.startsWith('/ysu');
             if (isYsu) {
                 document.title = 'YSU Social';
-                // Select by ID to ensure we target the correct tags
-                document.getElementById('app-icon').href = '/img/ysu.png';
-                document.getElementById('apple-icon').href = '/img/ysu.png';
-                document.getElementById('app-manifest').href = '/manifest-ysu.json';
+                const icon = document.getElementById('app-icon');
+                const appleIcon = document.getElementById('apple-icon');
+                const manifest = document.getElementById('app-manifest');
+                
+                if (icon) icon.href = '/img/ysu.png';
+                if (appleIcon) appleIcon.href = '/img/ysu.png';
+                if (manifest) manifest.href = '/manifest-ysu.json';
             }
         })();
     </script>
@@ -720,6 +723,9 @@
          x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-transition:enter-end="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave="transition ease-in duration-200 transform" x-transition:leave-start="translate-x-0 lg:opacity-100 lg:scale-100" x-transition:leave-end="translate-x-full lg:translate-x-0 lg:opacity-0 lg:scale-95" x-cloak class="fixed inset-0 z-[400] bg-white dark:bg-gray-900 flex flex-col lg:inset-auto lg:bottom-0 lg:right-96 lg:w-80 lg:h-[500px] lg:rounded-t-2xl lg:shadow-2xl lg:border dark:border-gray-700 overscroll-contain">
         <!-- List View -->
         <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
+        <div class="flex flex-col w-full overflow-hidden" :style="isMessaging && window.innerWidth < 1024 ? { height: viewportHeight + 'px' } : { height: '100%' }">
+            <!-- List View -->
+            <div x-show="!activeChat && !isCreatingGroup && !selectedTopic" class="flex flex-col h-full animate-fadeIn lg:hidden">
             <div class="p-4 flex items-center justify-between border-b dark:border-gray-800">
                 <button @click="isMessaging = false" class="text-xl p-2 rounded-full active:bg-gray-100 dark:active:bg-gray-800"><i class="fa-solid fa-chevron-left"></i></button>
                 <div class="flex-1 flex flex-col items-center">
@@ -2434,6 +2440,7 @@
                 </div>
                 <input type="range" min="1" max="20" x-model="brushSize" class="w-24 accent-blue-500">
                 <button @click="clearDrawings()" class="text-red-400 font-bold text-xs hover:text-red-300"><i class="fa-solid fa-trash"></i></button>
+                <button @click="clearDrawings()" class="flex items-center gap-1 text-red-400 font-bold text-xs hover:text-red-300"><i class="fa-solid fa-trash"></i><span>Clear</span></button>
                 <button @click="isDrawing = false" class="text-white font-bold text-xs">Done</button>
             </div>
 

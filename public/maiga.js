@@ -658,8 +658,8 @@ const initMaiga = () => {
                 options.headers = { ...options.headers, 'X-CSRF-Token': CSRF_TOKEN };
             }
             const fullUrl = url.startsWith('/') ? `${API_BASE_URL}${url}` : url;
-            const maxRetries = options.retries ?? 2;
-            const timeout = options.timeout ?? 300000; // Increased to 5 minutes for large uploads
+            const maxRetries = (options.retries !== undefined && options.retries !== null) ? options.retries : 2;
+            const timeout = (options.timeout !== undefined && options.timeout !== null) ? options.timeout : 300000; // Increased to 5 minutes for large uploads
 
             for (let i = 0; i <= maxRetries; i++) {
                 try {
@@ -5215,11 +5215,11 @@ const initMaiga = () => {
             return (this.callHistory || []).filter(c => c.status === 'missed' || c.is_missed || c.type === 'missed').length;
         },
         get activeChatPinnedMsg() {
-            const messages = this.chatMessages?.[this.activeChat?.id] || [];
+            const messages = (this.chatMessages && this.activeChat) ? (this.chatMessages[this.activeChat.id] || []) : [];
             return messages.find(m => m.pinned || m.is_pinned) || null;
         },
         get starredMessagesInActiveChat() {
-            return (this.chatMessages?.[this.activeChat?.id] || []).filter(m => m.starred || m.is_starred);
+            return ((this.chatMessages && this.activeChat && this.chatMessages[this.activeChat.id]) || []).filter(m => m.starred || m.is_starred);
         },
         get didYouMeanFriend() {
             return (this.searchSuggestions || []).find(item => item.type === 'user') || null;

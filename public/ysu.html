@@ -575,6 +575,8 @@
     <script>
         const API_BASE_URL = ''; // Use relative path so it works on any IP
 
+        var currentStep = 0; // Declare globally for script access
+
         function authComponent() {
             return {
                 view: 'login',
@@ -1365,7 +1367,7 @@
         // Prevent form submission on Enter key for intermediate registration steps
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON') {
-                if (currentStep > 0 && currentStep < 7) {
+                if (currentStep > 0 && currentStep < 8) {
                     e.preventDefault();
                     // If on OTP step, trigger verifyOTP instead of just moving next
                     if (currentStep === 7) {
