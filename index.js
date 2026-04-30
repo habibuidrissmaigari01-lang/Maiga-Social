@@ -21,7 +21,7 @@ export default {
             path.startsWith('/api') || 
             path.startsWith('/socket.io') || 
             request.headers.get('Upgrade') === 'websocket' ||
-            ['/home', '/maiga', '/maiga.js', '/offline.html', '/admin'].includes(path);
+            ['/home', '/maiga', '/maiga.js', '/offline.html', '/admin', '/ysu/home'].includes(path);
 
         if (isProxyRequest) {
             if (!env.BACKEND_URL) return jsonError('Backend URL not configured in Worker environment.', 502);
