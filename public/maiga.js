@@ -2766,7 +2766,7 @@ const initMaiga = () => {
             });
 
             this.socket.on('ice_candidate', (candidate) => {
-                if (!this.peerConnection || !this.peerConnection.remoteDescription?.type) {
+                if (!this.peerConnection || !(this.peerConnection.remoteDescription && this.peerConnection.remoteDescription.type)) {
                     this.pendingIceCandidates.push(candidate);
                     return;
                 }
@@ -6241,7 +6241,7 @@ const initMaiga = () => {
         },
         isBlocked(userId) {
             if (this.user.is_admin) return false; // Admins bypass block logic for moderation
-            return this.blockedUsers.includes(userId?.toString());
+            return this.blockedUsers.includes(userId ? userId.toString() : '');
         },
         toggleBlock() {
             if (!this.viewingUser) return;

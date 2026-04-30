@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node api.js",
     "dev": "nodemon api.js",
+    "build": "npm run css:build && babel public/maiga.js --out-file public/maiga.min.js",
     "css:watch": "tailwindcss -i ./public/css/input.css -o ./public/css/main.css --watch",
     "css:build": "tailwindcss -i ./public/css/input.css -o ./public/css/main.css --minify"
   },
@@ -37,11 +38,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@babel/cli": "^7.28.6",
-    "@babel/core": "^7.29.0",
-    "@babel/preset-env": "^7.29.2",
     "autoprefixer": "^10.4.27",
-    "core-js": "^3.49.0",
     "nodemon": "^3.1.0",
     "postcss": "^8.5.9",
     "tailwindcss": "^4.2.2",
